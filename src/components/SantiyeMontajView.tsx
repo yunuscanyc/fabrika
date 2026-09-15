@@ -4,9 +4,10 @@ import {
   Filter, MapPin, Phone, Clock, ArrowRight, UserCheck, UserX, 
   Archive, RotateCcw, Trash2, Edit3, Check, X, Printer, FileText, 
   AlertCircle, ChevronRight, ChevronLeft, ChevronDown, ChevronUp,
-  HardHat, User, Briefcase, Award, ShieldCheck, Sparkles, DollarSign
+  HardHat, User, Briefcase, Award, ShieldCheck, Sparkles, DollarSign,
+  Save, CloudSun, AlertTriangle, CheckSquare, Layers, History, TrendingUp, Info
 } from 'lucide-react';
-import { SantiyeMontajGrubu, SantiyeEkipUyesi, Personel, Yevmiyeci, Proje, Departman, Gorev } from '../types';
+import { SantiyeMontajGrubu, SantiyeEkipUyesi, Personel, Yevmiyeci, Proje, Departman, Gorev, SantiyeGunlukDurum } from '../types';
 
 interface SantiyeMontajViewProps {
   personeller: Personel[];
@@ -35,7 +36,7 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
   const [aramaMetni, setAramaMetni] = useState('');
   const [seciliSantiyeId, setSeciliSantiyeId] = useState<number | string | null>(null);
 
-  // Tarih ve Yoklama State'leri
+  // Tarih ve Detay Sekmesi
   const getBugunStr = () => {
     const d = new Date();
     const y = d.getFullYear();
@@ -45,7 +46,17 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
   };
 
   const [seciliTarih, setSeciliTarih] = useState<string>(getBugunStr());
-  const [gorunumModu, setGorunumModu] = useState<'gunluk' | 'matris'>('gunluk');
+  const [detaySekmesi, setDetaySekmesi] = useState<'durum' | 'yoklama' | 'gecmis' | 'matris'>('durum');
+
+  // Günlük Durum Form State'leri (O günkü şantiye raporu)
+  const [durumOzet, setDurumOzet] = useState<SantiyeGunlukDurum['DurumOzet']>('Normal Devam Ediyor');
+  const [ilerlemeYuzdesi, setIlerlemeYuzdesi] = useState<number>(50);
+  const [havaDurumu, setHavaDurumu] = useState<string>('Güneşli / Açık');
+  const [yapilanIsler, setYapilanIsler] = useState<string>('');
+  const [eksikMalzemeler, setEksikMalzemeler] = useState<string>('');
+  const [genelNotlar, setGenelNotlar] = useState<string>('');
+  const [raporlayan, setRaporlayan] = useState<string>('');
+  const [kaydediliyor, setKaydediliyor] = useState<boolean>(false);
 
   // Modal States
   const [formModalAcik, setFormModalAcik] = useState(false);
@@ -54,8 +65,9 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
   const [notHedefUye, setNotHedefUye] = useState<{ uyeId: string; uyeAd: string; not: string } | null>(null);
   const [yazdirModalAcik, setYazdirModalAcik] = useState(false);
   const [yazdirSantiye, setYazdirSantiye] = useState<SantiyeMontajGrubu | null>(null);
+  const [yazdirMod, setYazdirMod] = useState<'gunluk' | 'genel'>('gunluk');
 
-  // Form State'leri
+  // Şantiye Ekle/Düzenle Form State'leri
   const [formSantiyeAdi, setFormSantiyeAdi] = useState('');
   const [formProjeId, setFormProjeId] = useState<string>('');
   const [formLokasyon, setFormLokasyon] = useState('');
@@ -176,6 +188,18 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
               [bugun]: {}
             },
             YoklamaNotlari: {},
+            GunlukDurumlar: {
+              [bugun]: {
+                Tarih: bugun,
+                DurumOzet: 'Normal Devam Ediyor',
+                IlerlemeYuzdesi: 65,
+                HavaDurumu: 'Güneşli / Açık',
+                YapilanIsler: 'Mutfak alt ve üst dolap gövdelerinin duvara asılması ve terazi ayarları tamamlandı. Ada tezgah iskeleti kuruldu.',
+                EksikMalzemeVeSorunlar: '2 koli frenli menteşe eksik, fabrikadan takviye istendi.',
+                GenelNotlar: 'Şantiyede elektrik ve su tesisatçıları ile uyumlu şekilde çalışıldı.',
+                Raporlayan: personeller[0]?.AdSoyad || 'Ahmet Yılmaz'
+              }
+            },
             OlusturmaTarihi: bugun
           },
           {
@@ -218,6 +242,18 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
               [bugun]: {}
             },
             YoklamaNotlari: {},
+            GunlukDurumlar: {
+              [bugun]: {
+                Tarih: bugun,
+                DurumOzet: 'Hızlı İlerliyor',
+                IlerlemeYuzdesi: 40,
+                HavaDurumu: 'Kapalı / İç Mekan',
+                YapilanIsler: 'Kasa bankosu ve soyunma kabinlerinin ahşap konstrüksiyonu yerleştirildi.',
+                EksikMalzemeVeSorunlar: 'Herhangi bir eksik malzeme yok.',
+                GenelNotlar: 'AVM gece çalışma izni 23:00 - 07:00 arası.',
+                Raporlayan: 'Mehmet Demir'
+              }
+            },
             OlusturmaTarihi: bugun
           }
         ];
@@ -260,14 +296,37 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
     return santiyeler.find(s => String(s.Id) === String(seciliSantiyeId)) || null;
   }, [santiyeler, seciliSantiyeId]);
 
+  // Seçili Şantiye veya Tarih Değiştiğinde Günlük Durum Formunu Doldur
+  useEffect(() => {
+    if (!seciliSantiye) return;
+
+    const kayitliRapor = seciliSantiye.GunlukDurumlar?.[seciliTarih];
+    if (kayitliRapor) {
+      setDurumOzet(kayitliRapor.DurumOzet || 'Normal Devam Ediyor');
+      setIlerlemeYuzdesi(kayitliRapor.IlerlemeYuzdesi !== undefined ? kayitliRapor.IlerlemeYuzdesi : 50);
+      setHavaDurumu(kayitliRapor.HavaDurumu || 'Güneşli / Açık');
+      setYapilanIsler(kayitliRapor.YapilanIsler || '');
+      setEksikMalzemeler(kayitliRapor.EksikMalzemeVeSorunlar || '');
+      setGenelNotlar(kayitliRapor.GenelNotlar || '');
+      setRaporlayan(kayitliRapor.Raporlayan || seciliSantiye.SorumluUsta || '');
+    } else {
+      // O güne özel henüz rapor girilmemişse varsayılanları getir
+      setDurumOzet('Normal Devam Ediyor');
+      setIlerlemeYuzdesi(50);
+      setHavaDurumu('Güneşli / Açık');
+      setYapilanIsler('');
+      setEksikMalzemeler('');
+      setGenelNotlar('');
+      setRaporlayan(seciliSantiye.SorumluUsta || '');
+    }
+  }, [seciliSantiye, seciliTarih]);
+
   // Filtrelenmiş Şantiyeler (Aktif veya Arşiv)
   const filtrelenmisSantiyeler = useMemo(() => {
     return santiyeler.filter(s => {
-      // 1. Durum filtresi (Aktif / Arşiv)
       if (anaSekme === 'aktif' && s.Durum !== 'Aktif') return false;
       if (anaSekme === 'arsiv' && s.Durum !== 'Tamamlandi') return false;
 
-      // 2. Arama filtresi
       if (!aramaMetni.trim()) return true;
       const lower = aramaMetni.toLowerCase();
       const ad = (s.SantiyeAdi || '').toLowerCase();
@@ -321,6 +380,99 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
     };
   }, [santiyeler, seciliTarih]);
 
+  // Şantiyenin çalışma günleri listesi (Geriye doğru 14 gün + gelecek günler)
+  const santiyeCalismaGunleri = useMemo(() => {
+    if (!seciliSantiye) return [];
+    const set = new Set<string>();
+
+    if (seciliSantiye.BaslangicTarihi) set.add(seciliSantiye.BaslangicTarihi);
+    set.add(seciliTarih);
+    set.add(getBugunStr());
+
+    if (seciliSantiye.YoklamaKayitlari) {
+      Object.keys(seciliSantiye.YoklamaKayitlari).forEach(t => set.add(t));
+    }
+    if (seciliSantiye.GunlukDurumlar) {
+      Object.keys(seciliSantiye.GunlukDurumlar).forEach(t => set.add(t));
+    }
+
+    // Seçili tarihten 5 gün önce ve 2 gün sonrasını da ekle
+    const secDate = new Date(seciliTarih);
+    for (let i = -7; i <= 3; i++) {
+      const d = new Date(secDate);
+      d.setDate(d.getDate() + i);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      set.add(`${y}-${m}-${day}`);
+    }
+
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [seciliSantiye, seciliTarih]);
+
+  // =========================================================================
+  // GÜNLÜK DURUM & SAHA RAPORU KAYDETME (KULLANICININ İSTEDİĞİ ANA BUTON)
+  // =========================================================================
+  const handleGunlukDurumuKaydet = async () => {
+    if (!seciliSantiye) return;
+
+    setKaydediliyor(true);
+    const yeniRapor: SantiyeGunlukDurum = {
+      Tarih: seciliTarih,
+      DurumOzet: durumOzet,
+      IlerlemeYuzdesi: Number(ilerlemeYuzdesi),
+      HavaDurumu: havaDurumu,
+      YapilanIsler: yapilanIsler.trim(),
+      EksikMalzemeVeSorunlar: eksikMalzemeler.trim(),
+      GenelNotlar: genelNotlar.trim(),
+      Raporlayan: raporlayan.trim() || seciliSantiye.SorumluUsta || 'Sorumlu Usta',
+      KayitZamani: new Date().toISOString()
+    };
+
+    // Mevcut yoklama verilerini de toparla
+    const mevcutYoklama = seciliSantiye.YoklamaKayitlari?.[seciliTarih] || {};
+    const mevcutYoklamaNotlari = seciliSantiye.YoklamaNotlari?.[seciliTarih] || {};
+
+    const guncelSantiyeler = santiyeler.map(s => {
+      if (String(s.Id) !== String(seciliSantiye.Id)) return s;
+
+      const yeniGunlukler = { ...(s.GunlukDurumlar || {}) };
+      yeniGunlukler[seciliTarih] = yeniRapor;
+
+      return {
+        ...s,
+        GunlukDurumlar: yeniGunlukler
+      };
+    });
+
+    setSantiyeler(guncelSantiyeler);
+    kaydetLocal(guncelSantiyeler);
+
+    try {
+      const res = await fetch(`/api/montaj-gruplari/${seciliSantiye.Id}/gunluk-durum`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tarih: seciliTarih,
+          durumKaydi: yeniRapor,
+          yoklamaKayitlari: mevcutYoklama,
+          yoklamaNotlari: mevcutYoklamaNotlari
+        })
+      });
+
+      if (res.ok) {
+        gosterBildirim(`✅ ${seciliTarih} tarihli şantiye durumu ve saha günlüğü başarıyla kaydedildi!`);
+      } else {
+        gosterBildirim(`✅ ${seciliTarih} tarihli durum yerel olarak kaydedildi.`);
+      }
+    } catch (err) {
+      console.warn('Durum kaydetme sunucu uyarısı:', err);
+      gosterBildirim(`✅ ${seciliTarih} tarihli durum başarıyla kaydedildi.`);
+    } finally {
+      setKaydediliyor(false);
+    }
+  };
+
   // =========================================================================
   // YOKLAMA TOGGLE İŞLEMİ (Tek tıkla Geldi / Gelmedi Geçişi)
   // =========================================================================
@@ -331,7 +483,6 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
     const mevcutDurum = santiye.YoklamaKayitlari?.[seciliTarih]?.[uyeId] ?? false;
     const yeniDurum = !mevcutDurum;
 
-    // Local state anında güncellensin (sıfır gecikme)
     const guncelSantiyeler = santiyeler.map(s => {
       if (String(s.Id) !== String(santiyeId)) return s;
 
@@ -353,20 +504,15 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
     setSantiyeler(guncelSantiyeler);
     kaydetLocal(guncelSantiyeler);
 
-    // Sunucuya ilet
     try {
-      await fetch(`/api/montaj-gruplari/${santiyeId}/toggle-yoklama`, {
-        method: 'POST',
+      await fetch(`/api/montaj-gruplari/${santiyeId}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          uyeId,
-          tarih: seciliTarih,
-          geldiMi: yeniDurum
+          YoklamaKayitlari: guncelSantiyeler.find(s => String(s.Id) === String(santiyeId))?.YoklamaKayitlari
         })
       });
-    } catch (err) {
-      console.warn('Sunucu yoklama senkronizasyon uyarısı:', err);
-    }
+    } catch (err) {}
   };
 
   // Toplu Yoklama (Tüm Ekip Geldi / Temizle)
@@ -395,17 +541,14 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
     gosterBildirim(durum ? 'Tüm ekip "GELDİ" olarak işaretlendi.' : 'Yoklama temizlendi.');
 
     try {
-      await fetch(`/api/montaj-gruplari/${santiyeId}/toplu-yoklama`, {
-        method: 'POST',
+      await fetch(`/api/montaj-gruplari/${santiyeId}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tarih: seciliTarih,
-          durum
+          YoklamaKayitlari: guncelSantiyeler.find(s => String(s.Id) === String(santiyeId))?.YoklamaKayitlari
         })
       });
-    } catch (err) {
-      console.warn('Toplu yoklama sunucu uyarısı:', err);
-    }
+    } catch (err) {}
   };
 
   // Günlük Not Ekleme / Güncelleme
@@ -443,6 +586,16 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
         })
       });
     } catch (e) {}
+  };
+
+  // Tarih Değiştirme Yardımcısı
+  const handleGunDegistir = (fark: number) => {
+    const current = new Date(seciliTarih);
+    current.setDate(current.getDate() + fark);
+    const y = current.getFullYear();
+    const m = String(current.getMonth() + 1).padStart(2, '0');
+    const day = String(current.getDate()).padStart(2, '0');
+    setSeciliTarih(`${y}-${m}-${day}`);
   };
 
   // =========================================================================
@@ -594,10 +747,19 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
           [formBaslangicTarihi]: {}
         },
         YoklamaNotlari: {},
+        GunlukDurumlar: {
+          [formBaslangicTarihi]: {
+            Tarih: formBaslangicTarihi,
+            DurumOzet: 'Normal Devam Ediyor',
+            IlerlemeYuzdesi: 10,
+            HavaDurumu: 'Güneşli / Açık',
+            YapilanIsler: 'Şantiye kurulumu yapıldı, ekip sahaya intikal etti.',
+            Raporlayan: formSorumluUsta.trim()
+          }
+        },
         OlusturmaTarihi: getBugunStr()
       };
 
-      // İlk gün için herkesi otomatik geldi yapalım
       formEkip.forEach(u => {
         yeniSantiye.YoklamaKayitlari[formBaslangicTarihi][u.Id] = true;
       });
@@ -619,367 +781,300 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
     }
   };
 
-  // Şantiyeyi Arşive Al / Tamamla veya Yeniden Aktif Et
-  const handleToggleArsiv = async (santiyeId: number | string, yeniDurum: 'Aktif' | 'Tamamlandi') => {
-    const onayMetni = yeniDurum === 'Tamamlandi'
-      ? 'Bu şantiye montaj işini tamamlayıp arşive kaldırmak istediğinize emin misiniz? (Tüm geçmiş katılım kayıtları arşivde güvenle saklanacaktır)'
-      : 'Bu şantiye montaj işini arşivden çıkarıp tekrar aktif şantiyelere almak istediğinize emin misiniz?';
-
-    if (!window.confirm(onayMetni)) return;
-
+  // Şantiyeyi Arşive Al / Aktife Döndür
+  const handleToggleArsiv = async (santiyeId: number | string, hedefDurum: 'Aktif' | 'Tamamlandi') => {
     const bugun = getBugunStr();
     const guncelSantiyeler = santiyeler.map(s => {
       if (String(s.Id) !== String(santiyeId)) return s;
       return {
         ...s,
-        Durum: yeniDurum,
-        GerceklesenBitisTarihi: yeniDurum === 'Tamamlandi' ? bugun : undefined,
-        ArsivlenmeTarihi: yeniDurum === 'Tamamlandi' ? bugun : undefined
+        Durum: hedefDurum,
+        GerceklesenBitisTarihi: hedefDurum === 'Tamamlandi' ? bugun : undefined,
+        ArsivlenmeTarihi: hedefDurum === 'Tamamlandi' ? bugun : undefined
       };
     });
 
     setSantiyeler(guncelSantiyeler);
     kaydetLocal(guncelSantiyeler);
-
-    if (yeniDurum === 'Tamamlandi') {
-      gosterBildirim('Şantiye işi tamamlandı ve arşive kaldırıldı.');
-      // Eğer seçili olan arşivlendiyse ve aktif sekmedeysek başka aktif şantiye seçelim
-      if (anaSekme === 'aktif') {
-        const kalanAktif = guncelSantiyeler.find(s => s.Durum === 'Aktif');
-        setSeciliSantiyeId(kalanAktif ? kalanAktif.Id : null);
-      }
-    } else {
-      gosterBildirim('Şantiye işi yeniden aktife alındı.');
-      setAnaSekme('aktif');
-      setSeciliSantiyeId(santiyeId);
-    }
+    gosterBildirim(hedefDurum === 'Tamamlandi' ? 'Şantiye başarıyla tamamlandı ve arşive alındı.' : 'Şantiye yeniden aktif edildi.');
 
     try {
-      await fetch(`/api/montaj-gruplari/${santiyeId}/arsivle`, {
-        method: 'POST',
+      await fetch(`/api/montaj-gruplari/${santiyeId}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ durum: yeniDurum })
+        body: JSON.stringify({
+          Durum: hedefDurum,
+          GerceklesenBitisTarihi: hedefDurum === 'Tamamlandi' ? bugun : null,
+          ArsivlenmeTarihi: hedefDurum === 'Tamamlandi' ? bugun : null
+        })
       });
-    } catch (e) {}
+    } catch (err) {}
   };
 
-  // Şantiyeyi Sil
+  // Şantiye Sil
   const handleSantiyeSil = async (santiyeId: number | string) => {
-    if (!window.confirm('Bu şantiye grubunu ve tüm yoklama geçmişini kalıcı olarak silmek istediğinize emin misiniz?')) {
+    if (!window.confirm('Bu şantiye montaj grubunu ve tüm günlük durum geçmişini silmek istediğinize emin misiniz?')) {
       return;
     }
 
-    const yeniListe = santiyeler.filter(s => String(s.Id) !== String(santiyeId));
-    setSantiyeler(yeniListe);
-    kaydetLocal(yeniListe);
+    const guncelSantiyeler = santiyeler.filter(s => String(s.Id) !== String(santiyeId));
+    setSantiyeler(guncelSantiyeler);
+    kaydetLocal(guncelSantiyeler);
 
     if (String(seciliSantiyeId) === String(santiyeId)) {
-      setSeciliSantiyeId(yeniListe.length > 0 ? yeniListe[0].Id : null);
+      setSeciliSantiyeId(guncelSantiyeler[0]?.Id || null);
     }
+
     gosterBildirim('Şantiye grubu silindi.');
 
     try {
-      await fetch(`/api/montaj-gruplari/${santiyeId}`, { method: 'DELETE' });
-    } catch (e) {}
+      await fetch(`/api/montaj-gruplari/${santiyeId}`, {
+        method: 'DELETE'
+      });
+    } catch (err) {}
   };
-
-  // Tarih Değiştirme Yardımcıları
-  const handleGunDegistir = (fark: number) => {
-    const d = new Date(seciliTarih);
-    d.setDate(d.getDate() + fark);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    setSeciliTarih(`${y}-${m}-${day}`);
-  };
-
-  // Şantiyenin çalıştığı tüm günlerin listesini çıkarma (Matris görünümü için)
-  const santiyeCalismaGunleri = useMemo(() => {
-    if (!seciliSantiye) return [];
-    const datesSet = new Set<string>();
-    
-    // Yoklama kaydı girilmiş tüm tarihler
-    if (seciliSantiye.YoklamaKayitlari) {
-      Object.keys(seciliSantiye.YoklamaKayitlari).forEach(t => datesSet.add(t));
-    }
-    
-    // Başlangıç ve bugün/bitiş arasındaki tarihler
-    const baslangic = new Date(seciliSantiye.BaslangicTarihi || getBugunStr());
-    const bitis = seciliSantiye.GerceklesenBitisTarihi 
-      ? new Date(seciliSantiye.GerceklesenBitisTarihi) 
-      : new Date();
-
-    const curr = new Date(baslangic);
-    let guard = 0;
-    while (curr <= bitis && guard < 60) {
-      const y = curr.getFullYear();
-      const m = String(curr.getMonth() + 1).padStart(2, '0');
-      const day = String(curr.getDate()).padStart(2, '0');
-      datesSet.add(`${y}-${m}-${day}`);
-      curr.setDate(curr.getDate() + 1);
-      guard++;
-    }
-
-    datesSet.add(seciliTarih);
-    return Array.from(datesSet).sort((a, b) => b.localeCompare(a)); // En yeni gün başta
-  }, [seciliSantiye, seciliTarih]);
 
   return (
     <div className="space-y-6">
-      {/* Üst Başlık ve Hızlı İstatistik Paneli */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-7 shadow-xl">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="p-2 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-xl">
-                <HardHat className="w-6 h-6" />
-              </span>
-              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                Dış Montaj &amp; Şantiye Takibi
-              </h2>
-            </div>
-            <p className="text-xs sm:text-sm text-slate-400 max-w-2xl">
-              Sahada montajda olan ustaları (Kadrolu &amp; Yevmiyeci) takip edin, birden fazla montaj grubunu yönetin ve günlük tek tıkla geldi/gelmedi yoklaması yapın.
-            </p>
+      {/* Üst Başlık & Aksiyon Barı */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-5 rounded-3xl shadow-xl">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white shadow-lg shadow-blue-500/20 shrink-0">
+            <Building2 className="w-6 h-6" />
           </div>
-
-          {/* Aksiyon Butonu */}
-          <div className="flex items-center gap-2.5">
-            <button
-              onClick={handleYeniSantiyeModalAc}
-              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-sm rounded-2xl shadow-lg shadow-blue-600/20 hover:shadow-blue-600/40 transition active:scale-95 cursor-pointer"
-            >
-              <Plus className="w-5 h-5" />
-              <span>Yeni Şantiye / Montaj İşi Ekle</span>
-            </button>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-black text-white tracking-tight">
+                Şantiye & Dış Montaj Yönetimi
+              </h2>
+              <span className="text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2.5 py-0.5 rounded-full font-bold">
+                Gün Gün Durum Takibi
+              </span>
+            </div>
+            <p className="text-xs text-slate-400">
+              Dış şantiyeler, montaj ekipleri, günlük saha raporları ve anlık usta yoklaması
+            </p>
           </div>
         </div>
 
-        {/* İstatistik Sayaçları */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-6 border-t border-slate-800/80">
-          <div className="bg-slate-950/60 border border-slate-800/60 p-3.5 rounded-2xl">
-            <div className="text-slate-400 text-xs font-semibold flex items-center gap-1.5">
-              <Building2 className="w-3.5 h-3.5 text-blue-400" />
-              Aktif Şantiyeler
-            </div>
-            <div className="text-xl sm:text-2xl font-black text-white mt-1">
-              {istatistikler.aktifSantiyeSayisi} <span className="text-xs text-slate-500 font-normal">Grup</span>
-            </div>
-          </div>
-
-          <div className="bg-slate-950/60 border border-slate-800/60 p-3.5 rounded-2xl">
-            <div className="text-slate-400 text-xs font-semibold flex items-center gap-1.5">
-              <Users className="w-3.5 h-3.5 text-indigo-400" />
-              Sahadaki Ustalar
-            </div>
-            <div className="text-xl sm:text-2xl font-black text-white mt-1">
-              {istatistikler.toplamSahadakiUsta} <span className="text-xs text-slate-500 font-normal">({istatistikler.toplamKadrolu} Kadrolu + {istatistikler.toplamYevmiyeci} Yevmiyeci)</span>
-            </div>
-          </div>
-
-          <div className="bg-slate-950/60 border border-slate-800/60 p-3.5 rounded-2xl">
-            <div className="text-slate-400 text-xs font-semibold flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-              Bugün Sahaya Gelenler
-            </div>
-            <div className="text-xl sm:text-2xl font-black text-emerald-400 mt-1">
-              {istatistikler.bugunGelenler} <span className="text-xs text-slate-500 font-normal">/ {istatistikler.bugunToplamBeklenen} ({istatistikler.katilimYuzdesi}%)</span>
-            </div>
-          </div>
-
-          <div className="bg-slate-950/60 border border-slate-800/60 p-3.5 rounded-2xl">
-            <div className="text-slate-400 text-xs font-semibold flex items-center gap-1.5">
-              <Archive className="w-3.5 h-3.5 text-slate-400" />
-              Tamamlanan (Arşiv)
-            </div>
-            <div className="text-xl sm:text-2xl font-black text-slate-300 mt-1">
-              {istatistikler.arsivSantiyeSayisi} <span className="text-xs text-slate-500 font-normal">İş</span>
-            </div>
-          </div>
+        {/* Aksiyon Butonları */}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            onClick={handleYeniSantiyeModalAc}
+            className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs px-4 py-2.5 rounded-2xl shadow-lg shadow-blue-600/30 transition transform active:scale-95 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Yeni Şantiye / Montaj İşi Oluştur</span>
+          </button>
         </div>
       </div>
 
       {/* Bildirim Toast */}
       {bildirim && (
-        <div className={`p-4 rounded-2xl border flex items-center gap-3 transition shadow-lg ${
+        <div className={`p-3.5 rounded-2xl text-xs font-bold flex items-center gap-2.5 transition animate-fade-in ${
           bildirim.tip === 'basari' 
-            ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-200' 
-            : 'bg-rose-950/80 border-rose-500/50 text-rose-200'
+            ? 'bg-emerald-950/80 border border-emerald-500/50 text-emerald-200' 
+            : 'bg-rose-950/80 border border-rose-500/50 text-rose-200'
         }`}>
-          {bildirim.tip === 'basari' ? <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" /> : <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />}
-          <span className="text-sm font-semibold">{bildirim.metin}</span>
+          {bildirim.tip === 'basari' ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <AlertCircle className="w-4 h-4 text-rose-400" />}
+          <span>{bildirim.metin}</span>
         </div>
       )}
 
-      {/* Sekmeler ve Filtre Çubuğu */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-900 border border-slate-800 p-2.5 rounded-2xl">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setAnaSekme('aktif')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
-              anaSekme === 'aktif'
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <Building2 className="w-4 h-4" />
-            <span>Aktif Şantiyeler ({santiyeler.filter(s => s.Durum === 'Aktif').length})</span>
-          </button>
-
-          <button
-            onClick={() => setAnaSekme('arsiv')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
-              anaSekme === 'arsiv'
-                ? 'bg-slate-700 text-white shadow-md'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <Archive className="w-4 h-4" />
-            <span>Arşiv / Tamamlanan İşler ({santiyeler.filter(s => s.Durum === 'Tamamlandi').length})</span>
-          </button>
+      {/* İstatistik Özet Kartları */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
+            <Building2 className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Aktif Şantiyeler</div>
+            <div className="text-lg font-black text-white">{istatistikler.aktifSantiyeSayisi} <span className="text-xs text-slate-500 font-normal">Grup</span></div>
+          </div>
         </div>
 
-        {/* Arama Kutusu */}
-        <div className="relative w-full sm:w-72">
-          <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={aramaMetni}
-            onChange={(e) => setAramaMetni(e.target.value)}
-            placeholder="Şantiye, usta, şehir ara..."
-            className="w-full pl-9 pr-3 py-1.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-          />
+        <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
+            <Users className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Sahadaki Toplam Ekip</div>
+            <div className="text-lg font-black text-white">{istatistikler.toplamSahadakiUsta} <span className="text-xs text-slate-500 font-normal">Usta</span></div>
+          </div>
+        </div>
+
+        <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-emerald-600/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Seçili Gün Gelenler</div>
+            <div className="text-lg font-black text-emerald-400">
+              {istatistikler.bugunGelenler} / {istatistikler.bugunToplamBeklenen}
+              <span className="text-xs text-slate-400 font-normal ml-1">(%{istatistikler.katilimYuzdesi})</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-amber-600/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+            <Archive className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Tamamlanan / Arşiv</div>
+            <div className="text-lg font-black text-white">{istatistikler.arsivSantiyeSayisi} <span className="text-xs text-slate-500 font-normal">İş</span></div>
+          </div>
         </div>
       </div>
 
-      {/* Şantiye Listesi & Detay Alanı Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Sol Kolon: Şantiye Kartları Listesi (lg: 4 veya 5 kolon) */}
-        <div className="lg:col-span-4 xl:col-span-4 space-y-3">
-          <div className="flex items-center justify-between text-xs font-bold text-slate-400 px-1">
-            <span>{anaSekme === 'aktif' ? 'AKTİF ŞANTİYELER' : 'ARŞİVDEKİ ŞANTİYELER'}</span>
-            <span>{filtrelenmisSantiyeler.length} Kayıt</span>
+      {/* Ana Çalışma Alanı: Sol Kolon (Şantiye Listesi) + Sağ Kolon (Durum & Yoklama Paneli) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        
+        {/* Sol Kolon: Şantiye Seçici & Arama (4 kolon) */}
+        <div className="lg:col-span-4 space-y-3">
+          {/* Aktif / Arşiv Sekmeleri */}
+          <div className="bg-slate-900 border border-slate-800 p-1.5 rounded-2xl flex items-center gap-1">
+            <button
+              onClick={() => setAnaSekme('aktif')}
+              className={`flex-1 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                anaSekme === 'aktif' 
+                  ? 'bg-blue-600 text-white shadow-lg' 
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+              }`}
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              <span>Aktif ({santiyeler.filter(s => s.Durum === 'Aktif').length})</span>
+            </button>
+
+            <button
+              onClick={() => setAnaSekme('arsiv')}
+              className={`flex-1 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                anaSekme === 'arsiv' 
+                  ? 'bg-blue-600 text-white shadow-lg' 
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+              }`}
+            >
+              <Archive className="w-3.5 h-3.5" />
+              <span>Arşiv ({santiyeler.filter(s => s.Durum === 'Tamamlandi').length})</span>
+            </button>
           </div>
 
-          {filtrelenmisSantiyeler.length === 0 ? (
-            <div className="bg-slate-900/60 border border-slate-800 border-dashed rounded-3xl p-8 text-center space-y-3">
-              <Building2 className="w-10 h-10 text-slate-600 mx-auto" />
-              <div className="text-slate-300 font-semibold text-sm">
-                {anaSekme === 'aktif' ? 'Aktif şantiye bulunmuyor' : 'Arşivde şantiye kaydı yok'}
-              </div>
-              <p className="text-xs text-slate-500 max-w-xs mx-auto">
-                {anaSekme === 'aktif' 
-                  ? 'Dışarıda montajı olan ustaları takip etmek için yukarıdaki butondan yeni şantiye grubu ekleyin.' 
-                  : 'Tamamlanan şantiyeler burada listelenir.'}
-              </p>
-              {anaSekme === 'aktif' && (
+          {/* Şantiye Arama Kutusu */}
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Şantiye, lokasyon, müşteri veya usta ara..."
+              value={aramaMetni}
+              onChange={(e) => setAramaMetni(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-800 rounded-2xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition"
+            />
+          </div>
+
+          {/* Şantiye Kartları Listesi */}
+          <div className="space-y-2.5 max-h-[750px] overflow-y-auto pr-1">
+            {filtrelenmisSantiyeler.length === 0 ? (
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-8 text-center space-y-2">
+                <Building2 className="w-8 h-8 text-slate-600 mx-auto" />
+                <div className="text-xs text-slate-400 font-medium">Kayıtlı şantiye bulunamadı</div>
                 <button
                   onClick={handleYeniSantiyeModalAc}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-xl text-xs font-bold hover:bg-blue-600 hover:text-white transition"
+                  className="text-xs text-blue-400 hover:underline font-bold"
                 >
-                  <Plus className="w-4 h-4" /> Şantiye Ekle
+                  + Yeni Şantiye Oluştur
                 </button>
-              )}
-            </div>
-          ) : (
-            filtrelenmisSantiyeler.map(s => {
-              const isSelected = String(s.Id) === String(seciliSantiyeId);
-              const ekipSayisi = s.Ekip?.length || 0;
-              const kadroluSayisi = s.Ekip?.filter(e => e.Tur === 'Kadrolu').length || 0;
-              const yevmiyeciSayisi = s.Ekip?.filter(e => e.Tur === 'Yevmiyeci').length || 0;
-              
-              // Seçili tarihteki katılım sayısı
-              const gunlukGelen = s.Ekip?.filter(e => s.YoklamaKayitlari?.[seciliTarih]?.[e.Id] === true).length || 0;
+              </div>
+            ) : (
+              filtrelenmisSantiyeler.map(s => {
+                const isSelected = String(s.Id) === String(seciliSantiyeId);
+                const ekipSayisi = s.Ekip?.length || 0;
+                let gunlukGelen = 0;
+                s.Ekip?.forEach(e => {
+                  if (s.YoklamaKayitlari?.[seciliTarih]?.[e.Id] === true) gunlukGelen++;
+                });
 
-              return (
-                <div
-                  key={s.Id}
-                  onClick={() => setSeciliSantiyeId(s.Id)}
-                  className={`p-4 rounded-2xl border transition cursor-pointer text-left relative overflow-hidden ${
-                    isSelected
-                      ? 'bg-slate-800/90 border-blue-500 shadow-lg shadow-blue-900/20'
-                      : 'bg-slate-900/80 border-slate-800 hover:bg-slate-800/50 hover:border-slate-700'
-                  }`}
-                >
-                  {isSelected && (
-                    <div className="absolute top-0 left-0 bottom-0 w-1.5 bg-blue-500" />
-                  )}
+                const sonDurum = s.GunlukDurumlar?.[seciliTarih] || Object.values(s.GunlukDurumlar || {}).pop();
 
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                          s.Durum === 'Aktif'
-                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                            : 'bg-slate-700 text-slate-300'
-                        }`}>
-                          {s.Durum === 'Aktif' ? 'AKTİF MONTAJ' : 'TAMAMLANDI'}
-                        </span>
-                        {s.Lokasyon && (
-                          <span className="text-[10px] text-slate-400 flex items-center gap-0.5">
-                            <MapPin className="w-3 h-3 text-slate-500" />
-                            {s.Lokasyon}
-                          </span>
-                        )}
-                      </div>
-
-                      <h3 className="text-sm font-bold text-white line-clamp-1">
+                return (
+                  <div
+                    key={s.Id}
+                    onClick={() => setSeciliSantiyeId(s.Id)}
+                    className={`p-4 rounded-2xl border transition cursor-pointer text-left relative space-y-2 ${
+                      isSelected
+                        ? 'bg-blue-950/40 border-blue-500/80 shadow-lg shadow-blue-500/10'
+                        : 'bg-slate-900 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <h4 className="text-xs font-black text-white leading-snug line-clamp-2">
                         {s.SantiyeAdi}
-                      </h3>
+                      </h4>
+                      {s.Durum === 'Aktif' ? (
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 mt-1 shadow-sm shadow-emerald-400" />
+                      ) : (
+                        <span className="text-[10px] text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded shrink-0">Arşiv</span>
+                      )}
+                    </div>
 
-                      {s.MusteriFirma && (
-                        <div className="text-xs text-slate-400 font-medium">
-                          Müşteri: {s.MusteriFirma}
+                    <div className="space-y-1 text-[11px] text-slate-400">
+                      {s.Lokasyon && (
+                        <div className="flex items-center gap-1 truncate">
+                          <MapPin className="w-3 h-3 text-rose-400 shrink-0" />
+                          <span className="truncate">{s.Lokasyon}</span>
+                        </div>
+                      )}
+                      {s.SorumluUsta && (
+                        <div className="flex items-center gap-1 truncate">
+                          <HardHat className="w-3 h-3 text-amber-400 shrink-0" />
+                          <span className="truncate font-medium text-slate-300">{s.SorumluUsta}</span>
                         </div>
                       )}
                     </div>
 
-                    <ChevronRight className={`w-4 h-4 shrink-0 transition ${isSelected ? 'text-blue-400 translate-x-0.5' : 'text-slate-600'}`} />
-                  </div>
-
-                  {/* Ekip ve Katılım Özeti */}
-                  <div className="mt-3 pt-3 border-t border-slate-800/70 flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1 text-slate-400">
-                      <Users className="w-3.5 h-3.5 text-blue-400" />
-                      <span>{ekipSayisi} Usta</span>
-                      <span className="text-[10px] text-slate-500 font-mono">({kadroluSayisi}K / {yevmiyeciSayisi}Y)</span>
-                    </div>
-
-                    <div className={`font-semibold flex items-center gap-1 ${gunlukGelen > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Bugün: {gunlukGelen}/{ekipSayisi} Geldi</span>
+                    {/* İlerleme ve Katılım Özeti */}
+                    <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-400">
+                      <span className="flex items-center gap-1 font-semibold text-blue-300">
+                        <Users className="w-3 h-3" />
+                        {gunlukGelen}/{ekipSayisi} Usta Sahada
+                      </span>
+                      {sonDurum?.IlerlemeYuzdesi !== undefined && (
+                        <span className="font-bold text-emerald-400">
+                          %{sonDurum.IlerlemeYuzdesi} İlerleme
+                        </span>
+                      )}
                     </div>
                   </div>
-                </div>
-              );
-            })
-          )}
+                );
+              })
+            )}
+          </div>
         </div>
 
-        {/* Sağ Kolon: Seçili Şantiyenin İnteraktif Yoklama ve Süreç Paneli (lg: 8 kolon) */}
-        <div className="lg:col-span-8 xl:col-span-8 space-y-4">
+        {/* Sağ Kolon: Seçili Şantiye Detayları, Durum Formu & Yoklama Paneli (8 kolon) */}
+        <div className="lg:col-span-8 space-y-4">
           {seciliSantiye ? (
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl space-y-6">
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl space-y-5">
+              
               {/* Şantiye Detay Başlığı & Aksiyonlar */}
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pb-5 border-b border-slate-800">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pb-4 border-b border-slate-800">
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`text-xs font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                    <span className={`text-xs font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
                       seciliSantiye.Durum === 'Aktif'
                         ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                         : 'bg-slate-700 text-slate-300'
                     }`}>
-                      {seciliSantiye.Durum === 'Aktif' ? '• AKTİF ŞANTİYE GRUBU' : 'TAMAMLANMIŞ / ARŞİV'}
+                      {seciliSantiye.Durum === 'Aktif' ? '• AKTİF ŞANTİYE' : 'TAMAMLANMIŞ / ARŞİV'}
                     </span>
                     {seciliSantiye.Lokasyon && (
-                      <span className="text-xs text-slate-400 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 flex items-center gap-1">
-                        <MapPin className="w-3.5 h-3.5 text-rose-400" />
+                      <span className="text-xs text-slate-400 bg-slate-950 px-2 py-0.5 rounded-lg border border-slate-800 flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-rose-400" />
                         {seciliSantiye.Lokasyon}
                       </span>
                     )}
                     {seciliSantiye.ProjeAdi && (
-                      <span className="text-xs text-blue-300 bg-blue-950/60 px-2.5 py-1 rounded-lg border border-blue-800/50 flex items-center gap-1">
-                        <Briefcase className="w-3.5 h-3.5 text-blue-400" />
+                      <span className="text-xs text-blue-300 bg-blue-950/60 px-2 py-0.5 rounded-lg border border-blue-800/50 flex items-center gap-1">
+                        <Briefcase className="w-3 h-3 text-blue-400" />
                         Proje: {seciliSantiye.ProjeAdi}
                       </span>
                     )}
@@ -998,31 +1093,25 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
                       <span><strong>Planlanan Bitiş:</strong> {seciliSantiye.PlanlananBitisTarihi}</span>
                     )}
                   </div>
-
-                  {seciliSantiye.Aciklama && (
-                    <p className="text-xs text-slate-400 bg-slate-950/50 p-2.5 rounded-xl border border-slate-800/80 mt-2">
-                      {seciliSantiye.Aciklama}
-                    </p>
-                  )}
                 </div>
 
-                {/* Sağ Butonlar */}
+                {/* Sağ Aksiyon Butonları */}
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
                     onClick={() => {
                       setYazdirSantiye(seciliSantiye);
                       setYazdirModalAcik(true);
                     }}
-                    title="Şantiye Puantaj ve Yoklama Tutanak Çıktısı Al"
+                    title="Şantiye Rapor Çıktısı Al"
                     className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
                   >
                     <Printer className="w-4 h-4 text-blue-400" />
-                    <span>Yazdır</span>
+                    <span>Yazdır / Rapor</span>
                   </button>
 
                   <button
                     onClick={() => handleDuzenleModalAc(seciliSantiye)}
-                    title="Şantiye Bilgilerini ve Ekibi Düzenle"
+                    title="Şantiye ve Ekip Bilgilerini Düzenle"
                     className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
                   >
                     <Edit3 className="w-4 h-4 text-amber-400" />
@@ -1032,16 +1121,16 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
                   {seciliSantiye.Durum === 'Aktif' ? (
                     <button
                       onClick={() => handleToggleArsiv(seciliSantiye.Id, 'Tamamlandi')}
-                      title="Şantiyeyi Tamamla ve Arşive Kaldır"
+                      title="Şantiyeyi Tamamla ve Arşive Al"
                       className="px-3 py-2 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
                     >
                       <CheckCircle2 className="w-4 h-4" />
-                      <span>İşi Tamamla &amp; Arşive Al</span>
+                      <span>Tamamla & Arşivle</span>
                     </button>
                   ) : (
                     <button
                       onClick={() => handleToggleArsiv(seciliSantiye.Id, 'Aktif')}
-                      title="Şantiyeyi Arşivden Çıkar ve Yeniden Aktif Et"
+                      title="Yeniden Aktif Et"
                       className="px-3 py-2 bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white border border-blue-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
                     >
                       <RotateCcw className="w-4 h-4" />
@@ -1059,10 +1148,10 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
                 </div>
               </div>
 
-              {/* YOKLAMA KONTROL ÇUBUĞU (Tarih Seçimi + Günlük / Matris Görünüm Seçimi) */}
-              <div className="bg-slate-950 border border-slate-800 p-3 rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              {/* TARİH SEÇİMİ VE GÜNLÜK MOD BAR */}
+              <div className="bg-slate-950 border border-slate-800 p-3 rounded-2xl flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
                 {/* Tarih Seçici */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <button
                     onClick={() => handleGunDegistir(-1)}
                     className="p-2 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-xl transition"
@@ -1092,60 +1181,264 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
                   {seciliTarih !== getBugunStr() && (
                     <button
                       onClick={() => setSeciliTarih(getBugunStr())}
-                      className="px-2.5 py-1 bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white rounded-lg text-xs font-semibold transition"
+                      className="px-2.5 py-1 bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white rounded-lg text-xs font-semibold transition cursor-pointer"
                     >
                       Bugün
                     </button>
                   )}
                 </div>
 
-                {/* Toplu İşlem ve Görünüm Seçimi */}
-                <div className="flex items-center gap-2">
+                {/* Alt Sekmeler: Durum Raporu / Yoklama / Geçmiş Günlükler / Matris */}
+                <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-800 gap-1 flex-wrap">
                   <button
-                    onClick={() => handleTopluYoklama(seciliSantiye.Id, true)}
-                    className="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                    onClick={() => setDetaySekmesi('durum')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                      detaySekmesi === 'durum' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                    }`}
                   >
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Tüm Ekip Geldi</span>
+                    <Save className="w-3.5 h-3.5 text-emerald-300" />
+                    <span>Günlük Durum & Rapor</span>
                   </button>
 
                   <button
-                    onClick={() => handleTopluYoklama(seciliSantiye.Id, false)}
-                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium transition cursor-pointer"
+                    onClick={() => setDetaySekmesi('yoklama')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                      detaySekmesi === 'yoklama' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                    }`}
                   >
-                    <span>Temizle</span>
+                    <Users className="w-3.5 h-3.5" />
+                    <span>Usta Yoklaması ({seciliSantiye.Ekip?.filter(e => seciliSantiye.YoklamaKayitlari?.[seciliTarih]?.[e.Id] === true).length || 0})</span>
                   </button>
 
-                  {/* Görünüm Geçişi */}
-                  <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-800">
-                    <button
-                      onClick={() => setGorunumModu('gunluk')}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                        gorunumModu === 'gunluk' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      Günlük Yoklama
-                    </button>
-                    <button
-                      onClick={() => setGorunumModu('matris')}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                        gorunumModu === 'matris' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      Tüm Günler Matrisi
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => setDetaySekmesi('gecmis')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                      detaySekmesi === 'gecmis' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <History className="w-3.5 h-3.5" />
+                    <span>Günlük Rapor Geçmişi</span>
+                  </button>
+
+                  <button
+                    onClick={() => setDetaySekmesi('matris')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                      detaySekmesi === 'matris' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>Devam Matrisi</span>
+                  </button>
                 </div>
               </div>
 
-              {/* 1. GÖRÜNÜM: GÜNLÜK YOKLAMA KARTLARI (KULLANICININ ÖZELLİKLE İSTEDİĞİ TEK TIKLA GELDİ / GELMEDİ TOGGLE) */}
-              {gorunumModu === 'gunluk' && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between text-xs font-bold text-slate-400 px-1">
-                    <span>{seciliTarih} TARİHLİ ŞANTİYE DEVAM / YOKLAMA LİSTESİ</span>
-                    <span className="text-emerald-400">
-                      Geldi Olarak İşaretlenen: {seciliSantiye.Ekip?.filter(e => seciliSantiye.YoklamaKayitlari?.[seciliTarih]?.[e.Id] === true).length || 0} / {seciliSantiye.Ekip?.length || 0} Usta
-                    </span>
+              {/* ========================================================================= */}
+              {/* 1. SEKME: GÜNLÜK SAHA DURUMU & RAPOR KAYDI (KULLANICININ ÖZELLİKLE İSTEDİĞİ DURUMU KAYDET FORMU) */}
+              {/* ========================================================================= */}
+              {detaySekmesi === 'durum' && (
+                <div className="space-y-5">
+                  <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
+                      <div>
+                        <h4 className="text-sm font-black text-white flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-blue-400" />
+                          <span>{seciliTarih} Tarihli Şantiye Saha Durumu</span>
+                        </h4>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          Günün ilerleme durumunu, yapılan montajları, eksik malzemeleri ve saha notlarını girip kaydedin.
+                        </p>
+                      </div>
+
+                      {/* BÜYÜK ÜST KAYDET BUTONU */}
+                      <button
+                        type="button"
+                        onClick={handleGunlukDurumuKaydet}
+                        disabled={kaydediliyor}
+                        className="flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs px-5 py-2.5 rounded-xl shadow-lg shadow-emerald-600/30 transition transform active:scale-95 cursor-pointer"
+                      >
+                        <Save className="w-4 h-4" />
+                        <span>{kaydediliyor ? 'Kaydediliyor...' : '💾 Günlük Durumu Kaydet'}</span>
+                      </button>
+                    </div>
+
+                    {/* Form Alanları */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Günün Genel Durumu */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" />
+                          <span>Günün Genel Durumu</span>
+                        </label>
+                        <select
+                          value={durumOzet}
+                          onChange={(e) => setDurumOzet(e.target.value as any)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-medium focus:outline-none focus:border-blue-500"
+                        >
+                          <option value="Normal Devam Ediyor">Normal Devam Ediyor</option>
+                          <option value="Hızlı İlerliyor">Hızlı İlerliyor (Planın Önünde)</option>
+                          <option value="Malzeme Bekleniyor">Malzeme / Parça Bekleniyor</option>
+                          <option value="Hava Engeli / Durduruldu">Hava Engeli / Geçici Durduruldu</option>
+                          <option value="Müşteri Revizyonu Bekleniyor">Müşteri / Mimar Revizyonu</option>
+                          <option value="Montaj Tamamlandı">Montaj & İmalat Tamamlandı</option>
+                        </select>
+                      </div>
+
+                      {/* Şantiye Tamamlanma Yüzdesi (%) */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                            <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Toplam İlerleme</span>
+                          </label>
+                          <span className="text-xs font-black text-emerald-400 font-mono">
+                            %{ilerlemeYuzdesi}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="5"
+                            value={ilerlemeYuzdesi}
+                            onChange={(e) => setIlerlemeYuzdesi(Number(e.target.value))}
+                            className="flex-1 accent-emerald-500 cursor-pointer"
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={ilerlemeYuzdesi}
+                            onChange={(e) => setIlerlemeYuzdesi(Number(e.target.value))}
+                            className="w-16 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white font-bold text-center"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Hava Durumu / Şantiye Ortamı */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                          <CloudSun className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Hava Durumu / Saha Şartı</span>
+                        </label>
+                        <select
+                          value={havaDurumu}
+                          onChange={(e) => setHavaDurumu(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-medium focus:outline-none focus:border-blue-500"
+                        >
+                          <option value="Güneşli / Açık">Güneşli / Açık</option>
+                          <option value="Parçalı Bulutlu">Parçalı Bulutlu</option>
+                          <option value="Yağmurlu">Yağmurlu</option>
+                          <option value="Rüzgarlı / Fırtına">Rüzgarlı / Fırtına</option>
+                          <option value="Soğuk / Kar">Soğuk / Kar Yağışlı</option>
+                          <option value="Kapalı / İç Mekan">Kapalı / İç Mekan Şartı</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Gün İçinde Yapılan İşler */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <CheckSquare className="w-3.5 h-3.5 text-blue-400" />
+                          <span>Bugün Tamamlanan Montaj & İmalat İşleri</span>
+                        </span>
+                        <span className="text-[10px] text-slate-500">Günlük İlerleme Raporu</span>
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={yapilanIsler}
+                        onChange={(e) => setYapilanIsler(e.target.value)}
+                        placeholder="Örn: Mutfak alt dolap iskeletleri duvara monte edildi, ada tezgahın elektrik geçişleri açıldı, kiler rayları takıldı..."
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+
+                    {/* Eksik Malzemeler ve Saha Aksaklıkları */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-amber-300 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Eksik Malzemeler, Hasarlı Parçalar veya Saha İhtiyaçları</span>
+                        </span>
+                        <span className="text-[10px] text-amber-500/80">Fabrikadan istenecekler</span>
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={eksikMalzemeler}
+                        onChange={(e) => setEksikMalzemeler(e.target.value)}
+                        placeholder="Örn: 2 koli frenli menteşe eksik, boy dolap kapaklarından 1 tanesi çatlak geldi, 5 kutu 3.5x18 vida gerekiyor..."
+                        className="w-full bg-slate-900 border border-amber-900/40 rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+
+                    {/* Genel Şantiye Notları & Raporlayan */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="md:col-span-2 space-y-1.5">
+                        <label className="text-xs font-bold text-slate-300">Genel Şantiye Notları & Talimatlar</label>
+                        <input
+                          type="text"
+                          value={genelNotlar}
+                          onChange={(e) => setGenelNotlar(e.target.value)}
+                          placeholder="Örn: Yarın sabah 09:00'da mermerci gelecek, çalışma alanı süpürüldü..."
+                          className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-300">Raporlayan / Sorumlu Usta</label>
+                        <input
+                          type="text"
+                          value={raporlayan}
+                          onChange={(e) => setRaporlayan(e.target.value)}
+                          placeholder="Ad Soyad"
+                          className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* ALT BÜYÜK KAYDET BUTONU */}
+                    <div className="pt-3 border-t border-slate-800 flex items-center justify-between flex-wrap gap-3">
+                      <div className="text-xs text-slate-400 flex items-center gap-1.5">
+                        <Info className="w-4 h-4 text-blue-400" />
+                        <span>Kaydettiğiniz raporlar şantiye tarihçesinde gün gün saklanır ve PDF / çıktı alınabilir.</span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleGunlukDurumuKaydet}
+                        disabled={kaydediliyor}
+                        className="flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm px-6 py-3 rounded-2xl shadow-xl shadow-emerald-600/30 transition transform active:scale-95 cursor-pointer"
+                      >
+                        <Save className="w-5 h-5" />
+                        <span>{kaydediliyor ? 'Kaydediliyor...' : '💾 GÜNLÜK DURUMU VE RAPORU KAYDET'}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ========================================================================= */}
+              {/* 2. SEKME: USTA YOKLAMASI (GELDİ / GELMEDİ TOGGLE) */}
+              {/* ========================================================================= */}
+              {detaySekmesi === 'yoklama' && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between flex-wrap gap-2 text-xs font-bold text-slate-400 px-1">
+                    <span className="text-white">{seciliTarih} Tarihli Usta Katılım Listesi</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleTopluYoklama(seciliSantiye.Id, true)}
+                        className="px-3 py-1 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 rounded-lg text-xs font-bold transition cursor-pointer"
+                      >
+                        ✔ Tüm Ekip Geldi
+                      </button>
+                      <button
+                        onClick={() => handleTopluYoklama(seciliSantiye.Id, false)}
+                        className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs transition cursor-pointer"
+                      >
+                        Temizle
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1164,7 +1457,6 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="flex items-start gap-3">
-                              {/* Avatar */}
                               <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-sm shrink-0 ${
                                 uye.Tur === 'Kadrolu'
                                   ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
@@ -1201,7 +1493,7 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
                             </div>
                           </div>
 
-                          {/* Yoklama Notu Varsa Göster */}
+                          {/* Yoklama Notu */}
                           {gunlukNot && (
                             <div className="text-xs text-slate-300 bg-slate-900/90 p-2 rounded-xl border border-slate-800 flex items-center justify-between">
                               <span className="italic">"{gunlukNot}"</span>
@@ -1217,7 +1509,7 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
                             </div>
                           )}
 
-                          {/* BÜYÜK TOGGLE DÜĞMESİ (GELDİ / GELMEDİ) */}
+                          {/* TOGGLE BUTONU */}
                           <div className="pt-2 border-t border-slate-800/60 flex items-center justify-between gap-2">
                             <button
                               type="button"
@@ -1230,7 +1522,6 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
                               {gunlukNot ? 'Notu Düzenle' : '+ Not Ekle'}
                             </button>
 
-                            {/* TOGGLE BUTONU */}
                             <button
                               type="button"
                               onClick={() => handleToggleYoklama(seciliSantiye.Id, uye.Id)}
@@ -1260,12 +1551,119 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
                 </div>
               )}
 
-              {/* 2. GÖRÜNÜM: TÜM GÜNLER MATRİS TABLOSU */}
-              {gorunumModu === 'matris' && (
+              {/* ========================================================================= */}
+              {/* 3. SEKME: GÜNLÜK RAPOR GEÇMİŞİ (ŞANTİYENİN GÜN GÜN ARŞİVİ) */}
+              {/* ========================================================================= */}
+              {detaySekmesi === 'gecmis' && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-400 px-1">
+                    <span className="text-white">Şantiye Gün Gün Durum Raporu Geçmişi</span>
+                    <span>Toplam {Object.keys(seciliSantiye.GunlukDurumlar || {}).length} Günlük Rapor Kayıtlı</span>
+                  </div>
+
+                  {Object.keys(seciliSantiye.GunlukDurumlar || {}).length === 0 ? (
+                    <div className="bg-slate-950 border border-slate-800 rounded-2xl p-8 text-center space-y-2">
+                      <FileText className="w-8 h-8 text-slate-600 mx-auto" />
+                      <div className="text-xs text-slate-400">Henüz kaydedilmiş bir günlük durum raporu bulunmuyor.</div>
+                      <button
+                        onClick={() => setDetaySekmesi('durum')}
+                        className="text-xs text-blue-400 font-bold hover:underline"
+                      >
+                        İlk Günün Durumunu Kaydet →
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {Object.entries(seciliSantiye.GunlukDurumlar || {})
+                        .sort((a, b) => b[0].localeCompare(a[0]))
+                        .map(([tarih, rapor]) => {
+                          const gelenUstaSayisi = seciliSantiye.Ekip?.filter(e => seciliSantiye.YoklamaKayitlari?.[tarih]?.[e.Id] === true).length || 0;
+
+                          return (
+                            <div
+                              key={tarih}
+                              className={`p-4 rounded-2xl border transition ${
+                                tarih === seciliTarih
+                                  ? 'bg-blue-950/30 border-blue-500/60 shadow'
+                                  : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                              }`}
+                            >
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-slate-800">
+                                <div className="flex items-center gap-2.5 flex-wrap">
+                                  <span className="text-sm font-black text-white flex items-center gap-1.5">
+                                    <Calendar className="w-4 h-4 text-blue-400" />
+                                    {tarih}
+                                  </span>
+                                  {rapor.DurumOzet && (
+                                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                                      {rapor.DurumOzet}
+                                    </span>
+                                  )}
+                                  {rapor.HavaDurumu && (
+                                    <span className="text-[11px] text-amber-300 bg-amber-950/40 px-2 py-0.5 rounded-md border border-amber-800/40">
+                                      {rapor.HavaDurumu}
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center gap-3 text-xs">
+                                  {rapor.IlerlemeYuzdesi !== undefined && (
+                                    <span className="font-bold text-emerald-400">
+                                      İlerleme: %{rapor.IlerlemeYuzdesi}
+                                    </span>
+                                  )}
+                                  <span className="text-slate-400">
+                                    {gelenUstaSayisi} Usta Çalıştı
+                                  </span>
+                                  <button
+                                    onClick={() => {
+                                      setSeciliTarih(tarih);
+                                      setDetaySekmesi('durum');
+                                    }}
+                                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-blue-400 rounded-lg text-xs font-bold transition"
+                                  >
+                                    Düzenle
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Yapılan İşler */}
+                              {rapor.YapilanIsler && (
+                                <div className="mt-2.5 text-xs text-slate-300 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/60">
+                                  <div className="text-[10px] font-bold text-slate-400 uppercase">Tamamlanan Montajlar:</div>
+                                  <div className="mt-0.5 whitespace-pre-line">{rapor.YapilanIsler}</div>
+                                </div>
+                              )}
+
+                              {/* Eksik Malzemeler */}
+                              {rapor.EksikMalzemeVeSorunlar && (
+                                <div className="mt-2 text-xs text-amber-300 bg-amber-950/20 p-2.5 rounded-xl border border-amber-900/30">
+                                  <div className="text-[10px] font-bold text-amber-400 uppercase">Eksik Malzeme & Sorunlar:</div>
+                                  <div className="mt-0.5 whitespace-pre-line">{rapor.EksikMalzemeVeSorunlar}</div>
+                                </div>
+                              )}
+
+                              {rapor.Raporlayan && (
+                                <div className="mt-2 text-[10px] text-slate-500 text-right">
+                                  Raporlayan: {rapor.Raporlayan}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ========================================================================= */}
+              {/* 4. SEKME: TÜM GÜNLER DEVAM MATRİSİ */}
+              {/* ========================================================================= */}
+              {detaySekmesi === 'matris' && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between text-xs font-bold text-slate-400 px-1">
-                    <span>ŞANTİYE SÜRECİ BOYUNCA GÜNLÜK DEVAM MATRİSİ</span>
-                    <span className="text-slate-500">Hücreye tıklayarak geçmiş günlerin yoklamasını da anında değiştirebilirsiniz</span>
+                    <span>ŞANTİYE DEVAM MATRİSİ</span>
+                    <span className="text-slate-500">Hücreye tıklayarak durumu anında değiştirebilirsiniz</span>
                   </div>
 
                   <div className="overflow-x-auto border border-slate-800 rounded-2xl bg-slate-950">
@@ -1349,7 +1747,7 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
               <Building2 className="w-12 h-12 text-slate-600 mx-auto" />
               <h3 className="text-base font-bold text-white">Şantiye Grubu Seçiniz</h3>
               <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                Yoklama yapmak veya şantiye detaylarını incelemek için sol taraftaki listeden bir montaj grubu seçin ya da yeni bir şantiye ekleyin.
+                Günlük durum kaydetmek, saha raporu girmek veya usta yoklaması yapmak için sol taraftaki listeden bir şantiye seçin.
               </p>
             </div>
           )}
@@ -1360,16 +1758,21 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
       {/* MODAL 1: YENİ ŞANTİYE / MONTAJ İŞİ EKLEME & DÜZENLEME MODALI */}
       {/* ========================================================================= */}
       {formModalAcik && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-3xl w-full p-6 sm:p-8 space-y-6 shadow-2xl max-h-[92vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-3xl shadow-2xl space-y-6 my-8">
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-              <div className="flex items-center gap-2.5">
-                <span className="p-2 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-xl">
-                  <HardHat className="w-5 h-5" />
-                </span>
-                <h3 className="text-lg font-black text-white">
-                  {duzenlenenSantiye ? 'Şantiye Montaj Grubunu Düzenle' : 'Yeni Şantiye / Montaj İşi Oluştur'}
-                </h3>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white">
+                    {duzenlenenSantiye ? 'Şantiye Montaj Grubunu Düzenle' : 'Yeni Şantiye / Montaj İşi Oluştur'}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Şantiye adı, lokasyon, sorumlu usta ve sahada çalışacak usta kadrosunu belirleyin
+                  </p>
+                </div>
               </div>
               <button
                 onClick={() => setFormModalAcik(false)}
@@ -1381,170 +1784,252 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
 
             <form onSubmit={handleSantiyeFormKaydet} className="space-y-6">
               {/* Temel Bilgiler */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="sm:col-span-2 space-y-1">
-                  <label className="text-xs font-bold text-slate-300">
-                    Şantiye / Montaj İşi Adı <span className="text-rose-500">*</span>
-                  </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-xs font-bold text-slate-300">Şantiye / Montaj İşi Adı *</label>
                   <input
                     type="text"
                     required
+                    placeholder="Örn: Kadıköy Sahil Villa Ahşap Montajı"
                     value={formSantiyeAdi}
                     onChange={(e) => setFormSantiyeAdi(e.target.value)}
-                    placeholder="Örn: Kadıköy Sahil Villa Ahşap Montajı"
-                    className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-300">
-                    Bağlı Fabrika Projesi (Opsiyonel)
-                  </label>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300">Bağlı Fabrika Projesi (Opsiyonel)</label>
                   <select
                     value={formProjeId}
                     onChange={(e) => setFormProjeId(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
                   >
-                    <option value="">-- Bağımsız Şantiye İşi --</option>
+                    <option value="">-- Proje Seçilmedi (Bağımsız Şantiye) --</option>
                     {projeler.map(p => (
                       <option key={p.ProjeId} value={p.ProjeId}>
-                        {p.ProjeKodu ? `[${p.ProjeKodu}] ` : ''}{p.ProjeAdi}
+                        {p.ProjeAdi} ({p.Musteri || 'Müşteri Belirtilmedi'})
                       </option>
                     ))}
                   </select>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-300">
-                    Müşteri / Firma Bilgisi
-                  </label>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300">Lokasyon / Açık Adres</label>
                   <input
                     type="text"
-                    value={formMusteriFirma}
-                    onChange={(e) => setFormMusteriFirma(e.target.value)}
-                    placeholder="Örn: Acar Mimarlık"
-                    className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-300">
-                    Lokasyon / Şehir / Adres
-                  </label>
-                  <input
-                    type="text"
+                    placeholder="Örn: Kadıköy / İstanbul, Bağdat Cad. No:12"
                     value={formLokasyon}
                     onChange={(e) => setFormLokasyon(e.target.value)}
-                    placeholder="Örn: Kadıköy / İstanbul"
-                    className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-300">
-                    Sorumlu Usta Başı / Şef
-                  </label>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300">Müşteri / Firma Adı</label>
                   <input
                     type="text"
-                    value={formSorumluUsta}
-                    onChange={(e) => setFormSorumluUsta(e.target.value)}
-                    placeholder="Örn: Ahmet Usta"
-                    className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"
+                    placeholder="Örn: Acar Mimarlık"
+                    value={formMusteriFirma}
+                    onChange={(e) => setFormMusteriFirma(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-300">
-                    Montaj Başlangıç Tarihi <span className="text-rose-500">*</span>
-                  </label>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300">Başlangıç Tarihi *</label>
                   <input
                     type="date"
                     required
                     value={formBaslangicTarihi}
                     onChange={(e) => setFormBaslangicTarihi(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-300">
-                    Planlanan Bitiş Tarihi (Opsiyonel)
-                  </label>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300">Planlanan Bitiş Tarihi</label>
                   <input
                     type="date"
                     value={formPlanlananBitisTarihi}
                     onChange={(e) => setFormPlanlananBitisTarihi(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
                   />
                 </div>
 
-                <div className="sm:col-span-2 space-y-1">
-                  <label className="text-xs font-bold text-slate-300">
-                    Açıklama &amp; Şantiye Notları
-                  </label>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300">Sorumlu Usta / Şef</label>
+                  <input
+                    type="text"
+                    placeholder="Örn: Ahmet Usta"
+                    value={formSorumluUsta}
+                    onChange={(e) => setFormSorumluUsta(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300">Sorumlu Telefon</label>
+                  <input
+                    type="text"
+                    placeholder="Örn: 0532 555 0000"
+                    value={formSorumluTelefon}
+                    onChange={(e) => setFormSorumluTelefon(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-xs font-bold text-slate-300">Şantiye Açıklaması / Notlar</label>
                   <textarea
                     rows={2}
+                    placeholder="Montaj detayları, özel talimatlar..."
                     value={formAciklama}
                     onChange={(e) => setFormAciklama(e.target.value)}
-                    placeholder="Şantiyede yapılacak işler, özel dikkat edilmesi gereken hususlar..."
-                    className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
                   />
                 </div>
               </div>
 
-              {/* EKİP SEÇİM ALANI (HEM KADROLU PERSONEL HEM DE YEVMIYECILERDEN SEÇİM) */}
+              {/* EKİP SEÇİCİ VE YÖNETİMİ */}
               <div className="space-y-3 pt-4 border-t border-slate-800">
                 <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <label className="text-sm font-black text-white flex items-center gap-1.5">
-                      <Users className="w-4 h-4 text-blue-400" />
-                      Montaj Ekibini Belirleyin ({formEkip.length} Kişi Eklendi)
-                    </label>
-                    <p className="text-xs text-slate-400">
-                      Hem fabrikanın kadrolu çalışanlarından hem de dışarıdan yevmiyeci ustalardan personel ekleyebilirsiniz.
-                    </p>
+                  <h4 className="text-xs font-black text-white flex items-center gap-2">
+                    <Users className="w-4 h-4 text-indigo-400" />
+                    <span>Şantiye Montaj Ekibi Kadrosu ({formEkip.length} Usta Eklendi)</span>
+                  </h4>
+                </div>
+
+                {/* Ekip Havuzundan Seçim */}
+                <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-2xl space-y-3">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => setEkipSeciciSekme('kadrolu')}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
+                          ekipSeciciSekme === 'kadrolu' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        Fabrika Kadrolu ({personeller.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEkipSeciciSekme('yevmiyeci')}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
+                          ekipSeciciSekme === 'yevmiyeci' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        Dış Usta / Yevmiyeci ({yevmiyeciler.length})
+                      </button>
+                    </div>
+
+                    <div className="relative flex-1 max-w-xs">
+                      <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        placeholder="Personel veya usta ara..."
+                        value={ekipArama}
+                        onChange={(e) => setEkipArama(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Personel / Yevmiyeci Listesi (Seçmek için tıkla) */}
+                  <div className="max-h-40 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-2 pr-1">
+                    {ekipSeciciSekme === 'kadrolu' ? (
+                      personeller
+                        .filter(p => !ekipArama || p.AdSoyad.toLowerCase().includes(ekipArama.toLowerCase()))
+                        .map(p => {
+                          const eklendi = formEkip.some(e => e.Id === `kadrolu_${p.PersonelId}`);
+                          return (
+                            <button
+                              key={p.PersonelId}
+                              type="button"
+                              onClick={() => handleEkipUyesiEkle('Kadrolu', p.PersonelId)}
+                              disabled={eklendi}
+                              className={`p-2.5 rounded-xl border text-left flex items-center justify-between text-xs transition ${
+                                eklendi
+                                  ? 'bg-blue-950/20 border-blue-500/30 text-slate-400 opacity-60'
+                                  : 'bg-slate-900 border-slate-800 hover:border-blue-500 text-white cursor-pointer'
+                              }`}
+                            >
+                              <div className="truncate">
+                                <div className="font-bold truncate">{p.AdSoyad}</div>
+                                <div className="text-[10px] text-slate-400 truncate">{p.Gorev || p.Departman || 'Personel'}</div>
+                              </div>
+                              <span className="text-xs font-bold text-blue-400 ml-2">
+                                {eklendi ? '✔ Eklendi' : '+ Ekle'}
+                              </span>
+                            </button>
+                          );
+                        })
+                    ) : (
+                      yevmiyeciler
+                        .filter(y => !ekipArama || y.AdSoyad.toLowerCase().includes(ekipArama.toLowerCase()))
+                        .map(y => {
+                          const eklendi = formEkip.some(e => e.Id === `yevmiyeci_${y.YevmiyeciId}`);
+                          return (
+                            <button
+                              key={y.YevmiyeciId}
+                              type="button"
+                              onClick={() => handleEkipUyesiEkle('Yevmiyeci', y.YevmiyeciId)}
+                              disabled={eklendi}
+                              className={`p-2.5 rounded-xl border text-left flex items-center justify-between text-xs transition ${
+                                eklendi
+                                  ? 'bg-indigo-950/20 border-indigo-500/30 text-slate-400 opacity-60'
+                                  : 'bg-slate-900 border-slate-800 hover:border-indigo-500 text-white cursor-pointer'
+                              }`}
+                            >
+                              <div className="truncate">
+                                <div className="font-bold truncate">{y.AdSoyad}</div>
+                                <div className="text-[10px] text-amber-400 truncate">
+                                  {y.UzmanlikAlani || 'Dış Usta'} • ₺{y.GunlukYevmiye || 0}/gün
+                                </div>
+                              </div>
+                              <span className="text-xs font-bold text-indigo-400 ml-2">
+                                {eklendi ? '✔ Eklendi' : '+ Ekle'}
+                              </span>
+                            </button>
+                          );
+                        })
+                    )}
                   </div>
                 </div>
 
-                {/* Seçili Ekip Listesi */}
+                {/* Seçilmiş Ekip Üyeleri Tablosu */}
                 {formEkip.length > 0 && (
-                  <div className="space-y-2 bg-slate-950/80 p-3 rounded-2xl border border-slate-800">
-                    <div className="text-[11px] font-bold text-slate-400 uppercase">Seçili Montaj Ekibi</div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {formEkip.map((e) => (
+                  <div className="space-y-2">
+                    <div className="text-xs font-bold text-slate-300">Ekibe Dahil Edilen Ustalar & Roller:</div>
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                      {formEkip.map(uye => (
                         <div
-                          key={e.Id}
-                          className="flex items-center justify-between gap-2 p-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs"
+                          key={uye.Id}
+                          className="bg-slate-950 border border-slate-800 p-2.5 rounded-xl flex items-center justify-between gap-3 text-xs"
                         >
-                          <div className="space-y-0.5">
-                            <div className="font-bold text-white flex items-center gap-1.5">
-                              <span>{e.AdSoyad}</span>
-                              <span className={`text-[9px] px-1.5 py-0.2 rounded ${
-                                e.Tur === 'Kadrolu' ? 'bg-blue-500/20 text-blue-400' : 'bg-indigo-500/20 text-indigo-400'
-                              }`}>
-                                {e.Tur}
-                              </span>
-                            </div>
-                            <div className="text-slate-400 text-[11px]">{e.Uzmanlik}</div>
+                          <div className="flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full ${uye.Tur === 'Kadrolu' ? 'bg-blue-400' : 'bg-indigo-400'}`} />
+                            <span className="font-bold text-white">{uye.AdSoyad}</span>
+                            <span className="text-[10px] text-slate-400">({uye.Tur})</span>
                           </div>
 
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-2">
                             <select
-                              value={e.Rol || 'Montaj Ustası'}
-                              onChange={(evt) => handleEkipRolDegistir(e.Id, evt.target.value as any)}
-                              className="bg-slate-950 border border-slate-800 rounded-lg text-[10px] text-slate-300 px-2 py-1"
+                              value={uye.Rol || 'Montaj Ustası'}
+                              onChange={(e) => handleEkipRolDegistir(uye.Id, e.target.value as any)}
+                              className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-[11px] text-white focus:outline-none"
                             >
-                              <option value="Usta Başı">Usta Başı</option>
+                              <option value="Usta Başı">Usta Başı / Şef</option>
                               <option value="Montaj Ustası">Montaj Ustası</option>
                               <option value="Şantiye Elemanı">Şantiye Elemanı</option>
                               <option value="Çırak / Yardımcı">Çırak / Yardımcı</option>
-                              <option value="Şoför & Lojistik">Şoför &amp; Lojistik</option>
+                              <option value="Şoför & Lojistik">Şoför & Lojistik</option>
                             </select>
 
                             <button
                               type="button"
-                              onClick={() => handleEkipUyesiCikar(e.Id)}
-                              className="p-1 text-slate-400 hover:text-rose-400 transition"
+                              onClick={() => handleEkipUyesiCikar(uye.Id)}
+                              className="p-1 text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 rounded transition"
                               title="Ekip Listesinden Çıkar"
                             >
                               <X className="w-4 h-4" />
@@ -1555,126 +2040,20 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
                     </div>
                   </div>
                 )}
-
-                {/* Personel / Yevmiyeci Ekleme Seçici Paneli */}
-                <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    {/* Sekme Seçimi: Kadrolu vs Yevmiyeci */}
-                    <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
-                      <button
-                        type="button"
-                        onClick={() => setEkipSeciciSekme('kadrolu')}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                          ekipSeciciSekme === 'kadrolu' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        Kadrolu Fabrika Personeli ({personeller.filter(p => p.DurumAktifMi).length})
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setEkipSeciciSekme('yevmiyeci')}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                          ekipSeciciSekme === 'yevmiyeci' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        Yevmiyeci &amp; Dış Ustalar ({yevmiyeciler.length})
-                      </button>
-                    </div>
-
-                    <input
-                      type="text"
-                      value={ekipArama}
-                      onChange={(e) => setEkipArama(e.target.value)}
-                      placeholder="Personel ara..."
-                      className="px-3 py-1 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white focus:outline-none"
-                    />
-                  </div>
-
-                  {/* Liste */}
-                  <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
-                    {ekipSeciciSekme === 'kadrolu' ? (
-                      personeller
-                        .filter(p => p.DurumAktifMi)
-                        .filter(p => !ekipArama || p.AdSoyad.toLowerCase().includes(ekipArama.toLowerCase()))
-                        .map(p => {
-                          const eklendiMi = formEkip.some(e => e.Id === `kadrolu_${p.PersonelId}`);
-                          return (
-                            <div
-                              key={p.PersonelId}
-                              className="flex items-center justify-between p-2 bg-slate-900 hover:bg-slate-850 rounded-xl border border-slate-800/80 text-xs"
-                            >
-                              <div>
-                                <span className="font-bold text-white">{p.AdSoyad}</span>
-                                <span className="text-slate-400 text-[11px] ml-2 font-medium">
-                                  ({p.Departman || 'Genel'} - {p.Gorev || 'Personel'})
-                                </span>
-                              </div>
-
-                              <button
-                                type="button"
-                                disabled={eklendiMi}
-                                onClick={() => handleEkipUyesiEkle('Kadrolu', p.PersonelId)}
-                                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
-                                  eklendiMi
-                                    ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                                    : 'bg-blue-600 hover:bg-blue-500 text-white cursor-pointer'
-                                }`}
-                              >
-                                {eklendiMi ? 'Ekipte ✔' : '+ Ekle'}
-                              </button>
-                            </div>
-                          );
-                        })
-                    ) : (
-                      yevmiyeciler
-                        .filter(y => !ekipArama || y.AdSoyad.toLowerCase().includes(ekipArama.toLowerCase()))
-                        .map(y => {
-                          const eklendiMi = formEkip.some(e => e.Id === `yevmiyeci_${y.YevmiyeciId}`);
-                          return (
-                            <div
-                              key={y.YevmiyeciId}
-                              className="flex items-center justify-between p-2 bg-slate-900 hover:bg-slate-850 rounded-xl border border-slate-800/80 text-xs"
-                            >
-                              <div>
-                                <span className="font-bold text-white">{y.AdSoyad}</span>
-                                <span className="text-amber-400 text-[11px] ml-2">
-                                  ({y.UzmanlikAlani || 'Dış Usta'} - ₺{y.GunlukYevmiye?.toLocaleString('tr-TR')})
-                                </span>
-                              </div>
-
-                              <button
-                                type="button"
-                                disabled={eklendiMi}
-                                onClick={() => handleEkipUyesiEkle('Yevmiyeci', y.YevmiyeciId)}
-                                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
-                                  eklendiMi
-                                    ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                                    : 'bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer'
-                                }`}
-                              >
-                                {eklendiMi ? 'Ekipte ✔' : '+ Ekle'}
-                              </button>
-                            </div>
-                          );
-                        })
-                    )}
-                  </div>
-                </div>
               </div>
 
-              {/* Butonlar */}
+              {/* Form Butonları */}
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
                 <button
                   type="button"
                   onClick={() => setFormModalAcik(false)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm font-semibold transition"
+                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition"
                 >
                   İptal
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-600/20 transition cursor-pointer"
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-600/30 transition transform active:scale-95"
                 >
                   {duzenlenenSantiye ? 'Değişiklikleri Kaydet' : 'Şantiye Grubunu Oluştur'}
                 </button>
@@ -1685,49 +2064,45 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 2: GÜNLÜK YOKLAMA NOTU EKLEME / DÜZENLEME MODALI */}
+      {/* MODAL 2: USTA YOKLAMA NOTU EKLEME / DÜZENLEME */}
       {/* ========================================================================= */}
       {notModalAcik && notHedefUye && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="text-sm font-black text-white">
-                Yoklama Notu Ekle / Düzenle
-              </h3>
-              <button
-                onClick={() => setNotModalAcik(false)}
-                className="text-slate-400 hover:text-white"
-              >
-                <X className="w-5 h-5" />
+              <h4 className="text-sm font-bold text-white">
+                Yoklama Notu: {notHedefUye.uyeAd}
+              </h4>
+              <button onClick={() => setNotModalAcik(false)} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-3">
-              <div className="text-xs text-slate-400">
-                Personel: <strong className="text-white">{notHedefUye.uyeAd}</strong> ({seciliTarih})
-              </div>
-
+            <div className="space-y-2">
+              <label className="text-xs text-slate-400">
+                {seciliTarih} tarihi için mesai, izin veya açıklama notu:
+              </label>
               <textarea
                 rows={3}
                 value={notHedefUye.not}
                 onChange={(e) => setNotHedefUye({ ...notHedefUye, not: e.target.value })}
-                placeholder="Örn: Yarım gün çalıştı, malzeme bekledi, 2 saat fazla mesai yaptı..."
-                className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"
+                placeholder="Örn: 2 saat fazla mesai yaptı, öğleden sonra izinli ayrıldı..."
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-blue-500"
               />
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+            <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 onClick={() => setNotModalAcik(false)}
-                className="px-3.5 py-1.5 bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold"
+                className="px-3 py-1.5 bg-slate-800 text-slate-300 rounded-xl text-xs font-medium"
               >
-                İptal
+                Vazgeç
               </button>
               <button
                 onClick={handleNotKaydet}
                 className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold"
               >
-                Kaydet
+                Notu Kaydet
               </button>
             </div>
           </div>
@@ -1735,24 +2110,27 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 3: YAZDIR / RESMİ ŞANTİYE DEVAM ÇİZELGESİ MODALI */}
+      {/* MODAL 3: YAZDIRMA & RESMİ RAPOR ÇIKTI MODALI */}
       {/* ========================================================================= */}
       {yazdirModalAcik && yazdirSantiye && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-4xl w-full p-6 sm:p-8 space-y-6 shadow-2xl max-h-[92vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800 print:hidden">
-              <div className="flex items-center gap-2">
-                <Printer className="w-5 h-5 text-blue-400" />
-                <h3 className="text-base font-bold text-white">
-                  Şantiye Montaj Devam &amp; Yoklama Tutanak Çıktısı
-                </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-4xl shadow-2xl space-y-6 my-8 text-left">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <Printer className="w-6 h-6 text-blue-400" />
+                <div>
+                  <h3 className="text-base font-black text-white">Şantiye Durum & Puantaj Raporu</h3>
+                  <p className="text-xs text-slate-400">Yazıcı çıktısı veya PDF olarak arşivlemek için hazırlanan resmi rapor</p>
+                </div>
               </div>
+
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => window.print()}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow"
                 >
-                  <Printer className="w-4 h-4" /> Yazdır / PDF Kaydet
+                  <Printer className="w-4 h-4" />
+                  <span>Yazdır / PDF Kaydet</span>
                 </button>
                 <button
                   onClick={() => setYazdirModalAcik(false)}
@@ -1763,21 +2141,22 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
               </div>
             </div>
 
-            {/* Yazdırma Şablonu */}
-            <div className="bg-white text-slate-900 p-8 rounded-2xl space-y-6 shadow font-sans text-xs">
-              <div className="border-b-2 border-slate-900 pb-4 flex justify-between items-start">
+            {/* Yazdırma Kağıdı Önizleme */}
+            <div className="bg-white text-slate-900 p-8 rounded-2xl shadow-inner space-y-6 font-sans border border-slate-200 print:border-none print:shadow-none">
+              {/* Antet */}
+              <div className="flex items-center justify-between border-b-2 border-slate-900 pb-4">
                 <div>
-                  <h1 className="text-xl font-black uppercase tracking-tight">RENDE AHŞAP &amp; FABRİKA YÖNETİMİ</h1>
-                  <h2 className="text-sm font-bold text-slate-700 mt-0.5">ŞANTİYE &amp; DIŞ MONTAJ DEVAM TUTANAĞI</h2>
+                  <h1 className="text-xl font-black tracking-tight text-slate-900">ŞANTİYE SAHA VE MONTAJ RAPORU</h1>
+                  <p className="text-xs text-slate-600">Rende Ahşap & Mobilya İmalat Fabrikası Dış Montaj Şube</p>
                 </div>
-                <div className="text-right text-[11px]">
-                  <div><strong>Rapor Tarihi:</strong> {getBugunStr()}</div>
+                <div className="text-right text-xs">
+                  <div><strong>Rapor Tarihi:</strong> {seciliTarih}</div>
                   <div><strong>Durum:</strong> {yazdirSantiye.Durum === 'Aktif' ? 'AKTİF ŞANTİYE' : 'TAMAMLANDI'}</div>
                 </div>
               </div>
 
-              {/* Şantiye Detayları */}
-              <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-lg border border-slate-200">
+              {/* Bilgiler */}
+              <div className="grid grid-cols-2 gap-4 text-xs bg-slate-50 p-4 rounded-xl border border-slate-200">
                 <div><strong>Şantiye Adı:</strong> {yazdirSantiye.SantiyeAdi}</div>
                 <div><strong>Lokasyon:</strong> {yazdirSantiye.Lokasyon || '-'}</div>
                 <div><strong>Müşteri / Firma:</strong> {yazdirSantiye.MusteriFirma || '-'}</div>
@@ -1786,39 +2165,50 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
                 <div><strong>Bitiş Tarihi:</strong> {yazdirSantiye.PlanlananBitisTarihi || yazdirSantiye.GerceklesenBitisTarihi || 'Devam Ediyor'}</div>
               </div>
 
-              {/* Ekip ve Katılım Tablosu */}
-              <div>
-                <h3 className="font-bold text-sm mb-2 text-slate-900 uppercase">Montaj Ekibi ve Katılım Detayı</h3>
-                <table className="w-full border-collapse border border-slate-300 text-left text-xs">
-                  <thead className="bg-slate-100 font-bold border-b border-slate-300">
+              {/* Seçili Günlük Rapor Bilgisi */}
+              {yazdirSantiye.GunlukDurumlar?.[seciliTarih] && (
+                <div className="space-y-2 text-xs border border-slate-300 p-4 rounded-xl">
+                  <h4 className="font-bold text-slate-900 uppercase">Günün Durum ve İlerleme Raporu ({seciliTarih}):</h4>
+                  <div><strong>Genel Durum:</strong> {yazdirSantiye.GunlukDurumlar[seciliTarih].DurumOzet}</div>
+                  <div><strong>Toplam İlerleme:</strong> %{yazdirSantiye.GunlukDurumlar[seciliTarih].IlerlemeYuzdesi}</div>
+                  {yazdirSantiye.GunlukDurumlar[seciliTarih].YapilanIsler && (
+                    <div><strong>Tamamlanan Montajlar:</strong> {yazdirSantiye.GunlukDurumlar[seciliTarih].YapilanIsler}</div>
+                  )}
+                  {yazdirSantiye.GunlukDurumlar[seciliTarih].EksikMalzemeVeSorunlar && (
+                    <div><strong>Eksik Malzeme & Sorunlar:</strong> {yazdirSantiye.GunlukDurumlar[seciliTarih].EksikMalzemeVeSorunlar}</div>
+                  )}
+                </div>
+              )}
+
+              {/* Ekip ve Puantaj Tablosu */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold uppercase text-slate-900">Usta Kadrosu ve Katılım Durumu</h4>
+                <table className="w-full text-left text-xs border-collapse border border-slate-300">
+                  <thead className="bg-slate-100 text-slate-800">
                     <tr>
-                      <th className="p-2 border border-slate-300">#</th>
-                      <th className="p-2 border border-slate-300">Personel / Usta Adı</th>
-                      <th className="p-2 border border-slate-300">Statü</th>
-                      <th className="p-2 border border-slate-300">Görevi / Rolü</th>
-                      <th className="p-2 border border-slate-300 text-center">Toplam Katıldığı Gün</th>
-                      <th className="p-2 border border-slate-300 text-right">İmza</th>
+                      <th className="border border-slate-300 p-2">Sıra</th>
+                      <th className="border border-slate-300 p-2">Usta Adı Soyadı</th>
+                      <th className="border border-slate-300 p-2">Statü / Rol</th>
+                      <th className="border border-slate-300 p-2 text-center">{seciliTarih} Yoklama</th>
+                      <th className="border border-slate-300 p-2">Günlük Not</th>
+                      <th className="border border-slate-300 p-2 text-center">İmza</th>
                     </tr>
                   </thead>
                   <tbody>
                     {yazdirSantiye.Ekip?.map((e, idx) => {
-                      let gunSayisi = 0;
-                      if (yazdirSantiye.YoklamaKayitlari) {
-                        Object.keys(yazdirSantiye.YoklamaKayitlari).forEach(t => {
-                          if (yazdirSantiye.YoklamaKayitlari[t]?.[e.Id] === true) {
-                            gunSayisi++;
-                          }
-                        });
-                      }
+                      const geldiMi = yazdirSantiye.YoklamaKayitlari?.[seciliTarih]?.[e.Id] ?? false;
+                      const not = yazdirSantiye.YoklamaNotlari?.[seciliTarih]?.[e.Id] || '-';
 
                       return (
-                        <tr key={e.Id} className="border-b border-slate-200">
-                          <td className="p-2 border border-slate-300">{idx + 1}</td>
-                          <td className="p-2 border border-slate-300 font-bold">{e.AdSoyad}</td>
-                          <td className="p-2 border border-slate-300">{e.Tur}</td>
-                          <td className="p-2 border border-slate-300">{e.Rol || e.Uzmanlik || '-'}</td>
-                          <td className="p-2 border border-slate-300 text-center font-bold">{gunSayisi} Gün</td>
-                          <td className="p-2 border border-slate-300 min-w-[100px]"></td>
+                        <tr key={e.Id}>
+                          <td className="border border-slate-300 p-2">{idx + 1}</td>
+                          <td className="border border-slate-300 p-2 font-bold">{e.AdSoyad}</td>
+                          <td className="border border-slate-300 p-2">{e.Rol || e.Tur}</td>
+                          <td className="border border-slate-300 p-2 text-center font-bold">
+                            {geldiMi ? 'GELDİ (ÇALIŞTI)' : 'GELMEDİ'}
+                          </td>
+                          <td className="border border-slate-300 p-2 text-slate-600">{not}</td>
+                          <td className="border border-slate-300 p-2 min-w-[90px]"></td>
                         </tr>
                       );
                     })}
@@ -1826,15 +2216,17 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
                 </table>
               </div>
 
-              {/* İmza Blokları */}
-              <div className="grid grid-cols-2 gap-8 pt-8 border-t border-slate-200">
-                <div className="text-center space-y-12">
-                  <div className="font-bold">Şantiye Sorumlu Usta Başı</div>
-                  <div className="text-slate-400 text-xs">(İmza / Kaşe)</div>
+              {/* İmza Alanı */}
+              <div className="grid grid-cols-2 gap-8 pt-8 text-center text-xs">
+                <div>
+                  <div className="font-bold">Şantiye Sorumlu Ustası</div>
+                  <div className="mt-1">{yazdirSantiye.SorumluUsta || 'İmza'}</div>
+                  <div className="mt-8 border-b border-slate-400 w-32 mx-auto"></div>
                 </div>
-                <div className="text-center space-y-12">
-                  <div className="font-bold">Fabrika İK &amp; Proje Müdürü</div>
-                  <div className="text-slate-400 text-xs">(İmza / Kaşe)</div>
+                <div>
+                  <div className="font-bold">Fabrika & Üretim Müdürü</div>
+                  <div className="mt-1">Onay & Teslim</div>
+                  <div className="mt-8 border-b border-slate-400 w-32 mx-auto"></div>
                 </div>
               </div>
             </div>

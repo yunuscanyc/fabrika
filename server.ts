@@ -5977,6 +5977,261 @@ app.post('/api/auth/change-settings', async (req, res) => {
 });
 
 // =========================================================================
+// ŞANTİYE & MONTAJ GRUPLARI & GÜNLÜK DURUM KAYITLARI APISİ
+// =========================================================================
+let memSantiyeGruplari: any[] = [];
+
+async function ensureSantiyeTable() {
+  if (!pool) return;
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS santiye_montaj_gruplari (
+        id SERIAL PRIMARY KEY,
+        santiye_adi VARCHAR(255) NOT NULL,
+        proje_id INTEGER,
+        proje_adi VARCHAR(255),
+        lokasyon VARCHAR(255),
+        musteri_firma VARCHAR(255),
+        baslangic_tarihi VARCHAR(50),
+        planlanan_bitis_tarihi VARCHAR(50),
+        gerceklesen_bitis_tarihi VARCHAR(50),
+        sorumlu_usta VARCHAR(255),
+        sorumlu_telefon VARCHAR(50),
+        durum VARCHAR(50) DEFAULT 'Aktif',
+        aciklama TEXT,
+        ekip JSONB DEFAULT '[]'::jsonb,
+        yoklama_kayitlari JSONB DEFAULT '{}'::jsonb,
+        yoklama_notlari JSONB DEFAULT '{}'::jsonb,
+        gunluk_durumlar JSONB DEFAULT '{}'::jsonb,
+        olusturma_tarihi VARCHAR(50),
+        arsivlenme_tarihi VARCHAR(50),
+        guncellenme_zamani TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+  } catch (err) {
+    console.warn('santiye_montaj_gruplari tablosu oluşturma uyarısı:', err);
+  }
+}
+
+// Şantiyeleri Getir
+app.get('/api/montaj-gruplari', async (req, res) => {
+  try {
+    if (pool) {
+      await ensureSantiyeTable();
+      const dbRes = await pool.query('SELECT * FROM santiye_montaj_gruplari ORDER BY id DESC');
+      if (dbRes.rows.length > 0) {
+        const formatted = dbRes.rows.map(r => ({
+          Id: r.id,
+          SantiyeAdi: r.santiye_adi,
+          ProjeId: r.proje_id,
+          ProjeAdi: r.proje_adi,
+          Lokasyon: r.lokasyon,
+          MusteriFirma: r.musteri_firma,
+          BaslangicTarihi: r.baslangic_tarihi,
+          PlanlananBitisTarihi: r.planlanan_bitis_tarihi,
+          GerceklesenBitisTarihi: r.gerceklesen_bitis_tarihi,
+          SorumluUsta: r.sorumlu_usta,
+          SorumluTelefon: r.sorumlu_telefon,
+          Durum: r.durum || 'Aktif',
+          Aciklama: r.aciklama,
+          Ekip: typeof r.ekip === 'string' ? JSON.parse(r.ekip) : (r.ekip || []),
+          YoklamaKayitlari: typeof r.yoklama_kayitlari === 'string' ? JSON.parse(r.yoklama_kayitlari) : (r.yoklama_kayitlari || {}),
+          YoklamaNotlari: typeof r.yoklama_notlari === 'string' ? JSON.parse(r.yoklama_notlari) : (r.yoklama_notlari || {}),
+          GunlukDurumlar: typeof r.gunluk_durumlar === 'string' ? JSON.parse(r.gunluk_durumlar) : (r.gunluk_durumlar || {}),
+          OlusturmaTarihi: r.olusturma_tarihi,
+          ArsivlenmeTarihi: r.arsivlenme_tarihi
+        }));
+        memSantiyeGruplari = formatted;
+        return res.json(formatted);
+      }
+    }
+    return res.json(memSantiyeGruplari);
+  } catch (err: any) {
+    console.error('Montaj grupları getirme hatası:', err);
+    return res.json(memSantiyeGruplari);
+  }
+});
+
+// Yeni Şantiye Grubu Ekle
+app.post('/api/montaj-gruplari', async (req, res) => {
+  try {
+    const b = req.body;
+    const bugun = getBugunStr();
+    const yeniGrup = {
+      Id: b.Id || Date.now(),
+      SantiyeAdi: b.SantiyeAdi || 'Yeni Şantiye',
+      ProjeId: b.ProjeId || null,
+      ProjeAdi: b.ProjeAdi || '',
+      Lokasyon: b.Lokasyon || '',
+      MusteriFirma: b.MusteriFirma || '',
+      BaslangicTarihi: b.BaslangicTarihi || bugun,
+      PlanlananBitisTarihi: b.PlanlananBitisTarihi || '',
+      GerceklesenBitisTarihi: b.GerceklesenBitisTarihi || '',
+      SorumluUsta: b.SorumluUsta || '',
+      SorumluTelefon: b.SorumluTelefon || '',
+      Durum: b.Durum || 'Aktif',
+      Aciklama: b.Aciklama || '',
+      Ekip: b.Ekip || [],
+      YoklamaKayitlari: b.YoklamaKayitlari || {},
+      YoklamaNotlari: b.YoklamaNotlari || {},
+      GunlukDurumlar: b.GunlukDurumlar || {},
+      OlusturmaTarihi: b.OlusturmaTarihi || bugun
+    };
+
+    if (pool) {
+      await ensureSantiyeTable();
+      const insertRes = await pool.query(`
+        INSERT INTO santiye_montaj_gruplari (
+          santiye_adi, proje_id, proje_adi, lokasyon, musteri_firma,
+          baslangic_tarihi, planlanan_bitis_tarihi, gerceklesen_bitis_tarihi,
+          sorumlu_usta, sorumlu_telefon, durum, aciklama,
+          ekip, yoklama_kayitlari, yoklama_notlari, gunluk_durumlar, olusturma_tarihi
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        RETURNING id;
+      `, [
+        yeniGrup.SantiyeAdi, yeniGrup.ProjeId, yeniGrup.ProjeAdi, yeniGrup.Lokasyon, yeniGrup.MusteriFirma,
+        yeniGrup.BaslangicTarihi, yeniGrup.PlanlananBitisTarihi, yeniGrup.GerceklesenBitisTarihi,
+        yeniGrup.SorumluUsta, yeniGrup.SorumluTelefon, yeniGrup.Durum, yeniGrup.Aciklama,
+        JSON.stringify(yeniGrup.Ekip), JSON.stringify(yeniGrup.YoklamaKayitlari),
+        JSON.stringify(yeniGrup.YoklamaNotlari), JSON.stringify(yeniGrup.GunlukDurumlar), yeniGrup.OlusturmaTarihi
+      ]);
+      if (insertRes.rows[0]) {
+        yeniGrup.Id = insertRes.rows[0].id;
+      }
+    }
+
+    memSantiyeGruplari.unshift(yeniGrup);
+    return res.status(201).json(yeniGrup);
+  } catch (err: any) {
+    console.error('Şantiye grubu ekleme hatası:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Şantiye Grubu Güncelle
+app.put('/api/montaj-gruplari/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const b = req.body;
+    
+    let mevcut = memSantiyeGruplari.find(s => String(s.Id) === String(id));
+    if (mevcut) {
+      Object.assign(mevcut, b);
+    }
+
+    if (pool) {
+      await ensureSantiyeTable();
+      await pool.query(`
+        UPDATE santiye_montaj_gruplari SET
+          santiye_adi = COALESCE($1, santiye_adi),
+          proje_id = COALESCE($2, proje_id),
+          proje_adi = COALESCE($3, proje_adi),
+          lokasyon = COALESCE($4, lokasyon),
+          musteri_firma = COALESCE($5, musteri_firma),
+          baslangic_tarihi = COALESCE($6, baslangic_tarihi),
+          planlanan_bitis_tarihi = COALESCE($7, planlanan_bitis_tarihi),
+          gerceklesen_bitis_tarihi = COALESCE($8, gerceklesen_bitis_tarihi),
+          sorumlu_usta = COALESCE($9, sorumlu_usta),
+          sorumlu_telefon = COALESCE($10, sorumlu_telefon),
+          durum = COALESCE($11, durum),
+          aciklama = COALESCE($12, aciklama),
+          ekip = CASE WHEN $13::jsonb IS NOT NULL THEN $13::jsonb ELSE ekip END,
+          yoklama_kayitlari = CASE WHEN $14::jsonb IS NOT NULL THEN $14::jsonb ELSE yoklama_kayitlari END,
+          yoklama_notlari = CASE WHEN $15::jsonb IS NOT NULL THEN $15::jsonb ELSE yoklama_notlari END,
+          gunluk_durumlar = CASE WHEN $16::jsonb IS NOT NULL THEN $16::jsonb ELSE gunluk_durumlar END,
+          arsivlenme_tarihi = COALESCE($17, arsivlenme_tarihi),
+          guncellenme_zamani = CURRENT_TIMESTAMP
+        WHERE id = $18 OR id::text = $18::text;
+      `, [
+        b.SantiyeAdi || null, b.ProjeId || null, b.ProjeAdi || null, b.Lokasyon || null, b.MusteriFirma || null,
+        b.BaslangicTarihi || null, b.PlanlananBitisTarihi || null, b.GerceklesenBitisTarihi || null,
+        b.SorumluUsta || null, b.SorumluTelefon || null, b.Durum || null, b.Aciklama || null,
+        b.Ekip ? JSON.stringify(b.Ekip) : null,
+        b.YoklamaKayitlari ? JSON.stringify(b.YoklamaKayitlari) : null,
+        b.YoklamaNotlari ? JSON.stringify(b.YoklamaNotlari) : null,
+        b.GunlukDurumlar ? JSON.stringify(b.GunlukDurumlar) : null,
+        b.ArsivlenmeTarihi || null,
+        id
+      ]);
+    }
+
+    return res.json({ success: true, message: 'Şantiye grubu güncellendi', data: mevcut });
+  } catch (err: any) {
+    console.error('Şantiye grubu güncelleme hatası:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Günlük Durum ve Rapor Kaydet
+app.post('/api/montaj-gruplari/:id/gunluk-durum', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const { tarih, durumKaydi, yoklamaKayitlari, yoklamaNotlari } = req.body;
+    if (!tarih) return res.status(400).json({ error: 'Tarih belirtilmelidir.' });
+
+    let santiye = memSantiyeGruplari.find(s => String(s.Id) === String(id));
+    if (!santiye) {
+      santiye = { Id: id, GunlukDurumlar: {}, YoklamaKayitlari: {}, YoklamaNotlari: {} };
+      memSantiyeGruplari.push(santiye);
+    }
+
+    if (!santiye.GunlukDurumlar) santiye.GunlukDurumlar = {};
+    if (durumKaydi) {
+      santiye.GunlukDurumlar[tarih] = {
+        ...durumKaydi,
+        Tarih: tarih,
+        KayitZamani: new Date().toISOString()
+      };
+    }
+
+    if (yoklamaKayitlari) {
+      if (!santiye.YoklamaKayitlari) santiye.YoklamaKayitlari = {};
+      santiye.YoklamaKayitlari[tarih] = yoklamaKayitlari;
+    }
+
+    if (yoklamaNotlari) {
+      if (!santiye.YoklamaNotlari) santiye.YoklamaNotlari = {};
+      santiye.YoklamaNotlari[tarih] = yoklamaNotlari;
+    }
+
+    if (pool) {
+      await ensureSantiyeTable();
+      await pool.query(`
+        UPDATE santiye_montaj_gruplari SET
+          gunluk_durumlar = jsonb_set(COALESCE(gunluk_durumlar, '{}'::jsonb), ARRAY[$1], $2::jsonb, true),
+          yoklama_kayitlari = CASE WHEN $3::jsonb IS NOT NULL THEN jsonb_set(COALESCE(yoklama_kayitlari, '{}'::jsonb), ARRAY[$1], $3::jsonb, true) ELSE yoklama_kayitlari END,
+          guncellenme_zamani = CURRENT_TIMESTAMP
+        WHERE id = $4 OR id::text = $4::text;
+      `, [
+        tarih,
+        JSON.stringify(durumKaydi || {}),
+        yoklamaKayitlari ? JSON.stringify(yoklamaKayitlari) : null,
+        id
+      ]);
+    }
+
+    return res.json({ success: true, message: `${tarih} tarihli günlük durum kaydedildi.`, santiye });
+  } catch (err: any) {
+    console.error('Günlük durum kaydetme hatası:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Şantiye Sil
+app.delete('/api/montaj-gruplari/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    memSantiyeGruplari = memSantiyeGruplari.filter(s => String(s.Id) !== String(id));
+    if (pool) {
+      await pool.query('DELETE FROM santiye_montaj_gruplari WHERE id = $1 OR id::text = $1::text', [id]);
+    }
+    return res.json({ success: true, message: 'Şantiye grubu silindi.' });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// =========================================================================
 // VITE MIDDLEWARE & STATIC SERVING
 // =========================================================================
 async function startServer() {

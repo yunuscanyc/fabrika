@@ -400,6 +400,19 @@ export interface SantiyeEkipUyesi {
   EklemeTarihi?: string;
 }
 
+export interface SantiyeGunlukDurum {
+  Tarih: string; // 'YYYY-MM-DD'
+  DurumOzet?: 'Normal Devam Ediyor' | 'Hızlı İlerliyor' | 'Malzeme Bekleniyor' | 'Hava Engeli / Durduruldu' | 'Müşteri Revizyonu Bekleniyor' | 'Montaj Tamamlandı';
+  IlerlemeYuzdesi?: number; // 0 - 100
+  HavaDurumu?: string; // Güneşli, Yağmurlu, Soğuk, Kapalı vb.
+  YapilanIsler?: string; // Gün içinde tamamlanan montaj/imalat işleri
+  EksikMalzemeVeSorunlar?: string; // Sahada ihtiyaç duyulan malzeme, parça veya aksaklıklar
+  GenelNotlar?: string; // Günlük şantiye notları
+  Raporlayan?: string; // Sorumlu usta veya mühendis
+  Fotograflar?: string[]; // Günlük saha fotoğrafları (base64 veya URL)
+  KayitZamani?: string; // ISO tarih veya saat
+}
+
 export interface SantiyeMontajGrubu {
   Id: number | string;
   SantiyeAdi: string; // İş / Şantiye adı (örn. Kadıköy Villa Montajı)
@@ -420,6 +433,8 @@ export interface SantiyeMontajGrubu {
   YoklamaKayitlari: Record<string, Record<string, boolean>>;
   // Tarih ve personel bazlı notlar: { [Tarih: string]: { [UyeId: string]: string } }
   YoklamaNotlari?: Record<string, Record<string, string>>;
+  // Gün gün şantiye durumu ve saha günlüğü kayıtları: { [Tarih: string]: SantiyeGunlukDurum }
+  GunlukDurumlar?: Record<string, SantiyeGunlukDurum>;
   OlusturmaTarihi?: string;
   ArsivlenmeTarihi?: string;
 }
