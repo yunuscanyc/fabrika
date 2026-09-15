@@ -1,0 +1,6 @@
+{
+  "name": "Rende Fabrika & Proje Yönetimi",
+  "description": "Fabrika üretim süreçleri, proje süreç ağacı, araç/ekipman periyodik bakım takibi ve görev paneli mobil uyumlu web yönetim sistemi.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

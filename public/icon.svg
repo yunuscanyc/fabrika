@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="50%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <linearGradient id="brand" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#6366f1" />
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#60a5fa" />
+      <stop offset="100%" stop-color="#93c5fd" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000" flood-opacity="0.4" />
+    </filter>
+  </defs>
+
+  <!-- Background with Safe Margin (Maskable friendly) -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)" />
+
+  <!-- Inner glowing emblem container -->
+  <g filter="url(#shadow)" transform="translate(40, 40)">
+    <!-- Factory + Modern Structure Shape -->
+    <rect x="36" y="36" width="360" height="360" rx="48" fill="url(#brand)" opacity="0.15" />
+    <rect x="40" y="40" width="352" height="352" rx="44" fill="#1e293b" stroke="url(#brand)" stroke-width="4" />
+
+    <!-- Industrial Rende Monogram & Factory Silhouette -->
+    <!-- Gear Accents -->
+    <circle cx="216" cy="160" r="48" fill="none" stroke="url(#accent)" stroke-width="12" stroke-dasharray="24 12" />
+    <circle cx="216" cy="160" r="28" fill="url(#brand)" />
+    
+    <!-- Factory Chimneys & Roof -->
+    <path d="M120 300 L120 220 L165 250 L165 220 L210 250 L210 200 L255 230 L255 300 Z" fill="url(#brand)" opacity="0.9" />
+    <rect x="270" y="190" width="40" height="110" rx="6" fill="url(#accent)" opacity="0.85" />
+    <rect x="280" y="170" width="20" height="20" rx="3" fill="url(#accent)" />
+    
+    <!-- Base Platform Line -->
+    <rect x="100" y="300" width="232" height="14" rx="7" fill="url(#accent)" />
+
+    <!-- "R" Monogram Overlay in center base -->
+    <text x="216" y="360" font-family="system-ui, -apple-system, sans-serif" font-size="40" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="4">RENDE</text>
+  </g>
+</svg>
