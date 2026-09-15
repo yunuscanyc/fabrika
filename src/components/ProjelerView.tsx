@@ -799,11 +799,28 @@ export const ProjelerView: React.FC<ProjelerViewProps> = ({
   };
 
   // Filtreleme
-  const filtrelenenProjeler = projeler.filter(p => {
-    const durumUygun = filtreDurum === 'Hepsi' || p.Durum === filtreDurum;
-    const aramaUygun = p.ProjeAdi.toLowerCase().includes(aramaMetni.toLowerCase()) ||
-                       p.ProjeKodu.toLowerCase().includes(aramaMetni.toLowerCase()) ||
-                       (p.MusteriFirma && p.MusteriFirma.toLowerCase().includes(aramaMetni.toLowerCase()));
+  const filtrelenenProjeler = (projeler || []).filter(p => {
+    if (!p) return false;
+    const durumUygun = filtreDurum === 'Hepsi' || 
+                       String(p.Durum || '').toLowerCase() === String(filtreDurum).toLowerCase() ||
+                       (filtreDurum === 'Üretimde' && (String(p.Durum).includes('Üretim') || String(p.Durum).includes('İmalat'))) ||
+                       (filtreDurum === 'Şantiyede' && (String(p.Durum).includes('Şantiye') || String(p.Durum).includes('Montaj'))) ||
+                       (filtreDurum === 'Tamamlandı' && (String(p.Durum).includes('Tamam') || String(p.Durum).includes('Bitti')));
+
+    const aramaLow = (aramaMetni || '').toLowerCase().trim();
+    if (!aramaLow) return durumUygun;
+
+    const pAd = String(p.ProjeAdi || '').toLowerCase();
+    const pKod = String(p.ProjeKodu || '').toLowerCase();
+    const pMusteri = String(p.MusteriFirma || '').toLowerCase();
+    const pSantiye = String(p.SantiyeAdresi || '').toLowerCase();
+    const pSorumlu = String(p.SorumluKisi || '').toLowerCase();
+
+    const aramaUygun = pAd.includes(aramaLow) ||
+                       pKod.includes(aramaLow) ||
+                       pMusteri.includes(aramaLow) ||
+                       pSantiye.includes(aramaLow) ||
+                       pSorumlu.includes(aramaLow);
     return durumUygun && aramaUygun;
   });
 

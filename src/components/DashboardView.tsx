@@ -16,12 +16,13 @@ import {
   Cog,
   FileText,
   ShieldCheck,
-  Database
+  Database,
+  HardHat
 } from 'lucide-react';
 
 interface DashboardViewProps {
   ozet: OzetIstatistikler | null;
-  onNavigateTab: (tab: string, subTab?: 'liste' | 'izin' | 'puantaj' | 'isg' | 'yevmiyeci', personelId?: number, isgSekme?: 'kkd' | 'saglik' | 'egitim') => void;
+  onNavigateTab: (tab: string, subTab?: 'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci', personelId?: number, isgSekme?: 'kkd' | 'saglik' | 'egitim') => void;
   dbStatus?: DbStatusData | null;
   onOpenDbModal?: () => void;
 }
@@ -70,6 +71,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => onNavigateTab('personel', 'montaj')}
+              className="px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-semibold text-xs sm:text-sm flex items-center gap-1.5 transition-colors border border-amber-500/30"
+            >
+              <HardHat className="w-4 h-4 text-amber-400" />
+              <span>Dış Montaj &amp; Şantiye</span>
+            </button>
             <button
               onClick={() => onNavigateTab('personel')}
               className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs sm:text-sm flex items-center gap-1.5 transition-colors border border-slate-700"

@@ -3,9 +3,10 @@ import { Personel, IzinKaydi, Proje, Departman, Gorev } from '../types';
 import { PersonelView } from './PersonelView';
 import { IzinView } from './IzinView';
 import { PuantajView } from './PuantajView';
+import { SantiyeMontajView } from './SantiyeMontajView';
 import { IsgView } from './IsgView';
 import { YevmiyeciView } from './YevmiyeciView';
-import { Users, Calendar, Clock, ShieldCheck, Briefcase } from 'lucide-react';
+import { Users, Calendar, Clock, ShieldCheck, Briefcase, HardHat } from 'lucide-react';
 
 interface PersonelHubViewProps {
   personeller: Personel[];
@@ -14,7 +15,7 @@ interface PersonelHubViewProps {
   departmanlar: Departman[];
   gorevler: Gorev[];
   onRefresh: () => void;
-  initialAltSekme?: 'liste' | 'izin' | 'puantaj' | 'isg' | 'yevmiyeci';
+  initialAltSekme?: 'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci';
   initialPersonelId?: number;
   initialIsgSekme?: 'kkd' | 'saglik' | 'egitim';
 }
@@ -30,7 +31,7 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
   initialPersonelId,
   initialIsgSekme,
 }) => {
-  const [altSekme, setAltSekme] = useState<'liste' | 'izin' | 'puantaj' | 'isg' | 'yevmiyeci'>(initialAltSekme);
+  const [altSekme, setAltSekme] = useState<'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci'>(initialAltSekme);
 
   useEffect(() => {
     if (initialAltSekme) {
@@ -92,10 +93,22 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
           </button>
 
           <button
+            onClick={() => setAltSekme('montaj')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
+              altSekme === 'montaj'
+                ? 'bg-amber-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <HardHat className="w-4 h-4" />
+            Dış Montaj &amp; Şantiye Takibi
+          </button>
+
+          <button
             onClick={() => setAltSekme('isg')}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
               altSekme === 'isg'
-                ? 'bg-amber-600 text-white shadow-md'
+                ? 'bg-rose-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800'
             }`}
           >
@@ -142,6 +155,16 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
         <PuantajView
           personeller={personeller}
           izinler={izinler}
+          onRefresh={onRefresh}
+        />
+      )}
+
+      {altSekme === 'montaj' && (
+        <SantiyeMontajView
+          personeller={personeller}
+          projeler={projeler}
+          departmanlar={departmanlar}
+          gorevler={gorevler}
           onRefresh={onRefresh}
         />
       )}

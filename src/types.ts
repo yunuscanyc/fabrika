@@ -387,3 +387,40 @@ export interface Gorev {
   Ad: string;
 }
 
+export interface SantiyeEkipUyesi {
+  Id: string; // Benzersiz üye ID'si (örn: kadrolu_1, yevmiyeci_2)
+  PersonelId?: number; // Kadrolu ise
+  YevmiyeciId?: number; // Yevmiyeci ise
+  Tur: 'Kadrolu' | 'Yevmiyeci';
+  AdSoyad: string;
+  Telefon?: string;
+  Uzmanlik?: string; // Görev veya uzmanlık alanı
+  Rol?: 'Usta Başı' | 'Montaj Ustası' | 'Şantiye Elemanı' | 'Çırak / Yardımcı' | 'Şoför & Lojistik';
+  GunlukUcret?: number; // Günlük yevmiye veya maliyet
+  EklemeTarihi?: string;
+}
+
+export interface SantiyeMontajGrubu {
+  Id: number | string;
+  SantiyeAdi: string; // İş / Şantiye adı (örn. Kadıköy Villa Montajı)
+  ProjeId?: number | null; // Bağlı fabrika projesi (opsiyonel)
+  ProjeAdi?: string;
+  Lokasyon?: string; // Şehir / İlçe / Açık adres
+  MusteriFirma?: string;
+  BaslangicTarihi: string; // 'YYYY-MM-DD'
+  PlanlananBitisTarihi?: string; // 'YYYY-MM-DD'
+  GerceklesenBitisTarihi?: string; // 'YYYY-MM-DD'
+  SorumluUsta?: string; // Sorumlu Usta / Şef
+  SorumluTelefon?: string;
+  Durum: 'Aktif' | 'Tamamlandi'; // Aktif şantiyeler ve arşiv
+  Aciklama?: string;
+  Ekip: SantiyeEkipUyesi[];
+  // Tarih bazlı yoklama kayıtları: { [Tarih: string]: { [UyeId: string]: boolean } }
+  // true = Geldi, false = Gelmedi
+  YoklamaKayitlari: Record<string, Record<string, boolean>>;
+  // Tarih ve personel bazlı notlar: { [Tarih: string]: { [UyeId: string]: string } }
+  YoklamaNotlari?: Record<string, Record<string, string>>;
+  OlusturmaTarihi?: string;
+  ArsivlenmeTarihi?: string;
+}
+

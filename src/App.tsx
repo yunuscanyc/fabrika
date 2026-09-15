@@ -17,7 +17,7 @@ import { Proje, Arac, BakimKaydi, Hatirlatici, OzetIstatistikler, Personel, Izin
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'personel' | 'makineler' | 'projeler' | 'araclar' | 'hatirlaticilar'>('dashboard');
-  const [personelSubTab, setPersonelSubTab] = useState<'liste' | 'izin' | 'puantaj' | 'isg' | 'yevmiyeci'>('liste');
+  const [personelSubTab, setPersonelSubTab] = useState<'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci'>('liste');
   const [selectedPersonelId, setSelectedPersonelId] = useState<number | undefined>(undefined);
   const [isgSekme, setIsgSekme] = useState<'kkd' | 'saglik' | 'egitim' | undefined>(undefined);
 
@@ -31,7 +31,7 @@ export default function App() {
 
   const handleNavigateTab = (
     tab: string,
-    subTab?: 'liste' | 'izin' | 'puantaj' | 'isg' | 'yevmiyeci',
+    subTab?: 'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci',
     personelId?: number,
     isgSekmeTarget?: 'kkd' | 'saglik' | 'egitim'
   ) => {

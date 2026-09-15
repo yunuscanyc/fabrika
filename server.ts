@@ -29,24 +29,27 @@ app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
 // PostgreSQL Havuz Yapılandırması (Hem yerel hem bulut/tünel bağlantılarını destekler)
 function createPgPool() {
-  if (process.env.DATABASE_URL) {
-    const isLocal = process.env.DATABASE_URL.includes('localhost') || process.env.DATABASE_URL.includes('127.0.0.1');
+  let dbUrl = process.env.DATABASE_URL;
+  if (dbUrl) {
+    dbUrl = String(dbUrl).replace(/[{}]/g, '').trim();
+    const isLocal = dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1');
     return new Pool({
-      connectionString: process.env.DATABASE_URL,
+      connectionString: dbUrl,
       ssl: isLocal ? false : { rejectUnauthorized: false },
-      connectionTimeoutMillis: 5000,
+      connectionTimeoutMillis: 7000,
     });
   }
 
-  const isLocalHost = !process.env.PGHOST || process.env.PGHOST === 'localhost' || process.env.PGHOST === '127.0.0.1';
+  const host = process.env.PGHOST || '87.121.104.184';
+  const isLocalHost = host === 'localhost' || host === '127.0.0.1';
   return new Pool({
-    host: process.env.PGHOST || 'localhost',
+    host: host,
     port: parseInt(process.env.PGPORT || '5432'),
-    database: process.env.PGDATABASE || 'FabrikaYonetimDB',
-    user: process.env.PGUSER || 'postgres',
-    password: process.env.PGPASSWORD || '1',
+    database: process.env.PGDATABASE || 'rende_portal',
+    user: (process.env.PGUSER || 'rende_user').replace(/[{}]/g, '').trim(),
+    password: process.env.PGPASSWORD || 'Elifesma12345',
     ssl: !isLocalHost || process.env.PGSSL === 'true' ? { rejectUnauthorized: false } : false,
-    connectionTimeoutMillis: 5000,
+    connectionTimeoutMillis: 7000,
   });
 }
 
@@ -261,19 +264,19 @@ function formatDate(val: any): string | null {
 // Model Normalize Ediciler (PostgreSQL satırını frontend formatına çevirir)
 function normalizeProje(row: any) {
   return {
-    ProjeId: Number(getProp(row, 'ProjeId', 'projeid', 'id', 'Id')),
-    ProjeKodu: String(getProp(row, 'ProjeKodu', 'projekodu', 'kod') || ''),
-    ProjeAdi: String(getProp(row, 'ProjeAdi', 'projeadi', 'ad') || ''),
-    MusteriFirma: String(getProp(row, 'MusteriFirma', 'musterifirma', 'musteri') || ''),
-    SantiyeAdresi: String(getProp(row, 'SantiyeAdresi', 'santiyeadresi', 'adres') || ''),
-    SorumluKisi: String(getProp(row, 'SorumluKisi', 'sorumlukisi', 'sorumlu') || ''),
-    SorumluPersonelId: getProp(row, 'SorumluPersonelId', 'sorumlupersonelid') ? Number(getProp(row, 'SorumluPersonelId', 'sorumlupersonelid')) : null,
-    BaslangicTarihi: formatDate(getProp(row, 'BaslangicTarihi', 'baslangictarihi', 'baslangic')) || getBugunStr(),
-    Deadline: formatDate(getProp(row, 'Deadline', 'deadline', 'bitistarihi')),
-    Durum: String(getProp(row, 'Durum', 'durum') || 'Teklif Verildi'),
-    GenelIlerlemeYuzdesi: Number(getProp(row, 'GenelIlerlemeYuzdesi', 'genelilerlemeyuzdesi', 'ilerleme') || 0),
-    AktifMi: Boolean(getProp(row, 'AktifMi', 'aktifmi') ?? true),
-    KilitliMi: Boolean(getProp(row, 'KilitliMi', 'kilitlimi')),
+    ProjeId: Number(getProp(row, 'ProjeId', 'projeid', 'id', 'Id', 'proje_id')),
+    ProjeKodu: String(getProp(row, 'ProjeKodu', 'projekodu', 'kod', 'Kod', 'proje_kodu', 'ProjeNo', 'projeno') || ''),
+    ProjeAdi: String(getProp(row, 'ProjeAdi', 'projeadi', 'ad', 'Ad', 'IsinAdi', 'isinadi', 'IsAdi', 'isadi', 'proje_adi', 'ProjeAd', 'projead') || 'İsimsiz Proje'),
+    MusteriFirma: String(getProp(row, 'MusteriFirma', 'musterifirma', 'musteri', 'Musteri', 'Firma', 'firma', 'musteri_firma', 'MusteriAdi', 'musteriadi') || ''),
+    SantiyeAdresi: String(getProp(row, 'SantiyeAdresi', 'santiyeadresi', 'adres', 'Adres', 'Santiye', 'santiye', 'santiye_adresi', 'Konum', 'konum', 'Sehir', 'sehir') || ''),
+    SorumluKisi: String(getProp(row, 'SorumluKisi', 'sorumlukisi', 'sorumlu', 'Sorumlu', 'ProjeSorumlusu', 'projesorumlusu', 'SorumluPersonel', 'sorumlupersonel', 'sorumlu_kisi') || ''),
+    SorumluPersonelId: getProp(row, 'SorumluPersonelId', 'sorumlupersonelid', 'sorumlu_personel_id') ? Number(getProp(row, 'SorumluPersonelId', 'sorumlupersonelid', 'sorumlu_personel_id')) : null,
+    BaslangicTarihi: formatDate(getProp(row, 'BaslangicTarihi', 'baslangictarihi', 'baslangic', 'GirisTarihi', 'giristarihi', 'Tarih', 'tarih', 'baslangic_tarihi')) || getBugunStr(),
+    Deadline: formatDate(getProp(row, 'Deadline', 'deadline', 'bitistarihi', 'BitisTarihi', 'HedefTarih', 'hedeftarih', 'bitis_tarihi', 'TeslimTarihi', 'teslimtarihi')),
+    Durum: String(getProp(row, 'Durum', 'durum', 'ProjeDurumu', 'projedurumu') || 'Teklif Verildi'),
+    GenelIlerlemeYuzdesi: Number(getProp(row, 'GenelIlerlemeYuzdesi', 'genelilerlemeyuzdesi', 'ilerleme', 'Ilerleme', 'ilerleme_yuzdesi', 'Yuzde', 'yuzde') || 0),
+    AktifMi: Boolean(getProp(row, 'AktifMi', 'aktifmi', 'aktif', 'Aktif') ?? true),
+    KilitliMi: Boolean(getProp(row, 'KilitliMi', 'kilitlimi', 'kilitli', 'Kilitli')),
     Asamalar: [] as any[]
   };
 }
@@ -2849,14 +2852,14 @@ app.post('/api/db-config', async (req, res) => {
     const { connectionString, host, port, database, user, password, ssl } = req.body;
     
     if (connectionString && String(connectionString).trim()) {
-      process.env.DATABASE_URL = String(connectionString).trim();
+      process.env.DATABASE_URL = String(connectionString).replace(/[{}]/g, '').trim();
     } else {
       delete process.env.DATABASE_URL;
-      if (host) process.env.PGHOST = String(host).trim();
-      if (port) process.env.PGPORT = String(port).trim();
-      if (database) process.env.PGDATABASE = String(database).trim();
-      if (user) process.env.PGUSER = String(user).trim();
-      if (password !== undefined) process.env.PGPASSWORD = String(password);
+      if (host) process.env.PGHOST = String(host).replace(/[{}]/g, '').trim();
+      if (port) process.env.PGPORT = String(port).replace(/[{}]/g, '').trim();
+      if (database) process.env.PGDATABASE = String(database).replace(/[{}]/g, '').trim();
+      if (user) process.env.PGUSER = String(user).replace(/[{}]/g, '').trim();
+      if (password !== undefined) process.env.PGPASSWORD = String(password).replace(/[{}]/g, '').trim();
       if (ssl !== undefined) process.env.PGSSL = String(ssl);
     }
 
