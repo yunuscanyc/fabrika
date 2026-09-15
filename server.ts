@@ -6013,6 +6013,30 @@ async function ensureSantiyeTable() {
   }
 }
 
+function formatSantiyeRow(r: any) {
+  return {
+    Id: r.id,
+    SantiyeAdi: r.santiye_adi || '',
+    ProjeId: r.proje_id || null,
+    ProjeAdi: r.proje_adi || '',
+    Lokasyon: r.lokasyon || '',
+    MusteriFirma: r.musteri_firma || '',
+    BaslangicTarihi: r.baslangic_tarihi || '',
+    PlanlananBitisTarihi: r.planlanan_bitis_tarihi || '',
+    GerceklesenBitisTarihi: r.gerceklesen_bitis_tarihi || '',
+    SorumluUsta: r.sorumlu_usta || '',
+    SorumluTelefon: r.sorumlu_telefon || '',
+    Durum: r.durum || 'Aktif',
+    Aciklama: r.aciklama || '',
+    Ekip: typeof r.ekip === 'string' ? JSON.parse(r.ekip) : (r.ekip || []),
+    YoklamaKayitlari: typeof r.yoklama_kayitlari === 'string' ? JSON.parse(r.yoklama_kayitlari) : (r.yoklama_kayitlari || {}),
+    YoklamaNotlari: typeof r.yoklama_notlari === 'string' ? JSON.parse(r.yoklama_notlari) : (r.yoklama_notlari || {}),
+    GunlukDurumlar: typeof r.gunluk_durumlar === 'string' ? JSON.parse(r.gunluk_durumlar) : (r.gunluk_durumlar || {}),
+    OlusturmaTarihi: r.olusturma_tarihi || '',
+    ArsivlenmeTarihi: r.arsivlenme_tarihi || ''
+  };
+}
+
 // Şantiyeleri Getir
 app.get('/api/montaj-gruplari', async (req, res) => {
   try {
@@ -6020,27 +6044,7 @@ app.get('/api/montaj-gruplari', async (req, res) => {
       await ensureSantiyeTable();
       const dbRes = await pool.query('SELECT * FROM santiye_montaj_gruplari ORDER BY id DESC');
       if (dbRes.rows.length > 0) {
-        const formatted = dbRes.rows.map(r => ({
-          Id: r.id,
-          SantiyeAdi: r.santiye_adi,
-          ProjeId: r.proje_id,
-          ProjeAdi: r.proje_adi,
-          Lokasyon: r.lokasyon,
-          MusteriFirma: r.musteri_firma,
-          BaslangicTarihi: r.baslangic_tarihi,
-          PlanlananBitisTarihi: r.planlanan_bitis_tarihi,
-          GerceklesenBitisTarihi: r.gerceklesen_bitis_tarihi,
-          SorumluUsta: r.sorumlu_usta,
-          SorumluTelefon: r.sorumlu_telefon,
-          Durum: r.durum || 'Aktif',
-          Aciklama: r.aciklama,
-          Ekip: typeof r.ekip === 'string' ? JSON.parse(r.ekip) : (r.ekip || []),
-          YoklamaKayitlari: typeof r.yoklama_kayitlari === 'string' ? JSON.parse(r.yoklama_kayitlari) : (r.yoklama_kayitlari || {}),
-          YoklamaNotlari: typeof r.yoklama_notlari === 'string' ? JSON.parse(r.yoklama_notlari) : (r.yoklama_notlari || {}),
-          GunlukDurumlar: typeof r.gunluk_durumlar === 'string' ? JSON.parse(r.gunluk_durumlar) : (r.gunluk_durumlar || {}),
-          OlusturmaTarihi: r.olusturma_tarihi,
-          ArsivlenmeTarihi: r.arsivlenme_tarihi
-        }));
+        const formatted = dbRes.rows.map(formatSantiyeRow);
         memSantiyeGruplari = formatted;
         return res.json(formatted);
       }
@@ -6057,26 +6061,23 @@ app.post('/api/montaj-gruplari', async (req, res) => {
   try {
     const b = req.body;
     const bugun = getBugunStr();
-    const yeniGrup = {
-      Id: b.Id || Date.now(),
-      SantiyeAdi: b.SantiyeAdi || 'Yeni Şantiye',
-      ProjeId: b.ProjeId || null,
-      ProjeAdi: b.ProjeAdi || '',
-      Lokasyon: b.Lokasyon || '',
-      MusteriFirma: b.MusteriFirma || '',
-      BaslangicTarihi: b.BaslangicTarihi || bugun,
-      PlanlananBitisTarihi: b.PlanlananBitisTarihi || '',
-      GerceklesenBitisTarihi: b.GerceklesenBitisTarihi || '',
-      SorumluUsta: b.SorumluUsta || '',
-      SorumluTelefon: b.SorumluTelefon || '',
-      Durum: b.Durum || 'Aktif',
-      Aciklama: b.Aciklama || '',
-      Ekip: b.Ekip || [],
-      YoklamaKayitlari: b.YoklamaKayitlari || {},
-      YoklamaNotlari: b.YoklamaNotlari || {},
-      GunlukDurumlar: b.GunlukDurumlar || {},
-      OlusturmaTarihi: b.OlusturmaTarihi || bugun
-    };
+    const santiyeAdi = b.SantiyeAdi || 'Yeni Şantiye';
+    const projeId = b.ProjeId ? Number(b.ProjeId) : null;
+    const projeAdi = b.ProjeAdi || '';
+    const lokasyon = b.Lokasyon || '';
+    const musteriFirma = b.MusteriFirma || '';
+    const baslangicTarihi = b.BaslangicTarihi || bugun;
+    const planlananBitisTarihi = b.PlanlananBitisTarihi || '';
+    const gerceklesenBitisTarihi = b.GerceklesenBitisTarihi || '';
+    const sorumluUsta = b.SorumluUsta || '';
+    const sorumluTelefon = b.SorumluTelefon || '';
+    const durum = b.Durum || 'Aktif';
+    const aciklama = b.Aciklama || '';
+    const ekip = JSON.stringify(b.Ekip || []);
+    const yoklamaKayitlari = JSON.stringify(b.YoklamaKayitlari || {});
+    const yoklamaNotlari = JSON.stringify(b.YoklamaNotlari || {});
+    const gunlukDurumlar = JSON.stringify(b.GunlukDurumlar || {});
+    const olusturmaTarihi = b.OlusturmaTarihi || bugun;
 
     if (pool) {
       await ensureSantiyeTable();
@@ -6086,20 +6087,42 @@ app.post('/api/montaj-gruplari', async (req, res) => {
           baslangic_tarihi, planlanan_bitis_tarihi, gerceklesen_bitis_tarihi,
           sorumlu_usta, sorumlu_telefon, durum, aciklama,
           ekip, yoklama_kayitlari, yoklama_notlari, gunluk_durumlar, olusturma_tarihi
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
-        RETURNING id;
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14::jsonb, $15::jsonb, $16::jsonb, $17)
+        RETURNING *;
       `, [
-        yeniGrup.SantiyeAdi, yeniGrup.ProjeId, yeniGrup.ProjeAdi, yeniGrup.Lokasyon, yeniGrup.MusteriFirma,
-        yeniGrup.BaslangicTarihi, yeniGrup.PlanlananBitisTarihi, yeniGrup.GerceklesenBitisTarihi,
-        yeniGrup.SorumluUsta, yeniGrup.SorumluTelefon, yeniGrup.Durum, yeniGrup.Aciklama,
-        JSON.stringify(yeniGrup.Ekip), JSON.stringify(yeniGrup.YoklamaKayitlari),
-        JSON.stringify(yeniGrup.YoklamaNotlari), JSON.stringify(yeniGrup.GunlukDurumlar), yeniGrup.OlusturmaTarihi
+        santiyeAdi, projeId, projeAdi, lokasyon, musteriFirma,
+        baslangicTarihi, planlananBitisTarihi, gerceklesenBitisTarihi,
+        sorumluUsta, sorumluTelefon, durum, aciklama,
+        ekip, yoklamaKayitlari, yoklamaNotlari, gunlukDurumlar, olusturmaTarihi
       ]);
-      if (insertRes.rows[0]) {
-        yeniGrup.Id = insertRes.rows[0].id;
+
+      if (insertRes.rows.length > 0) {
+        const created = formatSantiyeRow(insertRes.rows[0]);
+        memSantiyeGruplari.unshift(created);
+        return res.status(201).json(created);
       }
     }
 
+    const yeniGrup = {
+      Id: b.Id || Date.now(),
+      SantiyeAdi: santiyeAdi,
+      ProjeId: projeId,
+      ProjeAdi: projeAdi,
+      Lokasyon: lokasyon,
+      MusteriFirma: musteriFirma,
+      BaslangicTarihi: baslangicTarihi,
+      PlanlananBitisTarihi: planlananBitisTarihi,
+      GerceklesenBitisTarihi: gerceklesenBitisTarihi,
+      SorumluUsta: sorumluUsta,
+      SorumluTelefon: sorumluTelefon,
+      Durum: durum,
+      Aciklama: aciklama,
+      Ekip: b.Ekip || [],
+      YoklamaKayitlari: b.YoklamaKayitlari || {},
+      YoklamaNotlari: b.YoklamaNotlari || {},
+      GunlukDurumlar: b.GunlukDurumlar || {},
+      OlusturmaTarihi: olusturmaTarihi
+    };
     memSantiyeGruplari.unshift(yeniGrup);
     return res.status(201).json(yeniGrup);
   } catch (err: any) {
@@ -6111,17 +6134,18 @@ app.post('/api/montaj-gruplari', async (req, res) => {
 // Şantiye Grubu Güncelle
 app.put('/api/montaj-gruplari/:id', async (req, res) => {
   try {
-    const id = req.params.id;
+    const rawId = req.params.id;
+    const numId = Number(rawId);
     const b = req.body;
     
-    let mevcut = memSantiyeGruplari.find(s => String(s.Id) === String(id));
+    let mevcut = memSantiyeGruplari.find(s => String(s.Id) === String(rawId));
     if (mevcut) {
       Object.assign(mevcut, b);
     }
 
     if (pool) {
       await ensureSantiyeTable();
-      await pool.query(`
+      const updateRes = await pool.query(`
         UPDATE santiye_montaj_gruplari SET
           santiye_adi = COALESCE($1, santiye_adi),
           proje_id = COALESCE($2, proje_id),
@@ -6141,9 +6165,10 @@ app.put('/api/montaj-gruplari/:id', async (req, res) => {
           gunluk_durumlar = CASE WHEN $16::jsonb IS NOT NULL THEN $16::jsonb ELSE gunluk_durumlar END,
           arsivlenme_tarihi = COALESCE($17, arsivlenme_tarihi),
           guncellenme_zamani = CURRENT_TIMESTAMP
-        WHERE id = $18 OR id::text = $18::text;
+        WHERE id = $18 OR id::text = $19::text
+        RETURNING *;
       `, [
-        b.SantiyeAdi || null, b.ProjeId || null, b.ProjeAdi || null, b.Lokasyon || null, b.MusteriFirma || null,
+        b.SantiyeAdi || null, b.ProjeId ? Number(b.ProjeId) : null, b.ProjeAdi || null, b.Lokasyon || null, b.MusteriFirma || null,
         b.BaslangicTarihi || null, b.PlanlananBitisTarihi || null, b.GerceklesenBitisTarihi || null,
         b.SorumluUsta || null, b.SorumluTelefon || null, b.Durum || null, b.Aciklama || null,
         b.Ekip ? JSON.stringify(b.Ekip) : null,
@@ -6151,8 +6176,16 @@ app.put('/api/montaj-gruplari/:id', async (req, res) => {
         b.YoklamaNotlari ? JSON.stringify(b.YoklamaNotlari) : null,
         b.GunlukDurumlar ? JSON.stringify(b.GunlukDurumlar) : null,
         b.ArsivlenmeTarihi || null,
-        id
+        isNaN(numId) ? -1 : numId,
+        String(rawId)
       ]);
+
+      if (updateRes.rows.length > 0) {
+        const updated = formatSantiyeRow(updateRes.rows[0]);
+        const mIdx = memSantiyeGruplari.findIndex(s => String(s.Id) === String(rawId));
+        if (mIdx !== -1) memSantiyeGruplari[mIdx] = updated;
+        return res.json({ success: true, message: 'Şantiye grubu güncellendi', data: updated });
+      }
     }
 
     return res.json({ success: true, message: 'Şantiye grubu güncellendi', data: mevcut });
@@ -6165,13 +6198,14 @@ app.put('/api/montaj-gruplari/:id', async (req, res) => {
 // Günlük Durum ve Rapor Kaydet
 app.post('/api/montaj-gruplari/:id/gunluk-durum', async (req, res) => {
   try {
-    const id = req.params.id;
+    const rawId = req.params.id;
+    const numId = Number(rawId);
     const { tarih, durumKaydi, yoklamaKayitlari, yoklamaNotlari } = req.body;
     if (!tarih) return res.status(400).json({ error: 'Tarih belirtilmelidir.' });
 
-    let santiye = memSantiyeGruplari.find(s => String(s.Id) === String(id));
+    let santiye = memSantiyeGruplari.find(s => String(s.Id) === String(rawId));
     if (!santiye) {
-      santiye = { Id: id, GunlukDurumlar: {}, YoklamaKayitlari: {}, YoklamaNotlari: {} };
+      santiye = { Id: rawId, GunlukDurumlar: {}, YoklamaKayitlari: {}, YoklamaNotlari: {} };
       memSantiyeGruplari.push(santiye);
     }
 
@@ -6196,18 +6230,49 @@ app.post('/api/montaj-gruplari/:id/gunluk-durum', async (req, res) => {
 
     if (pool) {
       await ensureSantiyeTable();
-      await pool.query(`
-        UPDATE santiye_montaj_gruplari SET
-          gunluk_durumlar = jsonb_set(COALESCE(gunluk_durumlar, '{}'::jsonb), ARRAY[$1], $2::jsonb, true),
-          yoklama_kayitlari = CASE WHEN $3::jsonb IS NOT NULL THEN jsonb_set(COALESCE(yoklama_kayitlari, '{}'::jsonb), ARRAY[$1], $3::jsonb, true) ELSE yoklama_kayitlari END,
-          guncellenme_zamani = CURRENT_TIMESTAMP
-        WHERE id = $4 OR id::text = $4::text;
-      `, [
-        tarih,
-        JSON.stringify(durumKaydi || {}),
-        yoklamaKayitlari ? JSON.stringify(yoklamaKayitlari) : null,
-        id
+
+      // Önce mevcut row'u çekip JSON'ları tam güncelleyelim
+      const currRes = await pool.query(`SELECT * FROM santiye_montaj_gruplari WHERE id = $1 OR id::text = $2::text`, [
+        isNaN(numId) ? -1 : numId, String(rawId)
       ]);
+
+      if (currRes.rows.length > 0) {
+        const row = currRes.rows[0];
+        let currDurumlar = typeof row.gunluk_durumlar === 'string' ? JSON.parse(row.gunluk_durumlar) : (row.gunluk_durumlar || {});
+        let currYoklama = typeof row.yoklama_kayitlari === 'string' ? JSON.parse(row.yoklama_kayitlari) : (row.yoklama_kayitlari || {});
+        let currNotlar = typeof row.yoklama_notlari === 'string' ? JSON.parse(row.yoklama_notlari) : (row.yoklama_notlari || {});
+
+        if (durumKaydi) {
+          currDurumlar[tarih] = { ...durumKaydi, Tarih: tarih, KayitZamani: new Date().toISOString() };
+        }
+        if (yoklamaKayitlari) {
+          currYoklama[tarih] = yoklamaKayitlari;
+        }
+        if (yoklamaNotlari) {
+          currNotlar[tarih] = yoklamaNotlari;
+        }
+
+        const upRes = await pool.query(`
+          UPDATE santiye_montaj_gruplari SET
+            gunluk_durumlar = $1::jsonb,
+            yoklama_kayitlari = $2::jsonb,
+            yoklama_notlari = $3::jsonb,
+            guncellenme_zamani = CURRENT_TIMESTAMP
+          WHERE id = $4 OR id::text = $5::text
+          RETURNING *;
+        `, [
+          JSON.stringify(currDurumlar),
+          JSON.stringify(currYoklama),
+          JSON.stringify(currNotlar),
+          isNaN(numId) ? -1 : numId,
+          String(rawId)
+        ]);
+
+        if (upRes.rows.length > 0) {
+          const updated = formatSantiyeRow(upRes.rows[0]);
+          return res.json({ success: true, message: `${tarih} tarihli günlük durum kaydedildi.`, santiye: updated });
+        }
+      }
     }
 
     return res.json({ success: true, message: `${tarih} tarihli günlük durum kaydedildi.`, santiye });
@@ -6220,10 +6285,13 @@ app.post('/api/montaj-gruplari/:id/gunluk-durum', async (req, res) => {
 // Şantiye Sil
 app.delete('/api/montaj-gruplari/:id', async (req, res) => {
   try {
-    const id = req.params.id;
-    memSantiyeGruplari = memSantiyeGruplari.filter(s => String(s.Id) !== String(id));
+    const rawId = req.params.id;
+    const numId = Number(rawId);
+    memSantiyeGruplari = memSantiyeGruplari.filter(s => String(s.Id) !== String(rawId));
     if (pool) {
-      await pool.query('DELETE FROM santiye_montaj_gruplari WHERE id = $1 OR id::text = $1::text', [id]);
+      await pool.query('DELETE FROM santiye_montaj_gruplari WHERE id = $1 OR id::text = $2::text', [
+        isNaN(numId) ? -1 : numId, String(rawId)
+      ]);
     }
     return res.json({ success: true, message: 'Şantiye grubu silindi.' });
   } catch (err: any) {

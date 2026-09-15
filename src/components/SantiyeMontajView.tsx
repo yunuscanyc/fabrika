@@ -135,61 +135,74 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
         }
       } else {
         const bugun = getBugunStr();
-        const demoGruplar: SantiyeMontajGrubu[] = [
-          {
-            Id: 1,
-            SantiyeAdi: 'Kadıköy Sahil Villa Ahşap & Mobilya Montajı',
-            ProjeId: projeler[0]?.ProjeId || null,
-            ProjeAdi: projeler[0]?.ProjeAdi || 'Villa Dekorasyon Projesi',
-            Lokasyon: 'Kadıköy / İstanbul',
-            MusteriFirma: 'Acar Mimarlık & İnşaat',
-            BaslangicTarihi: bugun,
-            PlanlananBitisTarihi: '',
-            SorumluUsta: personeller[0]?.AdSoyad || 'Ahmet Yılmaz (Usta Başı)',
-            SorumluTelefon: personeller[0]?.Telefon || '0532 555 0123',
-            Durum: 'Aktif',
-            Aciklama: 'Mutfak dolapları, giyinme odaları ve masif panel kaplamaların sahada montajı.',
-            Ekip: [
-              ...(personeller.slice(0, 2).map((p, idx) => ({
-                Id: `kadrolu_${p.PersonelId}`,
-                PersonelId: p.PersonelId,
-                Tur: 'Kadrolu' as const,
-                AdSoyad: p.AdSoyad,
-                Telefon: p.Telefon,
-                Uzmanlik: p.Gorev || p.Departman || 'Montaj Ustası',
-                Rol: idx === 0 ? ('Usta Başı' as const) : ('Montaj Ustası' as const),
-                EklemeTarihi: bugun
-              }))),
-              ...(yevRes.slice(0, 2).map((y: Yevmiyeci) => ({
-                Id: `yevmiyeci_${y.YevmiyeciId}`,
-                YevmiyeciId: y.YevmiyeciId,
-                Tur: 'Yevmiyeci' as const,
-                AdSoyad: y.AdSoyad,
-                Telefon: y.Telefon,
-                Uzmanlik: y.UzmanlikAlani || 'Dış Montaj Ustası',
-                Rol: 'Şantiye Elemanı' as const,
-                GunlukUcret: y.GunlukYevmiye || 2500,
-                EklemeTarihi: bugun
-              })))
-            ],
-            YoklamaKayitlari: {
-              [bugun]: {}
-            },
-            YoklamaNotlari: {},
-            OlusturmaTarihi: bugun
-          }
-        ];
+        const demoGrup: SantiyeMontajGrubu = {
+          SantiyeAdi: 'Kadıköy Sahil Villa Ahşap & Mobilya Montajı',
+          ProjeId: projeler[0]?.ProjeId || null,
+          ProjeAdi: projeler[0]?.ProjeAdi || 'Villa Dekorasyon Projesi',
+          Lokasyon: 'Kadıköy / İstanbul',
+          MusteriFirma: 'Acar Mimarlık & İnşaat',
+          BaslangicTarihi: bugun,
+          PlanlananBitisTarihi: '',
+          SorumluUsta: personeller[0]?.AdSoyad || 'Ahmet Yılmaz (Usta Başı)',
+          SorumluTelefon: personeller[0]?.Telefon || '0532 555 0123',
+          Durum: 'Aktif',
+          Aciklama: 'Mutfak dolapları, giyinme odaları ve masif panel kaplamaların sahada montajı.',
+          Ekip: [
+            ...(personeller.slice(0, 2).map((p, idx) => ({
+              Id: `kadrolu_${p.PersonelId}`,
+              PersonelId: p.PersonelId,
+              Tur: 'Kadrolu' as const,
+              AdSoyad: p.AdSoyad,
+              Telefon: p.Telefon,
+              Uzmanlik: p.Gorev || p.Departman || 'Montaj Ustası',
+              Rol: idx === 0 ? ('Usta Başı' as const) : ('Montaj Ustası' as const),
+              EklemeTarihi: bugun
+            }))),
+            ...(yevRes.slice(0, 2).map((y: Yevmiyeci) => ({
+              Id: `yevmiyeci_${y.YevmiyeciId}`,
+              YevmiyeciId: y.YevmiyeciId,
+              Tur: 'Yevmiyeci' as const,
+              AdSoyad: y.AdSoyad,
+              Telefon: y.Telefon,
+              Uzmanlik: y.UzmanlikAlani || 'Dış Montaj Ustası',
+              Rol: 'Şantiye Elemanı' as const,
+              GunlukUcret: y.GunlukYevmiye || 2500,
+              EklemeTarihi: bugun
+            })))
+          ],
+          YoklamaKayitlari: {
+            [bugun]: {}
+          },
+          YoklamaNotlari: {},
+          OlusturmaTarihi: bugun
+        };
 
-        demoGruplar.forEach(g => {
-          g.Ekip.forEach(u => {
-            if (!g.YoklamaKayitlari[bugun]) g.YoklamaKayitlari[bugun] = {};
-            g.YoklamaKayitlari[bugun][u.Id] = true;
-          });
+        demoGrup.Ekip.forEach(u => {
+          if (!demoGrup.YoklamaKayitlari[bugun]) demoGrup.YoklamaKayitlari[bugun] = {};
+          demoGrup.YoklamaKayitlari[bugun][u.Id] = true;
         });
 
-        setSantiyeler(demoGruplar);
-        kaydetLocal(demoGruplar);
-        setSeciliSantiyeId(demoGruplar[0].Id);
+        // Demo grubu backend'e kaydet
+        try {
+          const pRes = await fetch('/api/montaj-gruplari', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(demoGrup)
+          });
+          if (pRes.ok) {
+            const created = await pRes.json();
+            setSantiyeler([created]);
+            kaydetLocal([created]);
+            setSeciliSantiyeId(created.Id);
+            setYukleniyor(false);
+            return;
+          }
+        } catch (e) {}
+
+        const fallback = { ...demoGrup, Id: 1 };
+        setSantiyeler([fallback]);
+        kaydetLocal([fallback]);
+        setSeciliSantiyeId(fallback.Id);
       }
     } catch (err) {
       console.error('Şantiye verileri yükleme hatası:', err);
@@ -583,11 +596,18 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
       gosterBildirim('Şantiye montaj grubu güncellendi.');
 
       try {
-        await fetch(`/api/montaj-gruplari/${duzenlenenSantiye.Id}`, {
+        const res = await fetch(`/api/montaj-gruplari/${duzenlenenSantiye.Id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(guncellenmis)
         });
+        if (res.ok) {
+          const resData = await res.json();
+          if (resData.data) {
+            setSantiyeler(prev => prev.map(s => String(s.Id) === String(duzenlenenSantiye.Id) ? resData.data : s));
+            kaydetLocal(santiyeler);
+          }
+        }
       } catch (err) {}
     } else {
       const yeniId = Date.now();
@@ -616,20 +636,29 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
         yeniSantiye.YoklamaKayitlari[formBaslangicTarihi][u.Id] = true;
       });
 
-      const yeniListe = [yeniSantiye, ...santiyeler];
-      setSantiyeler(yeniListe);
-      kaydetLocal(yeniListe);
-      setSeciliSantiyeId(yeniId);
       setFormModalAcik(false);
-      gosterBildirim('Yeni şantiye montaj grubu oluşturuldu.');
 
       try {
-        await fetch('/api/montaj-gruplari', {
+        const res = await fetch('/api/montaj-gruplari', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(yeniSantiye)
         });
+        if (res.ok) {
+          const created = await res.json();
+          setSantiyeler(prev => [created, ...prev.filter(s => String(s.Id) !== String(yeniId))]);
+          kaydetLocal([created, ...santiyeler]);
+          setSeciliSantiyeId(created.Id);
+          gosterBildirim('Yeni şantiye montaj grubu veritabanına kaydedildi.');
+          return;
+        }
       } catch (err) {}
+
+      const yeniListe = [yeniSantiye, ...santiyeler];
+      setSantiyeler(yeniListe);
+      kaydetLocal(yeniListe);
+      setSeciliSantiyeId(yeniId);
+      gosterBildirim('Yeni şantiye montaj grubu oluşturuldu.');
     }
   };
 
