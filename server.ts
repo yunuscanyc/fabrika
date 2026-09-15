@@ -22,7 +22,7 @@ types.setTypeParser(1114, (val: string) => val ? val.split('T')[0] : val);
 types.setTypeParser(1184, (val: string) => val ? val.split('T')[0] : val);
 
 const app = express();
-const PORT = 3000;
+const PORT = parseInt(process.env.PORT || '3000', 10);
 
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
