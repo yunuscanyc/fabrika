@@ -97,67 +97,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   };
   return (
     <div className="space-y-6 pb-20 md:pb-6">
-      {/* Üst Karşılama ve Hızlı Durum */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-2xl p-5 sm:p-6 text-white shadow-lg border border-slate-800">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30">
-                Fabrika Yönetim &amp; Üretim Takip
-              </span>
-              {dbStatus?.connected ? (
-                <button
-                  onClick={onOpenDbModal}
-                  className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center gap-1.5 hover:bg-emerald-500/30 transition-colors"
-                  title="Veritabanı bağlantı detayları"
-                >
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  <span>PostgreSQL Canlı Bağlı ({dbStatus.database})</span>
-                </button>
-              ) : (
-                <button
-                  onClick={onOpenDbModal}
-                  className="text-xs font-semibold px-2.5 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-1.5 hover:bg-rose-500/30 transition-colors"
-                  title="Canlı veritabanı ayarlarını yapılandırmak için tıklayın"
-                >
-                  <span className="w-2 h-2 rounded-full bg-rose-400"></span>
-                  <span>PostgreSQL Canlı Bağlantısı Yok (Ayarla)</span>
-                </button>
-              )}
-            </div>
-            <h1 className="text-xl sm:text-2xl font-bold mt-2 text-white">
-              Rende Ahşap &amp; Mobilya Fabrika Portalı
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl">
-              İmalat projeleri, personel puantaj &amp; izinleri, mobilya makineleri, araç filosu ve 6331 İSG denetimlerini tek ekranda yönetin.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => onNavigateTab('personel', 'montaj')}
-              className="px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-semibold text-xs sm:text-sm flex items-center gap-1.5 transition-colors border border-amber-500/30"
-            >
-              <HardHat className="w-4 h-4 text-amber-400" />
-              <span>Dış Montaj &amp; Şantiye</span>
-            </button>
-            <button
-              onClick={() => onNavigateTab('personel')}
-              className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs sm:text-sm flex items-center gap-1.5 transition-colors border border-slate-700"
-            >
-              <Users className="w-4 h-4 text-blue-400" />
-              <span>Personel &amp; Puantaj</span>
-            </button>
-            <button
-              onClick={() => onNavigateTab('projeler')}
-              className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs sm:text-sm flex items-center gap-1.5 transition-colors shadow-md shadow-blue-600/30"
-            >
-              <span>Projeleri Gör</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </div>
-
       {/* Canlı Veritabanı Bağlantı Durumu Bilgilendirmesi */}
       {dbStatus && !dbStatus.connected && (
         <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
