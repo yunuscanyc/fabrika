@@ -36,14 +36,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenDbModal,
   onToggleTamamlandi
 }) => {
-  const [ajandaFiltre, setAjandaFiltre] = useState<'acik' | 'hepsi' | 'tamamlanan'>('acik');
+  const [ajandaFiltre, setAjandaFiltre] = useState<'acik' | 'bugun' | 'gecikmis' | 'hepsi' | 'tamamlanan'>('acik');
 
   const gorevler: OzetGorevItem[] = ozet?.gorevListesi || [];
   const acikGorevSayisi = gorevler.filter(g => !g.tamamlandiMi).length;
   const tamamlananSayisi = gorevler.filter(g => g.tamamlandiMi).length;
+  const gecikmisSayisi = gorevler.filter(g => !g.tamamlandiMi && g.etiket === 'GEÇİKMİŞ').length;
+  const bugunSayisi = gorevler.filter(g => !g.tamamlandiMi && g.etiket === 'BUGÜN').length;
+  const yaklasanSayisi = gorevler.filter(g => !g.tamamlandiMi && (g.etiket === 'GELECEK 5 GÜN' || g.etiket === 'GELECEK')).length;
 
   const filtrelenmisGorevler = gorevler.filter(g => {
     if (ajandaFiltre === 'acik') return !g.tamamlandiMi;
+    if (ajandaFiltre === 'bugun') return !g.tamamlandiMi && g.etiket === 'BUGÜN';
+    if (ajandaFiltre === 'gecikmis') return !g.tamamlandiMi && g.etiket === 'GEÇİKMİŞ';
     if (ajandaFiltre === 'tamamlanan') return g.tamamlandiMi;
     return true;
   });
@@ -347,44 +352,71 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* Alt Bölüm: Fabrika Ajandası & Günün Görevleri */}
       <div className="bg-white border border-slate-200/80 rounded-2xl p-5 sm:p-6 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center shadow-sm shrink-0">
-              <Calendar className="w-5 h-5" />
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-5 border-b border-slate-100">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-sky-500 text-white flex items-center justify-center shadow-md shadow-sky-500/20 shrink-0">
+              <Calendar className="w-6 h-6" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-slate-900">Günün Ajandası &amp; Görevler</h2>
-                {gorevler.length > 0 && (
-                  <span className="px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 text-xs font-bold">
-                    {acikGorevSayisi} Açık
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-lg font-bold text-slate-900">Fabrika Ajandası &amp; Günün Görevleri</h2>
+                {acikGorevSayisi > 0 && (
+                  <span className="px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-800 text-xs font-bold border border-sky-200">
+                    {acikGorevSayisi} Bekleyen
+                  </span>
+                )}
+                {gecikmisSayisi > 0 && (
+                  <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-xs font-bold border border-rose-200 animate-pulse">
+                    {gecikmisSayisi} Gecikmiş
                   </span>
                 )}
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Teslimat, montaj, randevu, fatura ve operasyonel iş hatırlatıcıları
+                Teslimat, montaj, şantiye randevusu, periyodik araç/makine bakım ve operasyonel işler
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Filtre Segmentleri */}
-            <div className="flex items-center bg-slate-100 p-1 rounded-xl text-xs font-semibold">
+          <div className="flex items-center gap-2 flex-wrap justify-between sm:justify-end">
+            {/* Filtre Butonları */}
+            <div className="flex items-center bg-slate-100/90 p-1 rounded-xl text-xs font-semibold overflow-x-auto max-w-full">
               <button
                 onClick={() => setAjandaFiltre('acik')}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
+                className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
                   ajandaFiltre === 'acik'
-                    ? 'bg-white text-slate-900 shadow-sm'
+                    ? 'bg-white text-slate-900 shadow-xs font-bold'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 Açık ({acikGorevSayisi})
               </button>
               <button
+                onClick={() => setAjandaFiltre('bugun')}
+                className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
+                  ajandaFiltre === 'bugun'
+                    ? 'bg-sky-600 text-white shadow-xs font-bold'
+                    : 'text-slate-600 hover:text-sky-700'
+                }`}
+              >
+                Bugün ({bugunSayisi})
+              </button>
+              {gecikmisSayisi > 0 && (
+                <button
+                  onClick={() => setAjandaFiltre('gecikmis')}
+                  className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
+                    ajandaFiltre === 'gecikmis'
+                      ? 'bg-rose-600 text-white shadow-xs font-bold'
+                      : 'text-rose-600 hover:text-rose-800'
+                  }`}
+                >
+                  Gecikmiş ({gecikmisSayisi})
+                </button>
+              )}
+              <button
                 onClick={() => setAjandaFiltre('hepsi')}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
+                className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
                   ajandaFiltre === 'hepsi'
-                    ? 'bg-white text-slate-900 shadow-sm'
+                    ? 'bg-white text-slate-900 shadow-xs font-bold'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -392,9 +424,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </button>
               <button
                 onClick={() => setAjandaFiltre('tamamlanan')}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
+                className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
                   ajandaFiltre === 'tamamlanan'
-                    ? 'bg-white text-slate-900 shadow-sm'
+                    ? 'bg-white text-slate-900 shadow-xs font-bold'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -404,7 +436,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             <button
               onClick={() => onNavigateTab('hatirlaticilar')}
-              className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition"
+              className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition shrink-0"
             >
               <span>Ajandaya Git</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -412,36 +444,60 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Görev Listesi */}
-        <div className="mt-4">
+        {/* Görev Kartları Listesi */}
+        <div className="mt-5">
           {filtrelenmisGorevler.length === 0 ? (
-            <div className="py-10 text-center text-slate-500 bg-slate-50/70 border border-dashed border-slate-200 rounded-xl">
-              <Calendar className="w-8 h-8 text-slate-400 mx-auto mb-2 opacity-50" />
-              <p className="text-sm font-semibold text-slate-700">Bu görünümde ajanda kaydı bulunmuyor</p>
-              <p className="text-xs text-slate-400 mt-1">Yeni bir teslimat, montaj veya hatırlatıcı eklemek için Ajanda sekmesine gidebilirsiniz.</p>
+            <div className="py-12 text-center text-slate-500 bg-slate-50/70 border border-dashed border-slate-200 rounded-2xl">
+              <Calendar className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+              <p className="text-sm font-bold text-slate-700">Bu filtrede ajanda kaydı bulunamadı</p>
+              <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                Yeni bir teslimat, montaj görevi veya hatırlatıcı eklemek için Ajanda sekmesine gidebilirsiniz.
+              </p>
               <button
                 onClick={() => onNavigateTab('hatirlaticilar')}
-                className="mt-3 px-3.5 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition shadow-sm"
+                className="mt-4 px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition shadow-sm"
               >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Yeni Görev / Not Ekle</span>
+                <Plus className="w-4 h-4" />
+                <span>Yeni Görev / Hatırlatıcı Ekle</span>
               </button>
             </div>
           ) : (
-            <div className="divide-y divide-slate-100">
+            <div className="space-y-3">
               {filtrelenmisGorevler.map((g) => {
                 const isGecikmis = g.etiket === 'GEÇİKMİŞ';
                 const isBugun = g.etiket === 'BUGÜN';
                 const isYaklasan = g.etiket === 'GELECEK 5 GÜN' || g.etiket === 'GELECEK';
 
+                // Kart Renk Teması
+                let cardStyle = 'bg-white border-slate-200/90 hover:border-slate-300';
+                let badgeStyle = 'bg-slate-100 text-slate-700 border-slate-200';
+                let statusLabel = 'Planlandı';
+
+                if (g.tamamlandiMi) {
+                  cardStyle = 'bg-slate-50/70 border-slate-200 text-slate-400 opacity-65 hover:opacity-100';
+                  badgeStyle = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                  statusLabel = 'Tamamlandı';
+                } else if (isGecikmis) {
+                  cardStyle = 'bg-gradient-to-r from-rose-50/90 via-rose-50/40 to-white border-rose-200 hover:border-rose-300 shadow-xs';
+                  badgeStyle = 'bg-rose-100 text-rose-800 border-rose-300 font-extrabold';
+                  statusLabel = 'GEÇİKMİŞ';
+                } else if (isBugun) {
+                  cardStyle = 'bg-gradient-to-r from-sky-50/95 via-sky-50/50 to-white border-sky-300 hover:border-sky-400 shadow-xs ring-1 ring-sky-200/80';
+                  badgeStyle = 'bg-sky-100 text-sky-900 border-sky-300 font-extrabold';
+                  statusLabel = 'BUGÜN';
+                } else if (isYaklasan) {
+                  cardStyle = 'bg-gradient-to-r from-amber-50/70 via-amber-50/30 to-white border-amber-200 hover:border-amber-300 shadow-xs';
+                  badgeStyle = 'bg-amber-100 text-amber-800 border-amber-200 font-bold';
+                  statusLabel = 'YAKLAŞAN';
+                }
+
                 return (
                   <div
                     key={g.id}
-                    className={`py-3 px-2 rounded-xl transition flex items-center justify-between gap-3 hover:bg-slate-50/80 group ${
-                      g.tamamlandiMi ? 'opacity-60' : ''
-                    }`}
+                    className={`p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border transition-all duration-200 hover:shadow-md flex items-start justify-between gap-3 group ${cardStyle}`}
                   >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                    {/* Sol: Checkbox & İçerik */}
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
                       {/* Tamamlandı Toggle Butonu */}
                       <button
                         type="button"
@@ -452,61 +508,39 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           }
                         }}
                         disabled={!onToggleTamamlandi}
-                        className={`transition-colors shrink-0 ${
+                        className={`mt-0.5 transition-all shrink-0 p-0.5 rounded-full hover:scale-110 ${
                           g.tamamlandiMi
                             ? 'text-emerald-600 hover:text-emerald-700'
-                            : 'text-slate-300 hover:text-slate-400'
+                            : isGecikmis
+                            ? 'text-rose-400 hover:text-rose-600'
+                            : isBugun
+                            ? 'text-sky-500 hover:text-sky-700'
+                            : 'text-slate-300 hover:text-slate-500'
                         }`}
-                        title={g.tamamlandiMi ? 'Tamamlanmadı yap' : 'Tamamlandı işaretle'}
+                        title={g.tamamlandiMi ? 'Tamamlanmadı yap' : 'Tamamlandı olarak işaretle'}
                       >
                         {g.tamamlandiMi ? (
-                          <CheckCircle2 className="w-5 h-5" />
+                          <CheckCircle2 className="w-5 h-5 fill-emerald-100" />
                         ) : (
-                          <Circle className="w-5 h-5" />
+                          <Circle className="w-5 h-5 stroke-[2.2]" />
                         )}
                       </button>
 
-                      {/* Başlık ve Detaylar */}
+                      {/* Başlık ve Üst Rozetler */}
                       <div
                         onClick={() => onNavigateTab('hatirlaticilar')}
                         className="cursor-pointer min-w-0 flex-1"
                       >
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span
-                            className={`text-sm font-semibold truncate ${
-                              g.tamamlandiMi
-                                ? 'line-through text-slate-400'
-                                : 'text-slate-800 group-hover:text-sky-600'
-                            }`}
-                          >
-                            {g.baslik}
+                        {/* 1. Satır: Rozetler ve Tarih */}
+                        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap mb-1">
+                          {/* Durum Rozeti */}
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${badgeStyle}`}>
+                            {statusLabel}
                           </span>
 
-                          {/* Etiket Badge */}
-                          {isGecikmis && !g.tamamlandiMi && (
-                            <span className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[10px] font-bold border border-rose-200">
-                              GEÇİKMİŞ
-                            </span>
-                          )}
-                          {isBugun && !g.tamamlandiMi && (
-                            <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[10px] font-bold border border-amber-200">
-                              BUGÜN
-                            </span>
-                          )}
-                          {isYaklasan && !g.tamamlandiMi && (
-                            <span className="px-2 py-0.5 rounded-md bg-sky-100 text-sky-800 text-[10px] font-bold border border-sky-200">
-                              YAKLAŞAN
-                            </span>
-                          )}
-                          {g.tamamlandiMi && (
-                            <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-700 text-[10px] font-bold border border-emerald-200">
-                              TAMAMLANDI
-                            </span>
-                          )}
-
-                          {/* Kategori Badge */}
+                          {/* Kategori Rozeti */}
                           {g.kategori && (
-                            <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-medium">
+                            <span className="px-2 py-0.5 rounded-md bg-white/90 text-slate-700 text-[10px] font-semibold border border-slate-200 shadow-2xs">
                               {g.kategori}
                             </span>
                           )}
@@ -514,33 +548,44 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           {/* Öncelik */}
                           {g.onemDerecesi && g.onemDerecesi !== 'Normal' && !g.tamamlandiMi && (
                             <span
-                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                              className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${
                                 g.onemDerecesi === 'Kritik'
-                                  ? 'bg-rose-50 text-rose-600 border border-rose-200'
-                                  : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                  ? 'bg-rose-600 text-white border-rose-700 shadow-2xs animate-pulse'
+                                  : 'bg-amber-500 text-white border-amber-600 shadow-2xs'
                               }`}
                             >
-                              {g.onemDerecesi}
+                              {g.onemDerecesi} Öncelik
                             </span>
                           )}
+
+                          {/* Tarih Rozeti */}
+                          <span className="text-[11px] font-medium text-slate-500 flex items-center gap-1 bg-white/70 px-2 py-0.5 rounded-md border border-slate-200/60 font-mono">
+                            <Clock className="w-3 h-3 text-slate-400" />
+                            <span>{formatTarihTR(g.tarih)}</span>
+                          </span>
                         </div>
+
+                        {/* 2. Satır: Görev Başlığı */}
+                        <h3
+                          className={`text-sm sm:text-base font-bold leading-snug break-words transition-colors ${
+                            g.tamamlandiMi
+                              ? 'line-through text-slate-400 font-medium'
+                              : 'text-slate-900 group-hover:text-sky-700'
+                          }`}
+                        >
+                          {g.baslik}
+                        </h3>
                       </div>
                     </div>
 
-                    {/* Tarih ve Git Butonu */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      <div className="flex items-center gap-1 text-xs text-slate-500 font-mono">
-                        <Clock className="w-3.5 h-3.5 text-slate-400" />
-                        <span>{formatTarihTR(g.tarih)}</span>
-                      </div>
-                      <button
-                        onClick={() => onNavigateTab('hatirlaticilar')}
-                        className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-400 hover:text-slate-600 transition"
-                        title="Ajandada Aç"
-                      >
-                        <ArrowRight className="w-4 h-4" />
-                      </button>
-                    </div>
+                    {/* Sağ: Detaya Git Butonu */}
+                    <button
+                      onClick={() => onNavigateTab('hatirlaticilar')}
+                      className="mt-1 p-2 rounded-xl bg-white/80 hover:bg-white text-slate-400 hover:text-sky-700 border border-slate-200/80 hover:border-sky-300 shadow-2xs transition shrink-0 group-hover:translate-x-0.5"
+                      title="Ajandada Aç ve Düzenle"
+                    >
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
                   </div>
                 );
               })}
