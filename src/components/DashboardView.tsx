@@ -1,14 +1,10 @@
 import React from 'react';
 import { OzetIstatistikler } from '../types';
-import { formatTarihTR } from '../utils/dateUtils';
 import { DbStatusData } from './DatabaseStatusModal';
 import { 
   FolderGit2, 
   Truck, 
   Wrench, 
-  Calendar, 
-  AlertTriangle, 
-  CheckCircle2, 
   Clock, 
   ArrowRight,
   ShieldAlert,
@@ -16,7 +12,8 @@ import {
   Cog,
   ShieldCheck,
   Database,
-  HardHat
+  HardHat,
+  AlertTriangle
 } from 'lucide-react';
 
 interface DashboardViewProps {
@@ -122,7 +119,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       )}
 
-      {/* Ana Metrik Kartları (Masaüstü WPF Özeti) */}
+      {/* Ana Metrik Kartları */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
         {/* 1. Aktif Projeler */}
         <div 
@@ -198,47 +195,94 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <p className="text-[10px] text-slate-500 mt-0.5 truncate">Kamyon, Forklift, Servis</p>
         </div>
 
-        {/* 5. Bakım Uyarıları (Araç + Makine) */}
-        <div 
-          onClick={() => onNavigateTab('araclar')}
-          className="bg-white rounded-xl p-4 border border-amber-200 shadow-sm hover:shadow-md transition-all cursor-pointer group bg-gradient-to-br from-amber-50/40 to-white"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-amber-900">Bakım Uyarısı</span>
-            <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center group-hover:scale-105 transition-transform">
-              <Wrench className="w-4 h-4" />
+        {/* 5. Bakım Uyarıları (Araç + Makine) - Uyarı Varsa Kırmızı, Yoksa Standart */}
+        {(() => {
+          const aracBakim = ozet?.bakimBekleyenArac ?? 0;
+          const makineBakim = ozet?.bakimBekleyenMakine ?? 0;
+          const totalBakim = aracBakim + makineBakim;
+          const hasWarning = totalBakim > 0;
+
+          const handleBakimTikla = () => {
+            if (aracBakim > 0) {
+              onNavigateTab('araclar');
+            } else if (makineBakim > 0) {
+              onNavigateTab('makineler');
+            } else {
+              onNavigateTab('araclar');
+            }
+          };
+
+          return (
+            <div 
+              id="bakim-metric-card"
+              onClick={handleBakimTikla}
+              className={`rounded-xl p-4 shadow-sm hover:shadow-md transition-all cursor-pointer group ${
+                hasWarning
+                  ? 'bg-rose-50 border-2 border-rose-400/90 text-rose-950 hover:bg-rose-100/80 shadow-rose-100'
+                  : 'bg-white border border-slate-200/80'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className={`text-[11px] font-bold ${hasWarning ? 'text-rose-800 font-extrabold' : 'text-slate-500'}`}>
+                  Bakım Uyarısı
+                </span>
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform ${
+                  hasWarning 
+                    ? 'bg-rose-600 text-white shadow-sm shadow-rose-500/30' 
+                    : 'bg-emerald-50 text-emerald-600'
+                }`}>
+                  {hasWarning ? (
+                    <Wrench className="w-4 h-4 animate-pulse" />
+                  ) : (
+                    <Wrench className="w-4 h-4" />
+                  )}
+                </div>
+              </div>
+              <div className="mt-2 flex items-baseline gap-1.5">
+                <span className={`text-2xl font-black ${hasWarning ? 'text-rose-600' : 'text-slate-900'}`}>
+                  {totalBakim}
+                </span>
+                <span className={`text-[10px] font-bold ${hasWarning ? 'px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-300' : 'text-slate-400'}`}>
+                  {hasWarning ? 'Acil / Yakın' : 'Sorunsuz'}
+                </span>
+              </div>
+              <p className={`text-[10px] mt-0.5 truncate ${hasWarning ? 'text-rose-700 font-semibold' : 'text-slate-500'}`}>
+                {hasWarning 
+                  ? `${aracBakim > 0 ? `${aracBakim} Araç` : ''}${aracBakim > 0 && makineBakim > 0 ? ' + ' : ''}${makineBakim > 0 ? `${makineBakim} Makine` : ''} Bakımı`
+                  : 'Tüm Bakımlar Güncel'}
+              </p>
             </div>
-          </div>
-          <div className="mt-2 flex items-baseline gap-1.5">
-            <span className="text-2xl font-black text-amber-600">
-              {(ozet?.bakimBekleyenArac ?? 0) + (ozet?.bakimBekleyenMakine ?? 0)}
-            </span>
-            <span className="text-[10px] text-amber-800 font-semibold">Acil / Yakın</span>
-          </div>
-          <p className="text-[10px] text-amber-700 mt-0.5 truncate">Periyot Sayacı Dolan</p>
-        </div>
+          );
+        })()}
 
         {/* 6. Bugün Biten Ajanda Görevleri */}
-        <div 
-          onClick={() => onNavigateTab('hatirlaticilar')}
-          className="bg-white rounded-xl p-4 border border-sky-200 shadow-sm hover:shadow-md transition-all cursor-pointer group bg-gradient-to-br from-sky-50/40 to-white"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-sky-900">Günün Görevi</span>
-            <div className="w-7 h-7 rounded-lg bg-sky-500 text-white flex items-center justify-center group-hover:scale-105 transition-transform shadow-sm shadow-sky-500/30">
-              <Clock className="w-4 h-4" />
+        {(() => {
+          const gorevSayisi = ozet?.bugunBitenGorevler ?? 0;
+          return (
+            <div 
+              onClick={() => onNavigateTab('hatirlaticilar')}
+              className="bg-white rounded-xl p-4 border border-slate-200/80 shadow-sm hover:shadow-md transition-all cursor-pointer group"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-500">Günün Görevi</span>
+                <div className="w-7 h-7 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <Clock className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-2 flex items-baseline gap-1.5">
+                <span className="text-2xl font-black text-slate-900">{gorevSayisi}</span>
+                <span className="text-[10px] text-slate-400">
+                  {gorevSayisi > 0 ? 'Bugün Açık' : 'Tamam'}
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-500 mt-0.5 truncate">
+                {gorevSayisi > 0 ? 'Teslimat & Randevu' : 'Bekleyen Görev Yok'}
+              </p>
             </div>
-          </div>
-          <div className="mt-2 flex items-baseline gap-1.5">
-            <span className="text-2xl font-black text-sky-900">{ozet?.bugunBitenGorevler ?? 0}</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-800 font-bold border border-sky-200">
-              Bugün
-            </span>
-          </div>
-          <p className="text-[10px] text-sky-700 mt-0.5 truncate">Acil Teslimat &amp; Randevu</p>
-        </div>
+          );
+        })()}
 
-        {/* 7. İSG Uyarıları (Sağlık Raporu & Eğitim) */}
+        {/* 7. İSG Uyarıları (Sağlık Raporu & Eğitim) - Uyarı Varsa Kırmızı, Yoksa Standart */}
         {(() => {
           const isgCount = ozet?.isgUyarilari?.length ?? 0;
           const hasWarning = isgCount > 0;
@@ -283,222 +327,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           );
         })()}
       </div>
-
-      {/* İki Sütun: Sol Canlı Bakım Uyarıları | Sağ Ajanda & Hızlı İşlemler */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Canlı Bakım Uyarıları (WPF'teki Ana Ekran Özeti) */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
-                <AlertTriangle className="w-4 h-4" />
-              </div>
-              <div>
-                <h2 className="font-bold text-slate-900 text-sm sm:text-base">
-                  Acil ve Yaklaşan Bakım Uyarıları
-                </h2>
-                <p className="text-[11px] text-slate-500">Periyodik bakım sayacı gelen araç ve fabrika makineleri</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => onNavigateTab('makineler')}
-                className="text-xs font-semibold text-slate-600 hover:text-slate-900"
-              >
-                Makineler
-              </button>
-              <span>•</span>
-              <button
-                onClick={() => onNavigateTab('araclar')}
-                className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1"
-              >
-                <span>Araçlar</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-4 space-y-2.5">
-            {ozet?.bakimUyarilari && ozet.bakimUyarilari.length > 0 ? (
-              ozet.bakimUyarilari.map((u) => (
-                <div
-                  key={u.id}
-                  onClick={() => onNavigateTab('araclar')}
-                  className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
-                    u.durum === 'Gecikmis'
-                      ? 'bg-red-50/70 border-red-200 text-red-900 hover:bg-red-100/70'
-                      : 'bg-amber-50/70 border-amber-200 text-amber-900 hover:bg-amber-100/70'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-xs ${
-                        u.durum === 'Gecikmis'
-                          ? 'bg-red-600 text-white'
-                          : 'bg-amber-500 text-white'
-                      }`}
-                    >
-                      {u.birim === 'saat' ? 'SAAT' : 'KM'}
-                    </div>
-                    <div>
-                      <div className="font-bold text-sm text-slate-900">{u.ad}</div>
-                      <div className="text-xs text-slate-600 font-medium">{u.mesaj}</div>
-                    </div>
-                  </div>
-                  <span
-                    className={`text-xs px-2.5 py-1 rounded-full font-bold whitespace-nowrap ${
-                      u.durum === 'Gecikmis'
-                        ? 'bg-red-200 text-red-800'
-                        : 'bg-amber-200 text-amber-800'
-                    }`}
-                  >
-                    {u.durum === 'Gecikmis' ? 'Gecikti!' : 'Yaklaştı'}
-                  </span>
-                </div>
-              ))
-            ) : (
-              <div className="py-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-                <p className="text-sm font-semibold text-slate-700">Tüm araç ve makinelerin bakımları güncel</p>
-                <p className="text-xs text-slate-400 mt-0.5">Şu an acil bakım bekleyen ekipman bulunmuyor.</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Hatırlatıcılar & Görev Takibi */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center">
-                  <Calendar className="w-4 h-4" />
-                </div>
-                <div>
-                  <h2 className="font-bold text-slate-900 text-sm sm:text-base">
-                    Günün &amp; Geçmişin Görev / Hatırlatıcıları
-                  </h2>
-                  <p className="text-[11px] text-slate-500">Bugün, son 5 gün ve geçmiş açık ajanda kayıtları</p>
-                </div>
-              </div>
-              <button
-                onClick={() => onNavigateTab('hatirlaticilar')}
-                className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1"
-              >
-                <span>Ajandaya Git</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            <div className="mt-4 space-y-2.5 max-h-[260px] overflow-y-auto pr-1">
-              {ozet?.gorevListesi && ozet.gorevListesi.length > 0 ? (
-                ozet.gorevListesi.map((g) => (
-                  <div
-                    key={g.id}
-                    onClick={() => onNavigateTab('hatirlaticilar')}
-                    className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2 ${
-                      g.etiket === 'GEÇİKMİŞ'
-                        ? 'bg-rose-50/70 border-rose-200 hover:bg-rose-100/70'
-                        : g.etiket === 'BUGÜN'
-                        ? 'bg-sky-50/80 border-sky-300 hover:bg-sky-100/70'
-                        : g.etiket === 'GELECEK 5 GÜN'
-                        ? 'bg-indigo-50/80 border-indigo-200 hover:bg-indigo-100/70'
-                        : 'bg-slate-50 border-slate-200 hover:bg-slate-100/80'
-                    }`}
-                  >
-                    <div className="flex items-start gap-2.5 min-w-0">
-                      <div
-                        className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
-                          g.etiket === 'GEÇİKMİŞ'
-                            ? 'bg-rose-500 animate-pulse'
-                            : g.etiket === 'BUGÜN'
-                            ? 'bg-sky-500 animate-pulse'
-                            : g.etiket === 'GELECEK 5 GÜN'
-                            ? 'bg-indigo-500'
-                            : 'bg-slate-400'
-                        }`}
-                      ></div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span
-                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
-                              g.etiket === 'GEÇİKMİŞ'
-                                ? 'bg-rose-100 text-rose-800 border-rose-300'
-                                : g.etiket === 'BUGÜN'
-                                ? 'bg-sky-200 text-sky-900 border-sky-300'
-                                : g.etiket === 'GELECEK 5 GÜN'
-                                ? 'bg-indigo-100 text-indigo-900 border-indigo-300'
-                                : 'bg-slate-200 text-slate-800 border-slate-300'
-                            }`}
-                          >
-                            {g.etiket}
-                          </span>
-                          <span className="text-[11px] font-medium text-slate-500">{formatTarihTR(g.tarih)}</span>
-                          {g.kategori && (
-                            <span className="text-[10px] bg-white/80 px-1.5 py-0.5 rounded text-slate-600 border border-slate-200">
-                              {g.kategori}
-                            </span>
-                          )}
-                        </div>
-                        <div className="font-bold text-sm text-slate-900 truncate mt-1">{g.baslik}</div>
-                      </div>
-                    </div>
-                    {g.tamamlandiMi ? (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 whitespace-nowrap">
-                        Tamamlandı
-                      </span>
-                    ) : (
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${
-                          g.etiket === 'GEÇİKMİŞ'
-                            ? 'bg-rose-200 text-rose-900'
-                            : g.etiket === 'BUGÜN'
-                            ? 'bg-sky-200 text-sky-900'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}
-                      >
-                        {g.etiket === 'GEÇİKMİŞ' ? 'Acil Bekliyor' : 'Açık Görev'}
-                      </span>
-                    )}
-                  </div>
-                ))
-              ) : ozet?.bugunGorevListesi && ozet.bugunGorevListesi.length > 0 ? (
-                ozet.bugunGorevListesi.map((title, idx) => (
-                  <div
-                    key={idx}
-                    onClick={() => onNavigateTab('hatirlaticilar')}
-                    className="p-3.5 rounded-xl border border-sky-300 bg-sky-50/80 hover:bg-sky-100/70 transition-all cursor-pointer flex items-center justify-between"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="w-2.5 h-2.5 rounded-full bg-sky-500 animate-pulse mt-1.5 shrink-0"></div>
-                      <div>
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-200 text-sky-900 mr-2 inline-block">
-                          BUGÜN
-                        </span>
-                        <span className="font-bold text-sm text-slate-900">{title}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="py-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                  <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-                  <p className="text-sm font-semibold text-slate-700">Açık görev veya hatırlatıcı yok</p>
-                  <p className="text-xs text-slate-400 mt-0.5">Bugün, son 5 gün ve geçmiş için kayıt bulunmuyor.</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span>Sistem: PostgreSQL Senkronize</span>
-            <span className="text-emerald-600 font-semibold flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
-              Çevrimiçi
-            </span>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };
+

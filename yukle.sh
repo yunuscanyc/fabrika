@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-
+# Proje dizinine geçiş (sunucu dizini veya mevcut betik konumu)
+cd /var/www/rende-portal 2>/dev/null || cd "$(dirname "$0")"
 # Hata durumunda scripti durdur
 set -e
 

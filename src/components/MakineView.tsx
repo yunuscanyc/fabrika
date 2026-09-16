@@ -66,7 +66,7 @@ export const MakineView: React.FC<MakineViewProps> = ({ makineler, personeller =
     }
   }, [personeller]);
   const [turFiltre, setTurFiltre] = useState('Tümü');
-  const [aktiflikFiltre, setAktiflikFiltre] = useState<'aktif' | 'arsiv' | 'hepsi'>('aktif');
+  const [aktiflikFiltre, setAktiflikFiltre] = useState<'aktif' | 'arsiv' | 'hepsi' | 'acil' | 'yaklasan'>('aktif');
 
   const [seciliMakine, setSeciliMakine] = useState<Makine | null>(null);
   const [bakimModalAcik, setBakimModalAcik] = useState(false);
@@ -80,7 +80,39 @@ export const MakineView: React.FC<MakineViewProps> = ({ makineler, personeller =
     ? (makineler.find(m => m.MakineId === gecmisModalMakine.MakineId) || gecmisModalMakine)
     : null;
 
-  // Yeni/Düzenle Makine Form State
+  // Kritik Makine Bakım Hesaplamaları
+  const acilMakineler = makineler.filter(m => {
+    if (m.AktifMi === false) return false;
+    const kalanSaat = (m.SonBakimSaati + m.BakimAraligiSaat) - m.GuncelCalismaSaati;
+    return kalanSaat <= 0;
+  });
+
+  const yaklasanMakineler = makineler.filter(m => {
+    if (m.AktifMi === false) return false;
+    const kalanSaat = (m.SonBakimSaati + m.BakimAraligiSaat) - m.GuncelCalismaSaati;
+    return kalanSaat > 0 && kalanSaat <= 25;
+  });
+
+  const toplamKritikMakine = acilMakineler.length + yaklasanMakineler.length;
+
+  const turler = Array.from(new Set(makineler.map(m => m.MakineTuru).filter(Boolean)));
+
+  const filtrelenmis = makineler.filter(m => {
+    const matchArama = 
+      m.MakineAdi.toLowerCase().includes(arama.toLowerCase()) ||
+      m.MakineKodu.toLowerCase().includes(arama.toLowerCase()) ||
+      (m.MarkaModel && m.MarkaModel.toLowerCase().includes(arama.toLowerCase()));
+    const matchTur = turFiltre === 'Tümü' || m.MakineTuru === turFiltre;
+    
+    const matchAktif = 
+      aktiflikFiltre === 'hepsi' ? true :
+      aktiflikFiltre === 'aktif' ? m.AktifMi !== false :
+      aktiflikFiltre === 'arsiv' ? m.AktifMi === false :
+      aktiflikFiltre === 'acil' ? (m.AktifMi !== false && ((m.SonBakimSaati + m.BakimAraligiSaat) - m.GuncelCalismaSaati <= 0)) :
+      (m.AktifMi !== false && ((m.SonBakimSaati + m.BakimAraligiSaat) - m.GuncelCalismaSaati > 0 && (m.SonBakimSaati + m.BakimAraligiSaat) - m.GuncelCalismaSaati <= 25));
+
+    return matchArama && matchTur && matchAktif;
+  });
   const [formKod, setFormKod] = useState('');
   const [formAd, setFormAd] = useState('');
   const [formTur, setFormTur] = useState('CNC İşleme Merkezi');
@@ -167,23 +199,6 @@ export const MakineView: React.FC<MakineViewProps> = ({ makineler, personeller =
       setIslemSuruyor(false);
     }
   };
-
-  const turler = Array.from(new Set(makineler.map(m => m.MakineTuru).filter(Boolean)));
-
-  const filtrelenmis = makineler.filter(m => {
-    const matchArama = 
-      m.MakineAdi.toLowerCase().includes(arama.toLowerCase()) ||
-      m.MakineKodu.toLowerCase().includes(arama.toLowerCase()) ||
-      (m.MarkaModel && m.MarkaModel.toLowerCase().includes(arama.toLowerCase()));
-    const matchTur = turFiltre === 'Tümü' || m.MakineTuru === turFiltre;
-    
-    const matchAktif = 
-      aktiflikFiltre === 'hepsi' ? true :
-      aktiflikFiltre === 'aktif' ? m.AktifMi !== false :
-      m.AktifMi === false; // 'arsiv'
-
-    return matchArama && matchTur && matchAktif;
-  });
 
   const handleYeniEkle = () => {
     setDuzenlenecekMakine(null);
@@ -281,6 +296,112 @@ export const MakineView: React.FC<MakineViewProps> = ({ makineler, personeller =
         </button>
       </div>
 
+      {/* Kritik Periyodik Bakım Uyarı Paneli */}
+      {toplamKritikMakine > 0 && (
+        <div className="bg-rose-950/40 border-2 border-rose-500/70 rounded-2xl p-5 shadow-lg space-y-3">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-rose-500/30">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shadow-md shadow-rose-600/40 shrink-0">
+                <AlertTriangle className="w-5 h-5 animate-pulse" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  <span>Makineler Kritik Periyodik Bakım Uyarıları</span>
+                  <span className="px-2 py-0.5 rounded-full bg-rose-600 text-white text-xs font-extrabold">
+                    {toplamKritikMakine} Makine
+                  </span>
+                </h2>
+                <p className="text-xs text-rose-300 mt-0.5">
+                  250 saatlik periyodik çalışma süresi dolan veya yaklaşan makineler için servis &amp; bakım kaydı gereklidir.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              {acilMakineler.length > 0 && (
+                <button
+                  onClick={() => setAktiflikFiltre('acil')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                    aktiflikFiltre === 'acil'
+                      ? 'bg-rose-600 text-white shadow'
+                      : 'bg-rose-900/40 text-rose-300 border border-rose-700/60 hover:bg-rose-800/60'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping"></span>
+                  <span>{acilMakineler.length} Acil Bakım</span>
+                </button>
+              )}
+              {yaklasanMakineler.length > 0 && (
+                <button
+                  onClick={() => setAktiflikFiltre('yaklasan')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                    aktiflikFiltre === 'yaklasan'
+                      ? 'bg-amber-600 text-white shadow'
+                      : 'bg-amber-900/40 text-amber-300 border border-amber-700/60 hover:bg-amber-800/60'
+                  }`}
+                >
+                  <Clock className="w-3.5 h-3.5 text-amber-400" />
+                  <span>{yaklasanMakineler.length} Bakım Yakın</span>
+                </button>
+              )}
+              {aktiflikFiltre !== 'aktif' && (
+                <button
+                  onClick={() => setAktiflikFiltre('aktif')}
+                  className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+                >
+                  Filtreyi Sıfırla
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Acil Liste Özeti & Hızlı Bakım Butonu */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+            {[...acilMakineler, ...yaklasanMakineler].map((m) => {
+              const hedefSaat = m.SonBakimSaati + m.BakimAraligiSaat;
+              const kalanSaat = hedefSaat - m.GuncelCalismaSaati;
+              const isAcil = kalanSaat <= 0;
+
+              return (
+                <div
+                  key={m.MakineId}
+                  className={`p-3 rounded-xl border flex items-center justify-between gap-2 shadow-sm ${
+                    isAcil
+                      ? 'bg-slate-900/90 border-rose-500/60 text-rose-100'
+                      : 'bg-slate-900/90 border-amber-500/60 text-amber-100'
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-xs bg-slate-800 px-1.5 py-0.5 rounded text-amber-400 border border-slate-700">
+                        {m.MakineKodu}
+                      </span>
+                      <span className="font-bold text-xs truncate text-white">{m.MakineAdi}</span>
+                    </div>
+                    <div className={`text-[11px] font-bold mt-1 ${isAcil ? 'text-rose-400' : 'text-amber-400'}`}>
+                      {isAcil ? `${Math.abs(kalanSaat)} saat gecikti!` : `${kalanSaat} saat kaldı`}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSeciliMakine(m);
+                      setBakimModalAcik(true);
+                    }}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition shrink-0 ${
+                      isAcil
+                        ? 'bg-rose-600 hover:bg-rose-500 text-white shadow'
+                        : 'bg-amber-600 hover:bg-amber-500 text-white shadow'
+                    }`}
+                  >
+                    + Bakım Ekle
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Arama & Filtre */}
       <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-xl flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[220px]">
@@ -318,6 +439,12 @@ export const MakineView: React.FC<MakineViewProps> = ({ makineler, personeller =
             className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 text-xs focus:outline-none focus:border-amber-500"
           >
             <option value="aktif">Aktif Makineler</option>
+            {acilMakineler.length > 0 && (
+              <option value="acil">🔴 Acil Bakım ({acilMakineler.length})</option>
+            )}
+            {yaklasanMakineler.length > 0 && (
+              <option value="yaklasan">🟠 Bakımı Yaklaşan ({yaklasanMakineler.length})</option>
+            )}
             <option value="arsiv">Arşivlenmiş Makineler</option>
             <option value="hepsi">Tüm Makineler</option>
           </select>

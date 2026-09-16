@@ -54,7 +54,7 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
     }
   }, [personeller]);
 
-  const [filtre, setFiltre] = useState<'aktif' | 'pasif' | 'hepsi'>('aktif');
+  const [filtre, setFiltre] = useState<'aktif' | 'pasif' | 'hepsi' | 'gecikmis' | 'yaklasan'>('aktif');
   const [aramaMetni, setAramaMetni] = useState('');
   
   // Bakım Geçmişi Modalı
@@ -63,6 +63,44 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
   const [yeniBakimFormAcik, setYeniBakimFormAcik] = useState(false);
   const [bakimBelgeler, setBakimBelgeler] = useState<any[]>([]);
   const [lightboxDosya, setLightboxDosya] = useState<any | null>(null);
+
+  // Kalan Sayaç ve Durum Rozeti Hesaplama
+  const bakimDurumuHesapla = (a: Arac) => {
+    const kalan = a.SonBakimKmVeyaSaat + a.BakimAraligiKmVeyaSaat - a.GuncelKmVeyaSaat;
+    const birim = a.SaatTakibiMi ? 'Saat' : 'KM';
+    const esik = a.SaatTakibiMi ? 50 : 1000;
+
+    if (kalan <= 0) {
+      return {
+        durum: 'Gecikmis',
+        renk: 'text-red-600 bg-red-50 border-red-200',
+        metin: `${Math.abs(kalan)} ${birim} Gecikti!`,
+        kalan,
+        yuzde: 100
+      };
+    } else if (kalan <= esik) {
+      return {
+        durum: 'Yaklasiyor',
+        renk: 'text-amber-600 bg-amber-50 border-amber-200',
+        metin: `${kalan} ${birim} Kaldı`,
+        kalan,
+        yuzde: Math.round(((a.BakimAraligiKmVeyaSaat - kalan) / a.BakimAraligiKmVeyaSaat) * 100)
+      };
+    } else {
+      return {
+        durum: 'Normal',
+        renk: 'text-emerald-600 bg-emerald-50 border-emerald-200',
+        metin: `${kalan} ${birim} Kaldı`,
+        kalan,
+        yuzde: Math.max(0, Math.round(((a.BakimAraligiKmVeyaSaat - kalan) / a.BakimAraligiKmVeyaSaat) * 100))
+      };
+    }
+  };
+
+  // Kritik Bakım Listeleri
+  const gecikmisAraclar = araclar.filter(a => a.AktifMi && bakimDurumuHesapla(a).durum === 'Gecikmis');
+  const yaklasanAraclar = araclar.filter(a => a.AktifMi && bakimDurumuHesapla(a).durum === 'Yaklasiyor');
+  const toplamKritikBakim = gecikmisAraclar.length + yaklasanAraclar.length;
 
   // Güncel seçili aracı senkronize al
   const aktifSeciliArac = seciliAracBakimModal
@@ -109,12 +147,12 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
 
   // Filtreleme
   const filtrelenenAraclar = araclar.filter((a) => {
-    const durumUygun =
-      filtre === 'hepsi'
-        ? true
-        : filtre === 'aktif'
-        ? a.AktifMi
-        : !a.AktifMi;
+    let durumUygun = true;
+    if (filtre === 'aktif') durumUygun = a.AktifMi;
+    else if (filtre === 'pasif') durumUygun = !a.AktifMi;
+    else if (filtre === 'gecikmis') durumUygun = a.AktifMi && bakimDurumuHesapla(a).durum === 'Gecikmis';
+    else if (filtre === 'yaklasan') durumUygun = a.AktifMi && bakimDurumuHesapla(a).durum === 'Yaklasiyor';
+    else if (filtre === 'hepsi') durumUygun = true;
 
     const aramaUygun =
       a.PlakaVeyaKod.toLowerCase().includes(aramaMetni.toLowerCase()) ||
@@ -135,39 +173,6 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
       e.key !== 'Tab'
     ) {
       e.preventDefault();
-    }
-  };
-
-  // Kalan Sayaç ve Durum Rozeti Hesaplama
-  const bakimDurumuHesapla = (a: Arac) => {
-    const kalan = a.SonBakimKmVeyaSaat + a.BakimAraligiKmVeyaSaat - a.GuncelKmVeyaSaat;
-    const birim = a.SaatTakibiMi ? 'Saat' : 'KM';
-    const esik = a.SaatTakibiMi ? 50 : 1000;
-
-    if (kalan <= 0) {
-      return {
-        durum: 'Gecikmis',
-        renk: 'text-red-600 bg-red-50 border-red-200',
-        metin: `${Math.abs(kalan)} ${birim} Gecikti!`,
-        kalan,
-        yuzde: 100
-      };
-    } else if (kalan <= esik) {
-      return {
-        durum: 'Yaklasiyor',
-        renk: 'text-amber-600 bg-amber-50 border-amber-200',
-        metin: `${kalan} ${birim} Kaldı`,
-        kalan,
-        yuzde: Math.round(((a.BakimAraligiKmVeyaSaat - kalan) / a.BakimAraligiKmVeyaSaat) * 100)
-      };
-    } else {
-      return {
-        durum: 'Normal',
-        renk: 'text-emerald-600 bg-emerald-50 border-emerald-200',
-        metin: `${kalan} ${birim} Kaldı`,
-        kalan,
-        yuzde: Math.max(0, Math.round(((a.BakimAraligiKmVeyaSaat - kalan) / a.BakimAraligiKmVeyaSaat) * 100))
-      };
     }
   };
 
@@ -199,6 +204,110 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
         </div>
       </div>
 
+      {/* Kritik Bakım Uyarı Paneli (İSG Panelinde Olduğu Gibi) */}
+      {toplamKritikBakim > 0 && (
+        <div className="bg-rose-50 border-2 border-rose-400 rounded-2xl p-5 shadow-sm space-y-3">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-rose-200">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shadow-sm shadow-rose-500/30 shrink-0">
+                <AlertTriangle className="w-5 h-5 animate-pulse" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-rose-950 flex items-center gap-2">
+                  <span>Filo &amp; Ekipman Kritik Bakım Uyarıları</span>
+                  <span className="px-2 py-0.5 rounded-full bg-rose-600 text-white text-xs font-extrabold">
+                    {toplamKritikBakim} Araç / Ekipman
+                  </span>
+                </h2>
+                <p className="text-xs text-rose-700 mt-0.5">
+                  Periyodik KM veya çalışma saati dolan araçlar için acil bakım kaydı oluşturulmalıdır.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {gecikmisAraclar.length > 0 && (
+                <button
+                  onClick={() => setFiltre('gecikmis')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                    filtre === 'gecikmis'
+                      ? 'bg-rose-700 text-white shadow'
+                      : 'bg-rose-100 text-rose-800 border border-rose-300 hover:bg-rose-200'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping"></span>
+                  <span>{gecikmisAraclar.length} Acil Geciken</span>
+                </button>
+              )}
+              {yaklasanAraclar.length > 0 && (
+                <button
+                  onClick={() => setFiltre('yaklasan')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                    filtre === 'yaklasan'
+                      ? 'bg-amber-600 text-white shadow'
+                      : 'bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200'
+                  }`}
+                >
+                  <Clock className="w-3.5 h-3.5 text-amber-700" />
+                  <span>{yaklasanAraclar.length} Bakımı Yaklaşan</span>
+                </button>
+              )}
+              {filtre !== 'aktif' && (
+                <button
+                  onClick={() => setFiltre('aktif')}
+                  className="px-2.5 py-1.5 rounded-lg bg-white border border-rose-300 hover:bg-rose-100 text-rose-800 text-xs font-semibold transition"
+                >
+                  Filtreyi Sıfırla
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Acil Liste Özeti & Hızlı Bakım Butonu */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+            {[...gecikmisAraclar, ...yaklasanAraclar].map((a) => {
+              const b = bakimDurumuHesapla(a);
+              const isGecikmis = b.durum === 'Gecikmis';
+              return (
+                <div
+                  key={a.AracId}
+                  className={`p-3 rounded-xl border flex items-center justify-between gap-2 shadow-sm ${
+                    isGecikmis
+                      ? 'bg-white border-rose-300 text-rose-950'
+                      : 'bg-white border-amber-300 text-amber-950'
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-xs bg-slate-900 px-1.5 py-0.5 rounded text-white">
+                        {a.PlakaVeyaKod}
+                      </span>
+                      <span className="font-bold text-xs truncate text-slate-800">{a.MarkaModel}</span>
+                    </div>
+                    <div className={`text-[11px] font-bold mt-1 ${isGecikmis ? 'text-rose-600' : 'text-amber-600'}`}>
+                      {b.metin}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSeciliAracBakimModal(a);
+                      setDuzenlenenBakim(null);
+                      setYeniBakimFormAcik(true);
+                    }}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition shrink-0 ${
+                      isGecikmis
+                        ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-sm'
+                        : 'bg-amber-600 hover:bg-amber-700 text-white shadow-sm'
+                    }`}
+                  >
+                    + Bakım Ekle
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Arama & Aktif/Pasif Filtresi */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="flex-1 relative">
@@ -212,7 +321,33 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
           />
         </div>
 
-        <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shrink-0">
+        <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shrink-0 flex-wrap">
+          {gecikmisAraclar.length > 0 && (
+            <button
+              onClick={() => setFiltre('gecikmis')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${
+                filtre === 'gecikmis'
+                  ? 'bg-rose-600 text-white shadow-sm'
+                  : 'text-rose-600 hover:bg-rose-50'
+              }`}
+            >
+              <AlertTriangle className="w-3.5 h-3.5" />
+              <span>Acil Bakım ({gecikmisAraclar.length})</span>
+            </button>
+          )}
+          {yaklasanAraclar.length > 0 && (
+            <button
+              onClick={() => setFiltre('yaklasan')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${
+                filtre === 'yaklasan'
+                  ? 'bg-amber-600 text-white shadow-sm'
+                  : 'text-amber-600 hover:bg-amber-50'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>Yaklaşan ({yaklasanAraclar.length})</span>
+            </button>
+          )}
           <button
             onClick={() => setFiltre('aktif')}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
