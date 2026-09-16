@@ -136,6 +136,7 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
       } else {
         const bugun = getBugunStr();
         const demoGrup: SantiyeMontajGrubu = {
+          Id: 1,
           SantiyeAdi: 'Kadıköy Sahil Villa Ahşap & Mobilya Montajı',
           ProjeId: projeler[0]?.ProjeId || null,
           ProjeAdi: projeler[0]?.ProjeAdi || 'Villa Dekorasyon Projesi',

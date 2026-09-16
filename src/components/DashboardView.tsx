@@ -123,8 +123,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       )}
 
-      {/* 6 Ana Metrik Kartı (Masaüstü WPF Özeti) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      {/* Ana Metrik Kartları (Masaüstü WPF Özeti) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
         {/* 1. Aktif Projeler */}
         <div 
           onClick={() => onNavigateTab('projeler')}
@@ -238,6 +238,51 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
           <p className="text-[10px] text-sky-700 mt-0.5 truncate">Acil Teslimat &amp; Randevu</p>
         </div>
+
+        {/* 7. İSG Uyarıları (Sağlık Raporu & Eğitim) */}
+        {(() => {
+          const isgCount = ozet?.isgUyarilari?.length ?? 0;
+          const hasWarning = isgCount > 0;
+          return (
+            <div 
+              id="isg-metric-card"
+              onClick={() => onNavigateTab('personel', 'isg')}
+              className={`rounded-xl p-4 shadow-sm hover:shadow-md transition-all cursor-pointer group ${
+                hasWarning
+                  ? 'bg-rose-50 border-2 border-rose-400/90 text-rose-950 hover:bg-rose-100/80 shadow-rose-100'
+                  : 'bg-white border border-slate-200/80'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className={`text-[11px] font-bold ${hasWarning ? 'text-rose-800 font-extrabold' : 'text-slate-500'}`}>
+                  İSG Durumu
+                </span>
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform ${
+                  hasWarning 
+                    ? 'bg-rose-600 text-white shadow-sm shadow-rose-500/30' 
+                    : 'bg-emerald-50 text-emerald-600'
+                }`}>
+                  {hasWarning ? (
+                    <ShieldAlert className="w-4 h-4 animate-pulse" />
+                  ) : (
+                    <ShieldCheck className="w-4 h-4" />
+                  )}
+                </div>
+              </div>
+              <div className="mt-2 flex items-baseline gap-1.5">
+                <span className={`text-2xl font-black ${hasWarning ? 'text-rose-600' : 'text-slate-900'}`}>
+                  {isgCount}
+                </span>
+                <span className={`text-[10px] font-bold ${hasWarning ? 'px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-300' : 'text-slate-400'}`}>
+                  {hasWarning ? 'Kritik / Uyarı' : 'Sorunsuz'}
+                </span>
+              </div>
+              <p className={`text-[10px] mt-0.5 truncate ${hasWarning ? 'text-rose-700 font-semibold' : 'text-slate-500'}`}>
+                {hasWarning ? 'Rapor / Eğitim Eksik' : 'Tüm Kayıtlar Güncel'}
+              </p>
+            </div>
+          );
+        })()}
       </div>
 
       {/* 6331 İSG Sağlık Raporu & Eğitim Uyarıları Paneli */}
