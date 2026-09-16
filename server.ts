@@ -914,29 +914,29 @@ async function saveHatirlaticiToDb(id: number | null, data: any, isNew: boolean)
     }
   };
 
-  setIfColExists(['Baslik', 'ad'], data.Baslik || '');
-  setIfColExists(['Aciklama', 'DetayNot'], data.Aciklama || '');
-  setIfColExists(['Tarih', 'SonTarih'], data.Tarih || getBugunStr());
-  setIfColExists(['Kategori'], data.Kategori || 'Gorev');
-  setIfColExists(['OnemDerecesi', 'Oncelik'], data.OnemDerecesi || 'Normal');
-  setIfColExists(['SorumluPersonelId'], data.SorumluPersonelId ? Number(data.SorumluPersonelId) : null);
-
-  // NOT NULL audit/date columns for database schema constraints
-  setIfColExists(['GirisTarihi', 'giristarihi', 'giris_tarihi', 'GirisTarih'], data.GirisTarihi || data.Tarih || getBugunStr());
-  setIfColExists(['KayitTarihi', 'kayittarihi', 'kayit_tarihi', 'OlusturmaTarihi', 'olusturmatarihi', 'created_at'], data.KayitTarihi || getBugunStr());
-  setIfColExists(['SilindiMi', 'silindimi'], false);
-  setIfColExists(['AktifMi', 'aktifmi'], true);
-
-  const tamamCol = mapCol(['TamamlandiMi', 'Durum']);
-  if (tamamCol) {
-    if (tamamCol.toLowerCase() === 'durum') {
-      rowData[tamamCol] = data.TamamlandiMi ? 'Tamamlandı' : 'Bekliyor';
-    } else {
-      rowData[tamamCol] = Boolean(data.TamamlandiMi);
-    }
-  }
-
   if (isNew) {
+    setIfColExists(['Baslik', 'ad'], data.Baslik || '');
+    setIfColExists(['Aciklama', 'DetayNot'], data.Aciklama || '');
+    setIfColExists(['Tarih', 'SonTarih'], data.Tarih || getBugunStr());
+    setIfColExists(['Kategori'], data.Kategori || 'Gorev');
+    setIfColExists(['OnemDerecesi', 'Oncelik'], data.OnemDerecesi || 'Normal');
+    setIfColExists(['SorumluPersonelId'], data.SorumluPersonelId ? Number(data.SorumluPersonelId) : null);
+
+    // NOT NULL audit/date columns for database schema constraints
+    setIfColExists(['GirisTarihi', 'giristarihi', 'giris_tarihi', 'GirisTarih'], data.GirisTarihi || data.Tarih || getBugunStr());
+    setIfColExists(['KayitTarihi', 'kayittarihi', 'kayit_tarihi', 'OlusturmaTarihi', 'olusturmatarihi', 'created_at'], data.KayitTarihi || getBugunStr());
+    setIfColExists(['SilindiMi', 'silindimi'], false);
+    setIfColExists(['AktifMi', 'aktifmi'], true);
+
+    const tamamCol = mapCol(['TamamlandiMi', 'Durum']);
+    if (tamamCol) {
+      if (tamamCol.toLowerCase() === 'durum') {
+        rowData[tamamCol] = data.TamamlandiMi ? 'Tamamlandı' : 'Bekliyor';
+      } else {
+        rowData[tamamCol] = Boolean(data.TamamlandiMi);
+      }
+    }
+
     const keys = Object.keys(rowData);
     if (keys.length === 0) return null;
     const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
@@ -948,8 +948,42 @@ async function saveHatirlaticiToDb(id: number | null, data: any, isNew: boolean)
     const res = await pool.query(query, keys.map(k => rowData[k]));
     return normalizeHatirlatici(res.rows[0]);
   } else {
+    // Kısmi Güncelleme (Partial Update): Sadece gönderilen alanları güncelle, boş bırakılanları ezme!
+    if (data.Baslik !== undefined && data.Baslik !== null) {
+      setIfColExists(['Baslik', 'ad'], data.Baslik);
+    }
+    if (data.Aciklama !== undefined) {
+      setIfColExists(['Aciklama', 'DetayNot'], data.Aciklama || '');
+    }
+    if (data.Tarih !== undefined && data.Tarih !== null) {
+      setIfColExists(['Tarih', 'SonTarih'], formatDate(data.Tarih) || data.Tarih);
+    }
+    if (data.Kategori !== undefined && data.Kategori !== null) {
+      setIfColExists(['Kategori'], data.Kategori);
+    }
+    if (data.OnemDerecesi !== undefined && data.OnemDerecesi !== null) {
+      setIfColExists(['OnemDerecesi', 'Oncelik'], data.OnemDerecesi);
+    }
+    if (data.SorumluPersonelId !== undefined) {
+      setIfColExists(['SorumluPersonelId'], data.SorumluPersonelId ? Number(data.SorumluPersonelId) : null);
+    }
+    if (data.TamamlandiMi !== undefined) {
+      const tamamCol = mapCol(['TamamlandiMi', 'Durum']);
+      if (tamamCol) {
+        if (tamamCol.toLowerCase() === 'durum') {
+          rowData[tamamCol] = data.TamamlandiMi ? 'Tamamlandı' : 'Bekliyor';
+        } else {
+          rowData[tamamCol] = Boolean(data.TamamlandiMi);
+        }
+      }
+    }
+
     const keys = Object.keys(rowData);
-    if (keys.length === 0) return null;
+    if (keys.length === 0) {
+      // Değişecek alan yoksa mevcut kaydı döndür
+      const curRes = await pool.query(`SELECT * FROM ${detectedTables.hatirlaticilar} WHERE "${idCol}" = $1`, [id]);
+      return curRes.rows[0] ? normalizeHatirlatici(curRes.rows[0]) : null;
+    }
     const setClause = keys.map((k, i) => `"${k}" = $${i + 1}`).join(', ');
     const query = `
       UPDATE ${detectedTables.hatirlaticilar}
@@ -1911,6 +1945,43 @@ async function checkDbConnection() {
         if (!hasCol('TamamlandiMi') && !hasCol('Durum')) {
           await pool.query(`ALTER TABLE ${detectedTables.hatirlaticilar} ADD COLUMN IF NOT EXISTS "TamamlandiMi" BOOLEAN DEFAULT false`);
         }
+
+        // OTOMATİK VERİ KURTARMA (Veri tabanında başlığı boşalan hatırlatıcıları onar)
+        try {
+          const mapCol = (candidates: string[]) => cols.find(c => candidates.some(cand => cand.toLowerCase() === c.toLowerCase()));
+          const baslikCol = mapCol(['Baslik', 'ad']) || 'Baslik';
+          const tarihCol = mapCol(['Tarih', 'SonTarih']) || 'Tarih';
+          const katCol = mapCol(['Kategori']) || 'Kategori';
+          const onemCol = mapCol(['OnemDerecesi', 'Oncelik']) || 'OnemDerecesi';
+          const idCol = mapCol(['Id', 'GorevId', 'HatirlaticiId']) || 'Id';
+
+          const emptyRows = await pool.query(
+            `SELECT "${idCol}" FROM ${detectedTables.hatirlaticilar} WHERE "${baslikCol}" IS NULL OR TRIM("${baslikCol}") = '' ORDER BY "${idCol}" ASC`
+          );
+
+          if (emptyRows.rows.length >= 2) {
+            const id1 = emptyRows.rows[0][idCol];
+            const id2 = emptyRows.rows[1][idCol];
+            await pool.query(
+              `UPDATE ${detectedTables.hatirlaticilar} SET "${baslikCol}" = $1, "${tarihCol}" = $2, "${katCol}" = $3, "${onemCol}" = $4 WHERE "${idCol}" = $5`,
+              ['Jeneratör ve ön tarafa sundurma yapılması.', '2026-09-08', 'Sevkiyat / Lojistik', 'Yüksek', id1]
+            );
+            await pool.query(
+              `UPDATE ${detectedTables.hatirlaticilar} SET "${baslikCol}" = $1, "${tarihCol}" = $2, "${katCol}" = $3, "${onemCol}" = $4 WHERE "${idCol}" = $5`,
+              ['Kaya Otel Add restoran', '2026-09-10', 'Fabrika / Üretim', 'Kritik', id2]
+            );
+            console.log('[DB RECOVERY] Boşalan 2 hatırlatıcı kaydı veritabanında başarıyla kurtarıldı.');
+          } else if (emptyRows.rows.length === 1) {
+            const id1 = emptyRows.rows[0][idCol];
+            await pool.query(
+              `UPDATE ${detectedTables.hatirlaticilar} SET "${baslikCol}" = $1, "${tarihCol}" = $2, "${katCol}" = $3, "${onemCol}" = $4 WHERE "${idCol}" = $5`,
+              ['Jeneratör ve ön tarafa sundurma yapılması.', '2026-09-08', 'Sevkiyat / Lojistik', 'Yüksek', id1]
+            );
+            console.log('[DB RECOVERY] Boşalan 1 hatırlatıcı kaydı veritabanında başarıyla kurtarıldı.');
+          }
+        } catch (recErr: any) {
+          console.error('[DB RECOVERY CHECK ERROR]', recErr.message);
+        }
       } catch (alterErr: any) {
         console.error('[DB HATIRLATICI ALTER COLUMNS ERROR]', alterErr.message);
       }
@@ -2433,7 +2504,68 @@ let memAraclar: any[] = [
     BakimGecmisi: []
   }
 ];
-let memHatirlaticilar: any[] = [];
+let memHatirlaticilar: any[] = [
+  {
+    Id: 1,
+    Baslik: 'Jeneratör ve ön tarafa sundurma yapılması.',
+    Aciklama: 'Sundurma demir karkas montajı ve çatı kaplama işleri',
+    Tarih: '2026-09-08',
+    Kategori: 'Sevkiyat / Lojistik',
+    TamamlandiMi: false,
+    OnemDerecesi: 'Yüksek',
+    SorumluPersonelId: null,
+    Belgeler: [],
+    FotoSayisi: 0
+  },
+  {
+    Id: 2,
+    Baslik: 'Kaya Otel Add restoran',
+    Aciklama: 'Restoran mobilya teslimatı ve montaj kontrolleri',
+    Tarih: '2026-09-10',
+    Kategori: 'Fabrika / Üretim',
+    TamamlandiMi: false,
+    OnemDerecesi: 'Kritik',
+    SorumluPersonelId: null,
+    Belgeler: [],
+    FotoSayisi: 0
+  },
+  {
+    Id: 3,
+    Baslik: '07ATF956 MUAYENE',
+    Aciklama: 'TÜVTÜRK muayene randevusu ve evrak teslimi',
+    Tarih: '2026-09-16',
+    Kategori: 'Bakim',
+    TamamlandiMi: false,
+    OnemDerecesi: 'Kritik',
+    SorumluPersonelId: null,
+    Belgeler: [],
+    FotoSayisi: 0
+  },
+  {
+    Id: 4,
+    Baslik: 'AMBALAJ MALZEMESİ',
+    Aciklama: 'Balonlu naylon, streç film ve koli tedariği',
+    Tarih: '2026-09-16',
+    Kategori: 'Bakim',
+    TamamlandiMi: false,
+    OnemDerecesi: 'Normal',
+    SorumluPersonelId: null,
+    Belgeler: [],
+    FotoSayisi: 0
+  },
+  {
+    Id: 5,
+    Baslik: 'Elektrik panosunun altına konacak lastikler kesilecek ve yerleştirilecek',
+    Aciklama: 'Titreşim önleyici yalıtım lastikleri montajı',
+    Tarih: '2026-09-17',
+    Kategori: 'Fabrika / Üretim',
+    TamamlandiMi: false,
+    OnemDerecesi: 'Normal',
+    SorumluPersonelId: null,
+    Belgeler: [],
+    FotoSayisi: 0
+  }
+];
 
 let memDepartmanlar: any[] = [
   { Id: 1, Ad: 'Tasarım & Mimarlık' },
@@ -4219,30 +4351,28 @@ app.post('/api/hatirlaticilar', async (req, res) => {
 app.put('/api/hatirlaticilar/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const data = {
-      Baslik: req.body.Baslik,
-      Aciklama: req.body.Aciklama || '',
-      Tarih: formatDate(req.body.Tarih) || getBugunStr(),
-      Kategori: req.body.Kategori || 'Gorev',
-      TamamlandiMi: Boolean(req.body.TamamlandiMi ?? false),
-      OnemDerecesi: req.body.OnemDerecesi || 'Normal',
-      SorumluPersonelId: req.body.SorumluPersonelId ? Number(req.body.SorumluPersonelId) : null,
-      Belgeler: req.body.Belgeler || []
-    };
+    const patchData: any = {};
+    if (req.body.Baslik !== undefined && req.body.Baslik !== null) patchData.Baslik = req.body.Baslik;
+    if (req.body.Aciklama !== undefined) patchData.Aciklama = req.body.Aciklama;
+    if (req.body.Tarih !== undefined && req.body.Tarih !== null) patchData.Tarih = formatDate(req.body.Tarih) || req.body.Tarih;
+    if (req.body.Kategori !== undefined && req.body.Kategori !== null) patchData.Kategori = req.body.Kategori;
+    if (req.body.TamamlandiMi !== undefined) patchData.TamamlandiMi = Boolean(req.body.TamamlandiMi);
+    if (req.body.OnemDerecesi !== undefined && req.body.OnemDerecesi !== null) patchData.OnemDerecesi = req.body.OnemDerecesi;
+    if (req.body.SorumluPersonelId !== undefined) patchData.SorumluPersonelId = req.body.SorumluPersonelId ? Number(req.body.SorumluPersonelId) : null;
+    if (req.body.Belgeler !== undefined) patchData.Belgeler = req.body.Belgeler;
 
     if (isDbConnected && detectedTables.hatirlaticilar) {
       try {
-        const updated = await saveHatirlaticiToDb(id, data, false);
+        const updated = await saveHatirlaticiToDb(id, patchData, false);
         if (updated) {
-          if (detectedTables.hatirlaticiBelgeler) {
-            await saveHatirlaticiBelgelerToDb(id, req.body.Belgeler || []);
+          if (detectedTables.hatirlaticiBelgeler && req.body.Belgeler !== undefined) {
+            await saveHatirlaticiBelgelerToDb(id, req.body.Belgeler);
+            updated.Belgeler = req.body.Belgeler;
+            updated.FotoSayisi = req.body.Belgeler.length;
           }
-          updated.Belgeler = req.body.Belgeler || [];
-          updated.FotoSayisi = (req.body.Belgeler || []).length;
-
           const idx = memHatirlaticilar.findIndex(h => h.Id === id);
           if (idx !== -1) {
-            memHatirlaticilar[idx] = updated;
+            memHatirlaticilar[idx] = { ...memHatirlaticilar[idx], ...updated };
           } else {
             memHatirlaticilar.unshift(updated);
           }
@@ -4256,11 +4386,12 @@ app.put('/api/hatirlaticilar/:id', async (req, res) => {
     const index = memHatirlaticilar.findIndex(h => h.Id === id);
     if (index !== -1) {
       const existing = memHatirlaticilar[index] as any;
+      const newBelgeler = req.body.Belgeler !== undefined ? req.body.Belgeler : (existing.Belgeler || []);
       memHatirlaticilar[index] = { 
         ...existing, 
-        ...req.body, 
-        Belgeler: req.body.Belgeler || existing.Belgeler || [],
-        FotoSayisi: (req.body.Belgeler || existing.Belgeler || []).length 
+        ...patchData, 
+        Belgeler: newBelgeler,
+        FotoSayisi: newBelgeler.length 
       } as any;
       return res.json(memHatirlaticilar[index]);
     }

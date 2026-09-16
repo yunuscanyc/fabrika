@@ -425,22 +425,44 @@ export default function App() {
 
   // Hatırlatıcı Tamamlandı / Açık Durumu
   const handleToggleTamamlandi = async (id: number, tamamlandi: boolean) => {
+    // 1. İyimser Arayüz Güncellemesi (Optimistic UI)
+    setHatirlaticilar(prev =>
+      prev.map(h => (h.Id === id ? { ...h, TamamlandiMi: tamamlandi } : h))
+    );
+    setOzet(prev => {
+      if (!prev) return prev;
+      const guncelGorevler = (prev.gorevListesi || []).map(g =>
+        g.id === id ? { ...g, tamamlandiMi: tamamlandi } : g
+      );
+      return {
+        ...prev,
+        gorevListesi: guncelGorevler
+      };
+    });
+
     try {
+      const existing = hatirlaticilar.find(h => h.Id === id);
+      const payload = existing
+        ? { ...existing, TamamlandiMi: tamamlandi }
+        : { TamamlandiMi: tamamlandi };
+
       const res = await fetch(`/api/hatirlaticilar/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ TamamlandiMi: tamamlandi }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const txt = await res.text();
         throw new Error(`Sunucu Hatası (${res.status}): ${txt || res.statusText}`);
       }
+      const guncel = await res.json();
       setHatirlaticilar(prev =>
-        prev.map(h => (h.Id === id ? { ...h, TamamlandiMi: tamamlandi } : h))
+        prev.map(h => (h.Id === id ? { ...h, ...guncel } : h))
       );
       fetch('/api/ozet').then(r => r.json()).then(setOzet);
     } catch (err) {
       console.error('Hatırlatıcı güncelleme hatası:', err);
+      verileriYukle();
     }
   };
 

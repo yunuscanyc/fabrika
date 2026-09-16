@@ -37,6 +37,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onToggleTamamlandi
 }) => {
   const [ajandaFiltre, setAjandaFiltre] = useState<'acik' | 'bugun' | 'gecikmis' | 'hepsi' | 'tamamlanan'>('acik');
+  const [togglingId, setTogglingId] = useState<number | null>(null);
 
   const gorevler: OzetGorevItem[] = ozet?.gorevListesi || [];
   const acikGorevSayisi = gorevler.filter(g => !g.tamamlandiMi).length;
@@ -501,22 +502,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       {/* Tamamlandı Toggle Butonu */}
                       <button
                         type="button"
-                        onClick={(e) => {
+                        onClick={async (e) => {
                           e.stopPropagation();
-                          if (onToggleTamamlandi) {
-                            onToggleTamamlandi(g.id, !g.tamamlandiMi);
+                          if (onToggleTamamlandi && togglingId !== g.id) {
+                            setTogglingId(g.id);
+                            try {
+                              await onToggleTamamlandi(g.id, !g.tamamlandiMi);
+                            } finally {
+                              setTimeout(() => setTogglingId(null), 300);
+                            }
                           }
                         }}
-                        disabled={!onToggleTamamlandi}
-                        className={`mt-0.5 transition-all shrink-0 p-0.5 rounded-full hover:scale-110 ${
+                        disabled={!onToggleTamamlandi || togglingId === g.id}
+                        className={`mt-0.5 transition-all shrink-0 p-1 rounded-full hover:scale-110 active:scale-95 cursor-pointer ${
                           g.tamamlandiMi
                             ? 'text-emerald-600 hover:text-emerald-700'
                             : isGecikmis
-                            ? 'text-rose-400 hover:text-rose-600'
+                            ? 'text-rose-500 hover:text-rose-700'
                             : isBugun
-                            ? 'text-sky-500 hover:text-sky-700'
-                            : 'text-slate-300 hover:text-slate-500'
-                        }`}
+                            ? 'text-sky-600 hover:text-sky-800'
+                            : 'text-slate-400 hover:text-slate-600'
+                        } ${togglingId === g.id ? 'opacity-50 pointer-events-none' : ''}`}
                         title={g.tamamlandiMi ? 'Tamamlanmadı yap' : 'Tamamlandı olarak işaretle'}
                       >
                         {g.tamamlandiMi ? (
@@ -573,7 +579,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               : 'text-slate-900 group-hover:text-sky-700'
                           }`}
                         >
-                          {g.baslik}
+                          {g.baslik || '(İsimsiz Görev / Hatırlatıcı)'}
                         </h3>
                       </div>
                     </div>
