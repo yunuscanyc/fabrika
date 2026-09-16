@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Hatirlatici } from '../types';
 import { formatTarihTR } from '../utils/dateUtils';
 import { 
@@ -38,7 +38,34 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
 }) => {
   const [modalAcik, setModalAcik] = useState(false);
   const [secilenHatirlatici, setSecilenHatirlatici] = useState<Hatirlatici | null>(null);
-  const [filtre, setFiltre] = useState<'hepsi' | 'bugun' | 'tamamlanmayan'>('tamamlanmayan');
+  const [filtre, setFiltre] = useState<'hepsi' | 'bugun' | 'tamamlanmayan' | 'tamamlanan'>('hepsi');
+  const [doubleClickHintId, setDoubleClickHintId] = useState<number | null>(null);
+  const lastClickRef = useRef<{ id: number; time: number } | null>(null);
+
+  const handleCircleClick = (e: React.MouseEvent, h: Hatirlatici) => {
+    e.stopPropagation();
+    const now = Date.now();
+    const last = lastClickRef.current;
+
+    if (last && last.id === h.Id && now - last.time < 450) {
+      lastClickRef.current = null;
+      setDoubleClickHintId(null);
+      onToggleTamamlandi(h.Id, !h.TamamlandiMi);
+    } else {
+      lastClickRef.current = { id: h.Id, time: now };
+      setDoubleClickHintId(h.Id);
+      setTimeout(() => {
+        setDoubleClickHintId(prev => (prev === h.Id ? null : prev));
+      }, 2000);
+    }
+  };
+
+  const handleCircleDoubleClick = (e: React.MouseEvent, h: Hatirlatici) => {
+    e.stopPropagation();
+    lastClickRef.current = null;
+    setDoubleClickHintId(null);
+    onToggleTamamlandi(h.Id, !h.TamamlandiMi);
+  };
   
   // Yeni Ekleme Formu için Ekler (Belgeler)
   const [yeniBelgeler, setYeniBelgeler] = useState<any[]>([]);
@@ -107,6 +134,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
   const filtrelenenler = hatirlaticilar.filter((h) => {
     if (filtre === 'bugun') return h.Tarih === bugunStr && !h.TamamlandiMi;
     if (filtre === 'tamamlanmayan') return !h.TamamlandiMi;
+    if (filtre === 'tamamlanan') return h.TamamlandiMi;
     return true;
   });
 
@@ -183,7 +211,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
       </div>
 
       {/* Filtre Butonları */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <button
           onClick={() => setFiltre('hepsi')}
           className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
@@ -193,6 +221,16 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
           }`}
         >
           Tüm Görevler ({hatirlaticilar.length})
+        </button>
+        <button
+          onClick={() => setFiltre('tamamlanmayan')}
+          className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+            filtre === 'tamamlanmayan'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+          }`}
+        >
+          Açık Kalanlar ({hatirlaticilar.filter(h => !h.TamamlandiMi).length})
         </button>
         <button
           onClick={() => setFiltre('bugun')}
@@ -205,14 +243,14 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
           Bugün ({hatirlaticilar.filter(h => h.Tarih === bugunStr && !h.TamamlandiMi).length})
         </button>
         <button
-          onClick={() => setFiltre('tamamlanmayan')}
+          onClick={() => setFiltre('tamamlanan')}
           className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-            filtre === 'tamamlanmayan'
-              ? 'bg-blue-600 text-white shadow-sm'
+            filtre === 'tamamlanan'
+              ? 'bg-emerald-600 text-white shadow-sm'
               : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
           }`}
         >
-          Açık Kalanlar ({hatirlaticilar.filter(h => !h.TamamlandiMi).length})
+          Tamamlananlar ({hatirlaticilar.filter(h => h.TamamlandiMi).length})
         </button>
       </div>
 
@@ -233,20 +271,28 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                 onClick={() => setSecilenHatirlatici(h)}
                 className={`p-4 rounded-2xl border cursor-pointer hover:shadow-md transition-all flex items-start justify-between gap-3 ${d.renk}`}
               >
-                <div className="flex items-start gap-3 flex-1 min-w-0">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggleTamamlandi(h.Id, !h.TamamlandiMi);
-                    }}
-                    className="mt-0.5 text-slate-400 hover:text-blue-600 transition-colors shrink-0"
-                  >
-                    {h.TamamlandiMi ? (
-                      <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                    ) : (
-                      <Circle className="w-5 h-5 hover:scale-105" />
+                <div className="flex items-start gap-3 flex-1 min-w-0 relative">
+                  <div className="relative shrink-0 flex flex-col items-center">
+                    <button
+                      type="button"
+                      onClick={(e) => handleCircleClick(e, h)}
+                      onDoubleClick={(e) => handleCircleDoubleClick(e, h)}
+                      className="mt-0.5 text-slate-400 hover:text-blue-600 transition-all shrink-0 p-1 rounded-full hover:scale-110 active:scale-95"
+                      title="Tamamlamak veya açmak için ÇİFT TIKLAYIN"
+                    >
+                      {h.TamamlandiMi ? (
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                      ) : (
+                        <Circle className="w-5 h-5 hover:scale-105" />
+                      )}
+                    </button>
+
+                    {doubleClickHintId === h.Id && (
+                      <div className="absolute top-8 left-0 z-30 whitespace-nowrap bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-lg border border-slate-700 animate-bounce">
+                        👆 Çift tıklayın!
+                      </div>
                     )}
-                  </button>
+                  </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">

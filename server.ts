@@ -3494,17 +3494,8 @@ app.get('/api/ozet', async (req, res) => {
     const besGunOnceStr = getGunOnceStr(5);
     const besGunSonraStr = getGunSonraStr(5);
 
-    // Filtrele:
-    // 1) Tamamlanmamış TÜM görevler (geçmiş, bugün, gelecek 5 gün veya daha ileri)
-    // 2) Tamamlanmış olsa bile bugün, geçmiş (son 5 gün) ve önümüzdeki 5 gün içerisindeki görevler
-    const hedeflenmisHatirlaticilar = hatirlaticilar.filter(h => {
-      if (!h.Tarih) return true;
-      if (!h.TamamlandiMi) return true;
-      if (h.Tarih <= besGunSonraStr && h.Tarih >= besGunOnceStr) return true;
-      return false;
-    });
-
-    const gorevListesiFormatted = hedeflenmisHatirlaticilar.map(h => {
+    // Tüm hatırlatıcıları listele (tamamlananlar dahil hiçbir görev kaybolmaz)
+    const gorevListesiFormatted = hatirlaticilar.map(h => {
       let etiket: 'BUGÜN' | 'GEÇİKMİŞ' | 'SON 5 GÜN' | 'GELECEK 5 GÜN' | 'GELECEK' = 'GELECEK';
       if (h.Tarih === bugunStr) {
         etiket = 'BUGÜN';
@@ -3526,6 +3517,10 @@ app.get('/api/ozet', async (req, res) => {
         etiket
       };
     }).sort((a, b) => {
+      // Tamamlanmamışlar önce, tamamlananlar sonra
+      if (a.tamamlandiMi !== b.tamamlandiMi) {
+        return a.tamamlandiMi ? 1 : -1;
+      }
       const etiketSira = { 'GEÇİKMİŞ': 1, 'BUGÜN': 2, 'GELECEK 5 GÜN': 3, 'SON 5 GÜN': 4, 'GELECEK': 5 };
       if (etiketSira[a.etiket] !== etiketSira[b.etiket]) {
         return etiketSira[a.etiket] - etiketSira[b.etiket];

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { OzetIstatistikler, OzetGorevItem } from '../types';
 import { DbStatusData } from './DatabaseStatusModal';
 import { formatTarihTR } from '../utils/dateUtils';
@@ -36,8 +36,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenDbModal,
   onToggleTamamlandi
 }) => {
-  const [ajandaFiltre, setAjandaFiltre] = useState<'acik' | 'bugun' | 'gecikmis' | 'hepsi' | 'tamamlanan'>('acik');
+  const [ajandaFiltre, setAjandaFiltre] = useState<'hepsi' | 'acik' | 'bugun' | 'gecikmis' | 'tamamlanan'>('hepsi');
   const [togglingId, setTogglingId] = useState<number | null>(null);
+  const [doubleClickHintId, setDoubleClickHintId] = useState<number | null>(null);
+  const lastClickRef = useRef<{ id: number; time: number } | null>(null);
 
   const gorevler: OzetGorevItem[] = ozet?.gorevListesi || [];
   const acikGorevSayisi = gorevler.filter(g => !g.tamamlandiMi).length;
@@ -51,8 +53,48 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     if (ajandaFiltre === 'bugun') return !g.tamamlandiMi && g.etiket === 'BUGÜN';
     if (ajandaFiltre === 'gecikmis') return !g.tamamlandiMi && g.etiket === 'GEÇİKMİŞ';
     if (ajandaFiltre === 'tamamlanan') return g.tamamlandiMi;
-    return true;
+    return true; // 'hepsi'
   });
+
+  const handleCircleClick = async (e: React.MouseEvent, g: OzetGorevItem) => {
+    e.stopPropagation();
+    if (!onToggleTamamlandi || togglingId === g.id) return;
+
+    const now = Date.now();
+    const last = lastClickRef.current;
+
+    // Çift Tıklama Kontrolü (450ms aralıkla iki tıklama)
+    if (last && last.id === g.id && now - last.time < 450) {
+      lastClickRef.current = null;
+      setDoubleClickHintId(null);
+      setTogglingId(g.id);
+      try {
+        await onToggleTamamlandi(g.id, !g.tamamlandiMi);
+      } finally {
+        setTimeout(() => setTogglingId(null), 300);
+      }
+    } else {
+      // Tek tıklandığında çift tıklama uyarısı ver
+      lastClickRef.current = { id: g.id, time: now };
+      setDoubleClickHintId(g.id);
+      setTimeout(() => {
+        setDoubleClickHintId(prev => (prev === g.id ? null : prev));
+      }, 2000);
+    }
+  };
+
+  const handleCircleDoubleClick = async (e: React.MouseEvent, g: OzetGorevItem) => {
+    e.stopPropagation();
+    if (!onToggleTamamlandi || togglingId === g.id) return;
+    lastClickRef.current = null;
+    setDoubleClickHintId(null);
+    setTogglingId(g.id);
+    try {
+      await onToggleTamamlandi(g.id, !g.tamamlandiMi);
+    } finally {
+      setTimeout(() => setTogglingId(null), 300);
+    }
+  };
   return (
     <div className="space-y-6 pb-20 md:pb-6">
       {/* Üst Karşılama ve Hızlı Durum */}
@@ -380,16 +422,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <div className="flex items-center gap-2 flex-wrap justify-between sm:justify-end">
             {/* Filtre Butonları */}
-            <div className="flex items-center bg-slate-100/90 p-1 rounded-xl text-xs font-semibold overflow-x-auto max-w-full">
+            <div className="flex items-center bg-slate-100/90 p-1 rounded-xl text-xs font-semibold overflow-x-auto max-w-full gap-1">
               <button
-                onClick={() => setAjandaFiltre('acik')}
+                onClick={() => setAjandaFiltre('hepsi')}
                 className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
-                  ajandaFiltre === 'acik'
+                  ajandaFiltre === 'hepsi'
                     ? 'bg-white text-slate-900 shadow-xs font-bold'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Açık ({acikGorevSayisi})
+                Tümü ({gorevler.length})
+              </button>
+              <button
+                onClick={() => setAjandaFiltre('acik')}
+                className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
+                  ajandaFiltre === 'acik'
+                    ? 'bg-blue-600 text-white shadow-xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Bekleyenler ({acikGorevSayisi})
               </button>
               <button
                 onClick={() => setAjandaFiltre('bugun')}
@@ -406,7 +458,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   onClick={() => setAjandaFiltre('gecikmis')}
                   className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
                     ajandaFiltre === 'gecikmis'
-                      ? 'bg-rose-600 text-white shadow-xs font-bold'
+                      ? 'bg-rose-600 text-white shadow-xs font-bold animate-pulse'
                       : 'text-rose-600 hover:text-rose-800'
                   }`}
                 >
@@ -414,20 +466,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </button>
               )}
               <button
-                onClick={() => setAjandaFiltre('hepsi')}
-                className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
-                  ajandaFiltre === 'hepsi'
-                    ? 'bg-white text-slate-900 shadow-xs font-bold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Tümü ({gorevler.length})
-              </button>
-              <button
                 onClick={() => setAjandaFiltre('tamamlanan')}
                 className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
                   ajandaFiltre === 'tamamlanan'
-                    ? 'bg-white text-slate-900 shadow-xs font-bold'
+                    ? 'bg-emerald-600 text-white shadow-xs font-bold'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -498,39 +540,39 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     className={`p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border transition-all duration-200 hover:shadow-md flex items-start justify-between gap-3 group ${cardStyle}`}
                   >
                     {/* Sol: Checkbox & İçerik */}
-                    <div className="flex items-start gap-3 min-w-0 flex-1">
-                      {/* Tamamlandı Toggle Butonu */}
-                      <button
-                        type="button"
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          if (onToggleTamamlandi && togglingId !== g.id) {
-                            setTogglingId(g.id);
-                            try {
-                              await onToggleTamamlandi(g.id, !g.tamamlandiMi);
-                            } finally {
-                              setTimeout(() => setTogglingId(null), 300);
-                            }
-                          }
-                        }}
-                        disabled={!onToggleTamamlandi || togglingId === g.id}
-                        className={`mt-0.5 transition-all shrink-0 p-1 rounded-full hover:scale-110 active:scale-95 cursor-pointer ${
-                          g.tamamlandiMi
-                            ? 'text-emerald-600 hover:text-emerald-700'
-                            : isGecikmis
-                            ? 'text-rose-500 hover:text-rose-700'
-                            : isBugun
-                            ? 'text-sky-600 hover:text-sky-800'
-                            : 'text-slate-400 hover:text-slate-600'
-                        } ${togglingId === g.id ? 'opacity-50 pointer-events-none' : ''}`}
-                        title={g.tamamlandiMi ? 'Tamamlanmadı yap' : 'Tamamlandı olarak işaretle'}
-                      >
-                        {g.tamamlandiMi ? (
-                          <CheckCircle2 className="w-5 h-5 fill-emerald-100" />
-                        ) : (
-                          <Circle className="w-5 h-5 stroke-[2.2]" />
+                    <div className="flex items-start gap-3 min-w-0 flex-1 relative">
+                      {/* Tamamlandı Toggle Butonu - Çift Tıklamalı */}
+                      <div className="relative shrink-0 flex flex-col items-center">
+                        <button
+                          type="button"
+                          onClick={(e) => handleCircleClick(e, g)}
+                          onDoubleClick={(e) => handleCircleDoubleClick(e, g)}
+                          disabled={!onToggleTamamlandi || togglingId === g.id}
+                          className={`mt-0.5 transition-all shrink-0 p-1.5 rounded-full hover:scale-110 active:scale-95 cursor-pointer ${
+                            g.tamamlandiMi
+                              ? 'text-emerald-600 hover:text-emerald-700 bg-emerald-50'
+                              : isGecikmis
+                              ? 'text-rose-500 hover:text-rose-700 hover:bg-rose-50'
+                              : isBugun
+                              ? 'text-sky-600 hover:text-sky-800 hover:bg-sky-50'
+                              : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+                          } ${togglingId === g.id ? 'opacity-50 pointer-events-none' : ''}`}
+                          title="Tamamlamak veya açmak için ÇİFT TIKLAYIN"
+                        >
+                          {g.tamamlandiMi ? (
+                            <CheckCircle2 className="w-5 h-5 fill-emerald-100" />
+                          ) : (
+                            <Circle className="w-5 h-5 stroke-[2.2]" />
+                          )}
+                        </button>
+
+                        {/* Çift Tıklama Uyarı Rozeti */}
+                        {doubleClickHintId === g.id && (
+                          <div className="absolute top-9 left-0 z-30 whitespace-nowrap bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-lg border border-slate-700 animate-bounce">
+                            👆 Çift tıklayın!
+                          </div>
                         )}
-                      </button>
+                      </div>
 
                       {/* Başlık ve Üst Rozetler */}
                       <div
