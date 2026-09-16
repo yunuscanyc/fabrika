@@ -15,11 +15,14 @@ import {
   Search,
   X,
   ShieldCheck,
+  ShieldAlert,
   Upload,
   Image as ImageIcon,
   Paperclip,
   Download,
-  Eye
+  Eye,
+  FileCheck2,
+  AlertCircle
 } from 'lucide-react';
 import { PersonelCombobox } from './PersonelCombobox';
 import { formatTarihTR } from '../utils/dateUtils';
@@ -54,7 +57,7 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
     }
   }, [personeller]);
 
-  const [filtre, setFiltre] = useState<'aktif' | 'pasif' | 'hepsi' | 'gecikmis' | 'yaklasan'>('aktif');
+  const [filtre, setFiltre] = useState<'aktif' | 'pasif' | 'hepsi' | 'gecikmis' | 'muayene' | 'sigorta' | 'bakimlar'>('aktif');
   const [aramaMetni, setAramaMetni] = useState('');
   
   // Bakım Geçmişi Modalı
@@ -63,6 +66,8 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
   const [yeniBakimFormAcik, setYeniBakimFormAcik] = useState(false);
   const [bakimBelgeler, setBakimBelgeler] = useState<any[]>([]);
   const [lightboxDosya, setLightboxDosya] = useState<any | null>(null);
+
+  const bugunStr = new Date().toISOString().split('T')[0];
 
   // Kalan Sayaç ve Durum Rozeti Hesaplama
   const bakimDurumuHesapla = (a: Arac) => {
@@ -73,7 +78,7 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
     if (kalan <= 0) {
       return {
         durum: 'Gecikmis',
-        renk: 'text-red-600 bg-red-50 border-red-200',
+        renk: 'text-rose-700 bg-rose-50 border-rose-200',
         metin: `${Math.abs(kalan)} ${birim} Gecikti!`,
         kalan,
         yuzde: 100
@@ -81,7 +86,7 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
     } else if (kalan <= esik) {
       return {
         durum: 'Yaklasiyor',
-        renk: 'text-amber-600 bg-amber-50 border-amber-200',
+        renk: 'text-amber-700 bg-amber-50 border-amber-200',
         metin: `${kalan} ${birim} Kaldı`,
         kalan,
         yuzde: Math.round(((a.BakimAraligiKmVeyaSaat - kalan) / a.BakimAraligiKmVeyaSaat) * 100)
@@ -89,7 +94,7 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
     } else {
       return {
         durum: 'Normal',
-        renk: 'text-emerald-600 bg-emerald-50 border-emerald-200',
+        renk: 'text-emerald-700 bg-emerald-50 border-emerald-200',
         metin: `${kalan} ${birim} Kaldı`,
         kalan,
         yuzde: Math.max(0, Math.round(((a.BakimAraligiKmVeyaSaat - kalan) / a.BakimAraligiKmVeyaSaat) * 100))
@@ -97,10 +102,73 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
     }
   };
 
-  // Kritik Bakım Listeleri
-  const gecikmisAraclar = araclar.filter(a => a.AktifMi && bakimDurumuHesapla(a).durum === 'Gecikmis');
-  const yaklasanAraclar = araclar.filter(a => a.AktifMi && bakimDurumuHesapla(a).durum === 'Yaklasiyor');
-  const toplamKritikBakim = gecikmisAraclar.length + yaklasanAraclar.length;
+  // Tarih ve Kalan Gün Rozeti Hesaplama (Muayene, Sigorta, Kasko)
+  const tarihDurumuHesapla = (tarihStr?: string | null, yaklasmaGunEsik: number = 30) => {
+    if (!tarihStr) {
+      return {
+        durum: 'Belirtilmedi',
+        kalanGun: null,
+        metin: 'Tarih Girilmedi',
+        badgeClass: 'text-slate-400 bg-slate-100 border-slate-200'
+      };
+    }
+    const diffMs = new Date(tarihStr).getTime() - new Date(bugunStr).getTime();
+    const kalanGun = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+    if (kalanGun < 0) {
+      return {
+        durum: 'Gecikmis',
+        kalanGun,
+        metin: `${Math.abs(kalanGun)} gün önce doldu!`,
+        badgeClass: 'text-rose-700 bg-rose-50 border-rose-300 font-bold'
+      };
+    } else if (kalanGun === 0) {
+      return {
+        durum: 'Gecikmis',
+        kalanGun: 0,
+        metin: 'Bugün doluyor!',
+        badgeClass: 'text-rose-700 bg-rose-100 border-rose-400 font-bold animate-pulse'
+      };
+    } else if (kalanGun <= yaklasmaGunEsik) {
+      return {
+        durum: 'Yaklasiyor',
+        kalanGun,
+        metin: `${kalanGun} gün kaldı`,
+        badgeClass: 'text-amber-800 bg-amber-50 border-amber-300 font-bold'
+      };
+    } else {
+      return {
+        durum: 'Guncel',
+        kalanGun,
+        metin: `${kalanGun} gün var`,
+        badgeClass: 'text-emerald-700 bg-emerald-50 border-emerald-200 font-semibold'
+      };
+    }
+  };
+
+  // Kritik Uyarı Listeleri
+  const gecikmisBakimAraclar = araclar.filter(a => a.AktifMi && bakimDurumuHesapla(a).durum === 'Gecikmis');
+  const yaklasanBakimAraclar = araclar.filter(a => a.AktifMi && bakimDurumuHesapla(a).durum === 'Yaklasiyor');
+  
+  const muayeneUyarisiAraclar = araclar.filter(a => {
+    if (!a.AktifMi || !a.MuayeneBitisTarihi) return false;
+    const res = tarihDurumuHesapla(a.MuayeneBitisTarihi);
+    return res.durum === 'Gecikmis' || res.durum === 'Yaklasiyor';
+  });
+
+  const sigortaUyarisiAraclar = araclar.filter(a => {
+    if (!a.AktifMi) return false;
+    const sigRes = a.SigortaBitisTarihi ? tarihDurumuHesapla(a.SigortaBitisTarihi) : null;
+    const kaskoRes = a.KaskoBitisTarihi ? tarihDurumuHesapla(a.KaskoBitisTarihi) : null;
+    return (sigRes && (sigRes.durum === 'Gecikmis' || sigRes.durum === 'Yaklasiyor')) ||
+           (kaskoRes && (kaskoRes.durum === 'Gecikmis' || kaskoRes.durum === 'Yaklasiyor'));
+  });
+
+  const toplamKritikUyari = 
+    gecikmisBakimAraclar.length + 
+    yaklasanBakimAraclar.length + 
+    muayeneUyarisiAraclar.length + 
+    sigortaUyarisiAraclar.length;
 
   // Güncel seçili aracı senkronize al
   const aktifSeciliArac = seciliAracBakimModal
@@ -132,37 +200,105 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
     setBakimBelgeler(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Araç Ekleme / Düzenleme Modalı
+  // Araç Ekleme / Düzenleme Modalı ve State'leri
   const [aracFormAcik, setAracFormAcik] = useState(false);
   const [duzenlenenArac, setDuzenlenenArac] = useState<Arac | null>(null);
   const [formZimmetli, setFormZimmetli] = useState('');
+  
+  // Muayene & Sigorta Form State'leri (Canlı Hesaplama İçin)
+  const [formMuayeneTarihi, setFormMuayeneTarihi] = useState('');
+  const [formMuayeneGecerlilik, setFormMuayeneGecerlilik] = useState<number>(1);
+  const [formMuayeneBitisTarihi, setFormMuayeneBitisTarihi] = useState('');
+  const [formSigortaBitisTarihi, setFormSigortaBitisTarihi] = useState('');
+  const [formKaskoBitisTarihi, setFormKaskoBitisTarihi] = useState('');
+
+  // Otomatik Muayene Bitiş Tarihi Hesaplama Fonksiyonu
+  const otomatikMuayeneBitisHesapla = (baslangic: string, gecerlilik: number) => {
+    if (!baslangic) return '';
+    const d = new Date(baslangic);
+    if (isNaN(d.getTime())) return '';
+    if (gecerlilik === 0.5) {
+      d.setMonth(d.getMonth() + 6);
+    } else {
+      d.setFullYear(d.getFullYear() + Math.round(gecerlilik));
+    }
+    return d.toISOString().split('T')[0];
+  };
 
   useEffect(() => {
     if (duzenlenenArac) {
       setFormZimmetli(duzenlenenArac.ZimmetliKisi || '');
+      setFormMuayeneTarihi(duzenlenenArac.MuayeneTarihi || '');
+      const gecerlilik = duzenlenenArac.MuayeneGecerlilikYil !== undefined ? Number(duzenlenenArac.MuayeneGecerlilikYil) : 1;
+      setFormMuayeneGecerlilik(gecerlilik);
+      setFormMuayeneBitisTarihi(duzenlenenArac.MuayeneBitisTarihi || '');
+      setFormSigortaBitisTarihi(duzenlenenArac.SigortaBitisTarihi || '');
+      setFormKaskoBitisTarihi(duzenlenenArac.KaskoBitisTarihi || '');
     } else {
       setFormZimmetli('');
+      setFormMuayeneTarihi('');
+      setFormMuayeneGecerlilik(1);
+      setFormMuayeneBitisTarihi('');
+      setFormSigortaBitisTarihi('');
+      setFormKaskoBitisTarihi('');
     }
   }, [duzenlenenArac, aracFormAcik]);
+
+  // Muayene başlangıç tarihi veya geçerlilik süresi değiştiğinde bitişi güncelle
+  const handleMuayeneTarihiChange = (tarih: string) => {
+    setFormMuayeneTarihi(tarih);
+    if (tarih) {
+      const bitis = otomatikMuayeneBitisHesapla(tarih, formMuayeneGecerlilik);
+      setFormMuayeneBitisTarihi(bitis);
+    }
+  };
+
+  const handleMuayeneGecerlilikChange = (gecerlilik: number) => {
+    setFormMuayeneGecerlilik(gecerlilik);
+    if (formMuayeneTarihi) {
+      const bitis = otomatikMuayeneBitisHesapla(formMuayeneTarihi, gecerlilik);
+      setFormMuayeneBitisTarihi(bitis);
+    }
+  };
 
   // Filtreleme
   const filtrelenenAraclar = araclar.filter((a) => {
     let durumUygun = true;
     if (filtre === 'aktif') durumUygun = a.AktifMi;
     else if (filtre === 'pasif') durumUygun = !a.AktifMi;
-    else if (filtre === 'gecikmis') durumUygun = a.AktifMi && bakimDurumuHesapla(a).durum === 'Gecikmis';
-    else if (filtre === 'yaklasan') durumUygun = a.AktifMi && bakimDurumuHesapla(a).durum === 'Yaklasiyor';
+    else if (filtre === 'gecikmis') {
+      const bak = bakimDurumuHesapla(a).durum;
+      const muayene = a.MuayeneBitisTarihi ? tarihDurumuHesapla(a.MuayeneBitisTarihi).durum : null;
+      const sigorta = a.SigortaBitisTarihi ? tarihDurumuHesapla(a.SigortaBitisTarihi).durum : null;
+      const kasko = a.KaskoBitisTarihi ? tarihDurumuHesapla(a.KaskoBitisTarihi).durum : null;
+      durumUygun = a.AktifMi && (bak === 'Gecikmis' || muayene === 'Gecikmis' || sigorta === 'Gecikmis' || kasko === 'Gecikmis');
+    }
+    else if (filtre === 'muayene') {
+      const muayene = a.MuayeneBitisTarihi ? tarihDurumuHesapla(a.MuayeneBitisTarihi).durum : null;
+      durumUygun = a.AktifMi && (muayene === 'Gecikmis' || muayene === 'Yaklasiyor');
+    }
+    else if (filtre === 'sigorta') {
+      const sigorta = a.SigortaBitisTarihi ? tarihDurumuHesapla(a.SigortaBitisTarihi).durum : null;
+      const kasko = a.KaskoBitisTarihi ? tarihDurumuHesapla(a.KaskoBitisTarihi).durum : null;
+      durumUygun = a.AktifMi && (sigorta === 'Gecikmis' || sigorta === 'Yaklasiyor' || kasko === 'Gecikmis' || kasko === 'Yaklasiyor');
+    }
+    else if (filtre === 'bakimlar') {
+      const bak = bakimDurumuHesapla(a).durum;
+      durumUygun = a.AktifMi && (bak === 'Gecikmis' || bak === 'Yaklasiyor');
+    }
     else if (filtre === 'hepsi') durumUygun = true;
 
     const aramaUygun =
       a.PlakaVeyaKod.toLowerCase().includes(aramaMetni.toLowerCase()) ||
       a.MarkaModel.toLowerCase().includes(aramaMetni.toLowerCase()) ||
+      (a.SigortaSirketi && a.SigortaSirketi.toLowerCase().includes(aramaMetni.toLowerCase())) ||
+      (a.KaskoSirketi && a.KaskoSirketi.toLowerCase().includes(aramaMetni.toLowerCase())) ||
       (a.ZimmetliKisi && a.ZimmetliKisi.toLowerCase().includes(aramaMetni.toLowerCase()));
 
     return durumUygun && aramaUygun;
   });
 
-  // Sayısal Giriş Kontrolü (Global Politikamız: Harf ve sembol engeli)
+  // Sayısal Giriş Kontrolü
   const sadeceRakamGiris = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (
       !/[0-9]/.test(e.key) &&
@@ -183,10 +319,10 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
         <div>
           <h1 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
             <Truck className="w-6 h-6 text-blue-600" />
-            <span>Araç &amp; Ekipman Bakım Yönetimi</span>
+            <span>Araç Filosu, Muayene &amp; Bakım Takip Sistemi</span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            KM ve çalışma saati sayaçları, periyodik bakım geçmişi ve filo takibi
+            TÜVTÜRK muayene bitişleri, trafik sigortası &amp; kasko poliçeleri, KM ve çalışma saati periyodik bakımları
           </p>
         </div>
 
@@ -204,9 +340,9 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
         </div>
       </div>
 
-      {/* Kritik Bakım Uyarı Paneli (İSG Panelinde Olduğu Gibi) */}
-      {toplamKritikBakim > 0 && (
-        <div className="bg-rose-50 border-2 border-rose-400 rounded-2xl p-5 shadow-sm space-y-3">
+      {/* Kritik Filo & Evrak Uyarı Paneli */}
+      {toplamKritikUyari > 0 && (
+        <div className="bg-rose-50/90 border-2 border-rose-400 rounded-2xl p-5 shadow-sm space-y-3">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-rose-200">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shadow-sm shadow-rose-500/30 shrink-0">
@@ -214,41 +350,55 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
               </div>
               <div>
                 <h2 className="text-base font-bold text-rose-950 flex items-center gap-2">
-                  <span>Filo &amp; Ekipman Kritik Bakım Uyarıları</span>
+                  <span>Filo &amp; Evrak Kritik Uyarı Paneli</span>
                   <span className="px-2 py-0.5 rounded-full bg-rose-600 text-white text-xs font-extrabold">
-                    {toplamKritikBakim} Araç / Ekipman
+                    {toplamKritikUyari} Kritik Bildirim
                   </span>
                 </h2>
                 <p className="text-xs text-rose-700 mt-0.5">
-                  Periyodik KM veya çalışma saati dolan araçlar için acil bakım kaydı oluşturulmalıdır.
+                  Muayene süresi dolan/yaklaşan, sigortası biten veya KM bakımı geçen araçlar için işlem yapılmalıdır.
                 </p>
               </div>
             </div>
+
             <div className="flex items-center gap-2 flex-wrap">
-              {gecikmisAraclar.length > 0 && (
+              {muayeneUyarisiAraclar.length > 0 && (
                 <button
-                  onClick={() => setFiltre('gecikmis')}
+                  onClick={() => setFiltre('muayene')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                    filtre === 'gecikmis'
+                    filtre === 'muayene'
                       ? 'bg-rose-700 text-white shadow'
                       : 'bg-rose-100 text-rose-800 border border-rose-300 hover:bg-rose-200'
                   }`}
                 >
-                  <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping"></span>
-                  <span>{gecikmisAraclar.length} Acil Geciken</span>
+                  <FileCheck2 className="w-3.5 h-3.5 text-rose-700" />
+                  <span>{muayeneUyarisiAraclar.length} Muayene Uyarısı</span>
                 </button>
               )}
-              {yaklasanAraclar.length > 0 && (
+              {sigortaUyarisiAraclar.length > 0 && (
                 <button
-                  onClick={() => setFiltre('yaklasan')}
+                  onClick={() => setFiltre('sigorta')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                    filtre === 'yaklasan'
+                    filtre === 'sigorta'
+                      ? 'bg-purple-700 text-white shadow'
+                      : 'bg-purple-100 text-purple-800 border border-purple-300 hover:bg-purple-200'
+                  }`}
+                >
+                  <ShieldAlert className="w-3.5 h-3.5 text-purple-700" />
+                  <span>{sigortaUyarisiAraclar.length} Sigorta/Kasko Uyarısı</span>
+                </button>
+              )}
+              {(gecikmisBakimAraclar.length > 0 || yaklasanBakimAraclar.length > 0) && (
+                <button
+                  onClick={() => setFiltre('bakimlar')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                    filtre === 'bakimlar'
                       ? 'bg-amber-600 text-white shadow'
                       : 'bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200'
                   }`}
                 >
-                  <Clock className="w-3.5 h-3.5 text-amber-700" />
-                  <span>{yaklasanAraclar.length} Bakımı Yaklaşan</span>
+                  <Wrench className="w-3.5 h-3.5 text-amber-700" />
+                  <span>{gecikmisBakimAraclar.length + yaklasanBakimAraclar.length} Periyodik Bakım</span>
                 </button>
               )}
               {filtre !== 'aktif' && (
@@ -262,44 +412,61 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
             </div>
           </div>
 
-          {/* Acil Liste Özeti & Hızlı Bakım Butonu */}
+          {/* Acil Liste Kartları */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
-            {[...gecikmisAraclar, ...yaklasanAraclar].map((a) => {
-              const b = bakimDurumuHesapla(a);
-              const isGecikmis = b.durum === 'Gecikmis';
+            {araclar.filter(a => a.AktifMi).slice(0, 6).map((a) => {
+              const bakim = bakimDurumuHesapla(a);
+              const muayene = a.MuayeneBitisTarihi ? tarihDurumuHesapla(a.MuayeneBitisTarihi) : null;
+              const sigorta = a.SigortaBitisTarihi ? tarihDurumuHesapla(a.SigortaBitisTarihi) : null;
+
+              const hasAlert = bakim.durum === 'Gecikmis' || 
+                               bakim.durum === 'Yaklasiyor' || 
+                               (muayene && muayene.durum !== 'Guncel') || 
+                               (sigorta && sigorta.durum !== 'Guncel');
+
+              if (!hasAlert) return null;
+
               return (
                 <div
                   key={a.AracId}
-                  className={`p-3 rounded-xl border flex items-center justify-between gap-2 shadow-sm ${
-                    isGecikmis
-                      ? 'bg-white border-rose-300 text-rose-950'
-                      : 'bg-white border-amber-300 text-amber-950'
-                  }`}
+                  className="p-3 rounded-xl border bg-white border-rose-200 shadow-xs flex items-center justify-between gap-2"
                 >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-mono font-bold text-xs bg-slate-900 px-1.5 py-0.5 rounded text-white">
+                      <span className="font-mono font-black text-xs bg-slate-900 px-1.5 py-0.5 rounded text-white">
                         {a.PlakaVeyaKod}
                       </span>
                       <span className="font-bold text-xs truncate text-slate-800">{a.MarkaModel}</span>
                     </div>
-                    <div className={`text-[11px] font-bold mt-1 ${isGecikmis ? 'text-rose-600' : 'text-amber-600'}`}>
-                      {b.metin}
+                    <div className="text-[11px] space-y-0.5 mt-1">
+                      {muayene && (muayene.durum === 'Gecikmis' || muayene.durum === 'Yaklasiyor') && (
+                        <div className="text-rose-700 font-bold flex items-center gap-1">
+                          <FileCheck2 className="w-3 h-3" />
+                          <span>Muayene: {muayene.metin}</span>
+                        </div>
+                      )}
+                      {sigorta && (sigorta.durum === 'Gecikmis' || sigorta.durum === 'Yaklasiyor') && (
+                        <div className="text-purple-700 font-bold flex items-center gap-1">
+                          <ShieldAlert className="w-3 h-3" />
+                          <span>Sigorta: {sigorta.metin}</span>
+                        </div>
+                      )}
+                      {(bakim.durum === 'Gecikmis' || bakim.durum === 'Yaklasiyor') && (
+                        <div className="text-amber-700 font-semibold flex items-center gap-1">
+                          <Wrench className="w-3 h-3" />
+                          <span>Bakım: {bakim.metin}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                   <button
                     onClick={() => {
-                      setSeciliAracBakimModal(a);
-                      setDuzenlenenBakim(null);
-                      setYeniBakimFormAcik(true);
+                      setDuzenlenenArac(a);
+                      setAracFormAcik(true);
                     }}
-                    className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition shrink-0 ${
-                      isGecikmis
-                        ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-sm'
-                        : 'bg-amber-600 hover:bg-amber-700 text-white shadow-sm'
-                    }`}
+                    className="px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 text-xs font-bold transition shrink-0"
                   >
-                    + Bakım Ekle
+                    Düzenle
                   </button>
                 </div>
               );
@@ -308,13 +475,13 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
         </div>
       )}
 
-      {/* Arama & Aktif/Pasif Filtresi */}
+      {/* Arama & Filtreleme Butonları */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="flex-1 relative">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
           <input
             type="text"
-            placeholder="Plaka, kod, marka veya zimmetli personel ara..."
+            placeholder="Plaka, marka, sigorta şirketi veya zimmetli personel ara..."
             value={aramaMetni}
             onChange={(e) => setAramaMetni(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
@@ -322,32 +489,6 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
         </div>
 
         <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shrink-0 flex-wrap">
-          {gecikmisAraclar.length > 0 && (
-            <button
-              onClick={() => setFiltre('gecikmis')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${
-                filtre === 'gecikmis'
-                  ? 'bg-rose-600 text-white shadow-sm'
-                  : 'text-rose-600 hover:bg-rose-50'
-              }`}
-            >
-              <AlertTriangle className="w-3.5 h-3.5" />
-              <span>Acil Bakım ({gecikmisAraclar.length})</span>
-            </button>
-          )}
-          {yaklasanAraclar.length > 0 && (
-            <button
-              onClick={() => setFiltre('yaklasan')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${
-                filtre === 'yaklasan'
-                  ? 'bg-amber-600 text-white shadow-sm'
-                  : 'text-amber-600 hover:bg-amber-50'
-              }`}
-            >
-              <Clock className="w-3.5 h-3.5" />
-              <span>Yaklaşan ({yaklasanAraclar.length})</span>
-            </button>
-          )}
           <button
             onClick={() => setFiltre('aktif')}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
@@ -358,6 +499,45 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
           >
             Faal Araçlar ({araclar.filter(a => a.AktifMi).length})
           </button>
+          {muayeneUyarisiAraclar.length > 0 && (
+            <button
+              onClick={() => setFiltre('muayene')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${
+                filtre === 'muayene'
+                  ? 'bg-rose-600 text-white shadow-sm'
+                  : 'text-rose-600 hover:bg-rose-50'
+              }`}
+            >
+              <FileCheck2 className="w-3.5 h-3.5" />
+              <span>Muayene ({muayeneUyarisiAraclar.length})</span>
+            </button>
+          )}
+          {sigortaUyarisiAraclar.length > 0 && (
+            <button
+              onClick={() => setFiltre('sigorta')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${
+                filtre === 'sigorta'
+                  ? 'bg-purple-600 text-white shadow-sm'
+                  : 'text-purple-600 hover:bg-purple-50'
+              }`}
+            >
+              <ShieldAlert className="w-3.5 h-3.5" />
+              <span>Sigorta/Kasko ({sigortaUyarisiAraclar.length})</span>
+            </button>
+          )}
+          {(gecikmisBakimAraclar.length > 0 || yaklasanBakimAraclar.length > 0) && (
+            <button
+              onClick={() => setFiltre('bakimlar')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${
+                filtre === 'bakimlar'
+                  ? 'bg-amber-600 text-white shadow-sm'
+                  : 'text-amber-600 hover:bg-amber-50'
+              }`}
+            >
+              <Wrench className="w-3.5 h-3.5" />
+              <span>Bakım ({gecikmisBakimAraclar.length + yaklasanBakimAraclar.length})</span>
+            </button>
+          )}
           <button
             onClick={() => setFiltre('pasif')}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
@@ -385,7 +565,17 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filtrelenenAraclar.map((arac) => {
           const bakim = bakimDurumuHesapla(arac);
+          const muayene = tarihDurumuHesapla(arac.MuayeneBitisTarihi);
+          const sigorta = tarihDurumuHesapla(arac.SigortaBitisTarihi);
+          const kasko = tarihDurumuHesapla(arac.KaskoBitisTarihi);
           const birim = arac.SaatTakibiMi ? 'Saat' : 'KM';
+
+          const hasCriticalWarning = arac.AktifMi && (
+            bakim.durum === 'Gecikmis' || 
+            muayene.durum === 'Gecikmis' || 
+            sigorta.durum === 'Gecikmis' || 
+            kasko.durum === 'Gecikmis'
+          );
 
           return (
             <div
@@ -393,13 +583,13 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
               className={`bg-white rounded-2xl border p-4 sm:p-5 shadow-sm transition-all relative flex flex-col justify-between ${
                 !arac.AktifMi
                   ? 'border-slate-200 bg-slate-50/70 opacity-90'
-                  : bakim.durum === 'Gecikmis'
-                  ? 'border-red-300 ring-1 ring-red-200'
+                  : hasCriticalWarning
+                  ? 'border-rose-300 ring-1 ring-rose-200 shadow-rose-50/50'
                   : 'border-slate-200/80 hover:border-slate-300'
               }`}
             >
               <div>
-                {/* Üst Satır: Plaka & Durum */}
+                {/* Üst Satır: Plaka, Model & Aktiflik */}
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <span className="text-base sm:text-lg font-black tracking-tight text-slate-900 font-mono">
@@ -411,17 +601,19 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                   </div>
 
                   <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                    className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${
                       !arac.AktifMi
                         ? 'bg-slate-200 text-slate-700 border-slate-300'
-                        : bakim.renk
+                        : hasCriticalWarning
+                        ? 'bg-rose-100 text-rose-800 border-rose-300'
+                        : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                     }`}
                   >
-                    {!arac.AktifMi ? 'Elden Çıkarıldı' : bakim.metin}
+                    {!arac.AktifMi ? 'Elden Çıkarıldı' : hasCriticalWarning ? 'Kritik Uyarı Var' : 'Sorunsuz / Faal'}
                   </span>
                 </div>
 
-                {/* Zimmet & Tür */}
+                {/* Zimmet & Araç Türü */}
                 <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                   <div>
                     <span className="text-[10px] text-slate-400 block font-medium">Araç Türü:</span>
@@ -435,22 +627,86 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                   </div>
                 </div>
 
-                {/* Sayaç & Bakım İlerlemesi */}
-                <div className="mt-3">
+                {/* 1. TÜVTÜRK Muayene Durumu Kutusu */}
+                <div className="mt-3 p-2.5 rounded-xl border bg-slate-50/80 border-slate-200/80 space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                      <FileCheck2 className="w-4 h-4 text-blue-600" />
+                      <span>TÜVTÜRK Muayene:</span>
+                    </span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border ${muayene.badgeClass}`}>
+                      {muayene.metin}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 pt-0.5">
+                    <span>
+                      Son: <strong className="text-slate-700">{formatTarihTR(arac.MuayeneTarihi) || 'Girilmedi'}</strong> ({arac.MuayeneGecerlilikYil || 1} Yıl)
+                    </span>
+                    <span>
+                      Bitiş: <strong className="text-slate-900">{formatTarihTR(arac.MuayeneBitisTarihi) || 'Girilmedi'}</strong>
+                    </span>
+                  </div>
+                </div>
+
+                {/* 2. Trafik Sigortası & Kasko Kutusu */}
+                <div className="mt-2 p-2.5 rounded-xl border bg-slate-50/80 border-slate-200/80 space-y-1.5">
+                  {/* Trafik Sigortası */}
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-slate-700 flex items-center gap-1.5 truncate max-w-[60%]">
+                      <ShieldAlert className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                      <span className="truncate">Trafik Sigortası:</span>
+                    </span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border ${sigorta.badgeClass}`}>
+                      {sigorta.metin}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-slate-500">
+                    <span className="truncate max-w-[55%]">
+                      {arac.SigortaSirketi ? `${arac.SigortaSirketi} ${arac.SigortaPoliceNo ? `(${arac.SigortaPoliceNo})` : ''}` : 'Şirket Belirtilmedi'}
+                    </span>
+                    <span>
+                      Bitiş: <strong className="text-slate-900">{formatTarihTR(arac.SigortaBitisTarihi) || 'Girilmedi'}</strong>
+                    </span>
+                  </div>
+
+                  {/* Kasko */}
+                  <div className="pt-1.5 border-t border-slate-200/60">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-slate-700 flex items-center gap-1.5 truncate max-w-[60%]">
+                        <ShieldCheck className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                        <span className="truncate">Kasko Poliçesi:</span>
+                      </span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border ${kasko.badgeClass}`}>
+                        {kasko.metin}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 mt-0.5">
+                      <span className="truncate max-w-[55%]">
+                        {arac.KaskoSirketi ? `${arac.KaskoSirketi} ${arac.KaskoPoliceNo ? `(${arac.KaskoPoliceNo})` : ''}` : 'Kasko Yok / Girilmedi'}
+                      </span>
+                      <span>
+                        Bitiş: <strong className="text-slate-900">{formatTarihTR(arac.KaskoBitisTarihi) || 'Girilmedi'}</strong>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Sayaç & KM Bakım İlerlemesi */}
+                <div className="mt-3 p-2.5 rounded-xl border bg-slate-50/50 border-slate-200/70">
                   <div className="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1">
                     <span>
                       Sayaç: <strong className="text-slate-900">{arac.GuncelKmVeyaSaat.toLocaleString()} {birim}</strong>
                     </span>
-                    <span className="text-[11px] text-slate-500">
-                      Periyot: {arac.BakimAraligiKmVeyaSaat.toLocaleString()} {birim}
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${bakim.renk}`}>
+                      {bakim.metin}
                     </span>
                   </div>
 
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all ${
                         bakim.durum === 'Gecikmis'
-                          ? 'bg-red-600'
+                          ? 'bg-rose-600'
                           : bakim.durum === 'Yaklasiyor'
                           ? 'bg-amber-500'
                           : 'bg-emerald-500'
@@ -462,7 +718,7 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
 
                 {/* Not Varsa Göster */}
                 {arac.Notlar && (
-                  <div className="mt-3 text-[11px] bg-amber-50/60 border border-amber-200/60 text-amber-900 p-2 rounded-lg leading-relaxed flex items-start gap-1.5">
+                  <div className="mt-2.5 text-[11px] bg-amber-50/60 border border-amber-200/60 text-amber-900 p-2 rounded-lg leading-relaxed flex items-start gap-1.5">
                     <FileText className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
                     <span className="line-clamp-2">{arac.Notlar}</span>
                   </div>
@@ -471,7 +727,6 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
 
               {/* Alt Butonlar */}
               <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                {/* Yanlışlıkla elden çıkarılan aracı geri aktif yapma butonu */}
                 {!arac.AktifMi ? (
                   <button
                     onClick={() => {
@@ -494,7 +749,7 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                         setYeniBakimFormAcik(true);
                       }}
                       className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm"
-                      title="Bu araca yeni bakım kaydı, fatura ve fotoğraf ekle"
+                      title="Bu araca yeni periyodik bakım veya onarım ekle"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       <span>Bakım Ekle</span>
@@ -506,7 +761,7 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                         setYeniBakimFormAcik(false);
                       }}
                       className="px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold flex items-center gap-1 transition-colors"
-                      title="Geçmiş bakım kayıtlarını ve ekli belgeleri incele"
+                      title="Geçmiş bakım kayıtlarını ve faturaları incele"
                     >
                       <Wrench className="w-3.5 h-3.5 text-blue-600" />
                       <span>Geçmiş ({arac.BakimGecmisi?.length || 0})</span>
@@ -519,10 +774,11 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                     setDuzenlenenArac(arac);
                     setAracFormAcik(true);
                   }}
-                  className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
-                  title="Araç Bilgilerini Düzenle"
+                  className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1 transition-colors"
+                  title="TÜVTÜRK Muayene, Sigorta, Kasko ve Araç Bilgilerini Düzenle"
                 >
-                  <Edit3 className="w-4 h-4" />
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Düzenle</span>
                 </button>
               </div>
             </div>
@@ -530,7 +786,379 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
         })}
       </div>
 
-      {/* BAKIM GEÇMİŞİ MODALI (DÜZENLEME & SİLME DESTEKLİ) */}
+      {/* ARAÇ EKLEME / DÜZENLEME MODALI */}
+      {aracFormAcik && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-5 sm:p-7 shadow-2xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="font-extrabold text-slate-900 text-base sm:text-lg flex items-center gap-2">
+                  <Truck className="w-5 h-5 text-blue-600" />
+                  <span>{duzenlenenArac ? 'Araç, Muayene & Sigorta Bilgilerini Düzenle' : 'Yeni Araç / Ekipman Kaydı'}</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  TÜVTÜRK muayene süresi, zorunlu trafik sigortası, kasko ve periyodik sayaç ayarları
+                </p>
+              </div>
+              <button onClick={() => setAracFormAcik(false)} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const form = e.target as any;
+                const saatTakibi = form.takipTuru.value === 'saat';
+                const durum = form.durum.value;
+
+                const yeni: Arac = {
+                  AracId: duzenlenenArac?.AracId || Date.now(),
+                  PlakaVeyaKod: form.plaka.value,
+                  AracTipi: form.tur.value,
+                  MarkaModel: form.marka.value,
+                  ModelYili: Number(form.yil.value) || new Date().getFullYear(),
+                  SasiSeriNo: form.sasi.value,
+                  ZimmetliKisi: form.zimmet.value,
+                  GuncelKmVeyaSaat: Number(form.guncelSayac.value) || 0,
+                  BakimAraligiKmVeyaSaat: Number(form.aralikSayac.value) || (saatTakibi ? 250 : 10000),
+                  BakimAraligiAy: Number(form.aralikAy.value) || 12,
+                  SonBakimTarihi: form.sonBakimTarihi.value || new Date().toISOString().split('T')[0],
+                  SonBakimKmVeyaSaat: Number(form.guncelSayac.value) || 0,
+                  SaatTakibiMi: saatTakibi,
+                  MuayeneTarihi: formMuayeneTarihi || null,
+                  MuayeneGecerlilikYil: Number(formMuayeneGecerlilik) || 1,
+                  MuayeneBitisTarihi: formMuayeneBitisTarihi || null,
+                  SigortaSirketi: form.sigortaSirketi.value || '',
+                  SigortaPoliceNo: form.sigortaPoliceNo.value || '',
+                  SigortaBitisTarihi: formSigortaBitisTarihi || null,
+                  KaskoSirketi: form.kaskoSirketi.value || '',
+                  KaskoPoliceNo: form.kaskoPoliceNo.value || '',
+                  KaskoBitisTarihi: formKaskoBitisTarihi || null,
+                  Durum: durum,
+                  AktifMi: durum !== 'Elden Çıkarıldı / Satıldı',
+                  Notlar: form.notlar.value,
+                  BakimGecmisi: duzenlenenArac?.BakimGecmisi || []
+                };
+
+                onSaveArac(yeni);
+                setAracFormAcik(false);
+              }}
+              className="space-y-4 text-xs sm:text-sm"
+            >
+              {/* 1. BÖLÜM: TEMEL KİMLİK BİLGİLERİ */}
+              <div className="bg-slate-50/70 p-3.5 rounded-2xl border border-slate-200 space-y-3">
+                <span className="text-xs font-black text-slate-800 uppercase tracking-wider block">
+                  1. Temel Araç &amp; Kimlik Bilgileri
+                </span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Plaka / Ekipman Kodu:</label>
+                    <input
+                      name="plaka"
+                      defaultValue={duzenlenenArac?.PlakaVeyaKod || ''}
+                      placeholder="Örn: 07 RND 45 veya FK-01"
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-mono font-bold bg-white"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Araç / Ekipman Türü:</label>
+                    <select
+                      name="tur"
+                      defaultValue={duzenlenenArac?.AracTipi || 'Kamyonet / Sevkiyat'}
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white font-medium"
+                    >
+                      <option value="Kamyonet / Sevkiyat">Kamyonet / Sevkiyat</option>
+                      <option value="Kamyon (Ağır Vasıta)">Kamyon (Ağır Vasıta)</option>
+                      <option value="Forklift (Dizel/Elektrik)">Forklift (Dizel/Elektrik)</option>
+                      <option value="Otomobil (Binek)">Otomobil (Binek)</option>
+                      <option value="Transpalet / Yükleyici">Transpalet / Yükleyici</option>
+                      <option value="Personel Servisi">Personel Servisi</option>
+                      <option value="Tavan Vinci / Makine">Tavan Vinci / Makine</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Model Yılı:</label>
+                    <input
+                      name="yil"
+                      defaultValue={duzenlenenArac?.ModelYili || new Date().getFullYear()}
+                      onKeyDown={sadeceRakamGiris}
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-mono bg-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="font-semibold text-slate-700 block mb-1">Marka &amp; Model:</label>
+                    <input
+                      name="marka"
+                      defaultValue={duzenlenenArac?.MarkaModel || ''}
+                      placeholder="Örn: Ford Transit 350L Panelvan"
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Şasi / Seri No (Opsiyonel):</label>
+                    <input
+                      name="sasi"
+                      defaultValue={duzenlenenArac?.SasiSeriNo || ''}
+                      placeholder="Şasi No"
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-mono bg-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <PersonelCombobox
+                      name="zimmet"
+                      label="Zimmetli Personel / Sürücü:"
+                      personeller={yerelPersoneller}
+                      value={formZimmetli}
+                      onChange={(val) => setFormZimmetli(val)}
+                      placeholder="Personel seçin veya yazın..."
+                      helperText="Aracın ana sorumlusu veya şoförü"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Araç Durumu:</label>
+                    <select
+                      name="durum"
+                      defaultValue={duzenlenenArac?.Durum || 'Faal'}
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white font-medium"
+                    >
+                      <option value="Faal">Faal (Filoda Aktif)</option>
+                      <option value="Bakımda / Serviste">Bakımda / Serviste</option>
+                      <option value="Arızalı">Arızalı</option>
+                      <option value="Elden Çıkarıldı / Satıldı">Elden Çıkarıldı / Satıldı</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. BÖLÜM: TÜVTÜRK ARAÇ MUAYENE TAKİP SİSTEMİ (ÖZEL VURGULU) */}
+              <div className="bg-blue-50/60 p-4 rounded-2xl border-2 border-blue-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <FileCheck2 className="w-4 h-4 text-blue-600" />
+                    2. TÜVTÜRK Araç Muayene Takip Sistemi
+                  </span>
+                  {formMuayeneBitisTarihi && (
+                    <span className={`text-[11px] px-2.5 py-0.5 rounded-full border ${tarihDurumuHesapla(formMuayeneBitisTarihi).badgeClass}`}>
+                      {tarihDurumuHesapla(formMuayeneBitisTarihi).metin}
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Son Muayene Tarihi:</label>
+                    <input
+                      type="date"
+                      value={formMuayeneTarihi}
+                      onChange={(e) => handleMuayeneTarihiChange(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Geçerlilik Süresi:</label>
+                    <select
+                      value={formMuayeneGecerlilik}
+                      onChange={(e) => handleMuayeneGecerlilikChange(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white font-bold text-blue-900"
+                    >
+                      <option value={1}>1 Yıl (Ticari / Kamyonet / Ağır Vasıta)</option>
+                      <option value={2}>2 Yıl (Binek Otomobil / Hususi)</option>
+                      <option value={0.5}>6 Ay (Özel İzinli / Ticari Servis)</option>
+                      <option value={3}>3 Yıl (Sıfır Araç İlk Muayene)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1 flex items-center justify-between">
+                      <span>Muayene Bitiş Tarihi:</span>
+                      <span className="text-[10px] text-blue-600 font-normal">Otomatik / Manuel</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={formMuayeneBitisTarihi}
+                      onChange={(e) => setFormMuayeneBitisTarihi(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border-2 border-blue-300 text-xs bg-white font-bold text-slate-900"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. BÖLÜM: TRAFİK SİGORTASI & KASKO TAKİBİ */}
+              <div className="bg-purple-50/50 p-4 rounded-2xl border-2 border-purple-200 space-y-3">
+                <span className="text-xs font-black text-purple-950 uppercase tracking-wider flex items-center gap-1.5">
+                  <ShieldAlert className="w-4 h-4 text-purple-600" />
+                  3. Zorunlu Trafik Sigortası &amp; Kasko Poliçe Takibi
+                </span>
+
+                {/* Trafik Sigortası Bilgileri */}
+                <div className="bg-white p-3 rounded-xl border border-purple-100 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-purple-900">Zorunlu Trafik Sigortası:</span>
+                    {formSigortaBitisTarihi && (
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border ${tarihDurumuHesapla(formSigortaBitisTarihi).badgeClass}`}>
+                        {tarihDurumuHesapla(formSigortaBitisTarihi).metin}
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-600 block mb-1">Sigorta Şirketi:</label>
+                      <input
+                        name="sigortaSirketi"
+                        defaultValue={duzenlenenArac?.SigortaSirketi || ''}
+                        placeholder="Örn: Türkiye Sigorta / Anadolu"
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-600 block mb-1">Poliçe No:</label>
+                      <input
+                        name="sigortaPoliceNo"
+                        defaultValue={duzenlenenArac?.SigortaPoliceNo || ''}
+                        placeholder="Poliçe No"
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-600 block mb-1">Sigorta Bitiş Tarihi:</label>
+                      <input
+                        type="date"
+                        value={formSigortaBitisTarihi}
+                        onChange={(e) => setFormSigortaBitisTarihi(e.target.value)}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-purple-300 text-xs font-bold"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Kasko Bilgileri */}
+                <div className="bg-white p-3 rounded-xl border border-purple-100 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800">Kasko Poliçesi (Opsiyonel):</span>
+                    {formKaskoBitisTarihi && (
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border ${tarihDurumuHesapla(formKaskoBitisTarihi).badgeClass}`}>
+                        {tarihDurumuHesapla(formKaskoBitisTarihi).metin}
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-600 block mb-1">Kasko Şirketi:</label>
+                      <input
+                        name="kaskoSirketi"
+                        defaultValue={duzenlenenArac?.KaskoSirketi || ''}
+                        placeholder="Örn: Allianz / Axa Kasko"
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-600 block mb-1">Kasko Poliçe No:</label>
+                      <input
+                        name="kaskoPoliceNo"
+                        defaultValue={duzenlenenArac?.KaskoPoliceNo || ''}
+                        placeholder="Kasko No"
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-600 block mb-1">Kasko Bitiş Tarihi:</label>
+                      <input
+                        type="date"
+                        value={formKaskoBitisTarihi}
+                        onChange={(e) => setFormKaskoBitisTarihi(e.target.value)}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-bold"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. BÖLÜM: PERİYODİK SAYAÇ & KM BAKIM AYARLARI */}
+              <div className="bg-slate-50/70 p-3.5 rounded-2xl border border-slate-200 space-y-3">
+                <span className="text-xs font-black text-slate-800 uppercase tracking-wider block">
+                  4. Periyodik Sayaç &amp; Bakım Ayarları
+                </span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Takip Birimi:</label>
+                    <select
+                      name="takipTuru"
+                      defaultValue={duzenlenenArac?.SaatTakibiMi ? 'saat' : 'km'}
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white font-bold"
+                    >
+                      <option value="km">Kilometre (KM - Araçlar)</option>
+                      <option value="saat">Çalışma Saati (Saat - Forklift / Vinç)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Güncel Sayaç (KM / Saat):</label>
+                    <input
+                      name="guncelSayac"
+                      defaultValue={duzenlenenArac?.GuncelKmVeyaSaat ?? 0}
+                      onKeyDown={sadeceRakamGiris}
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-mono font-bold bg-white"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Bakım Periyodu (KM / Saat):</label>
+                    <input
+                      name="aralikSayac"
+                      defaultValue={duzenlenenArac?.BakimAraligiKmVeyaSaat ?? 10000}
+                      onKeyDown={sadeceRakamGiris}
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-mono bg-white"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <input type="hidden" name="aralikAy" defaultValue={duzenlenenArac?.BakimAraligiAy || 12} />
+              <input type="hidden" name="sonBakimTarihi" defaultValue={duzenlenenArac?.SonBakimTarihi || ''} />
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Araç &amp; Bakım Notları:</label>
+                <textarea
+                  name="notlar"
+                  rows={2}
+                  defaultValue={duzenlenenArac?.Notlar || ''}
+                  placeholder="Kritik parça değişimleri, lastik durumu, yedek anahtar veya özel notlar..."
+                  className="w-full p-2.5 rounded-lg border border-slate-200 text-xs"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAracFormAcik(false)}
+                  className="px-4 py-2.5 rounded-xl text-slate-600 hover:bg-slate-100 text-xs font-semibold transition"
+                >
+                  İptal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm transition"
+                >
+                  {duzenlenenArac ? 'Değişiklikleri Kaydet' : 'Aracı Filoya Ekle'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* BAKIM GEÇMİŞİ MODALI */}
       {aktifSeciliArac && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-2xl max-w-3xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] flex flex-col justify-between">
@@ -539,7 +1167,7 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                 <span className="text-xs font-bold text-blue-600 font-mono">
                   {aktifSeciliArac.PlakaVeyaKod}
                 </span>
-                <h3 className="font-bold text-slate-900 text-base">Periyodik Bakım Geçmişi &amp; Belge Yönetimi</h3>
+                <h3 className="font-bold text-slate-900 text-base">Periyodik Bakım Geçmişi &amp; Fatura Belgeleri</h3>
               </div>
               <div className="flex items-center gap-2">
                 {!yeniBakimFormAcik && (
@@ -552,7 +1180,7 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                     className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    <span>+ Yeni Bakım Ekle (Fotoğraf &amp; Belge)</span>
+                    <span>+ Yeni Bakım Ekle (Fotoğraf &amp; Fatura)</span>
                   </button>
                 )}
                 <button
@@ -668,16 +1296,15 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                     </span>
                   </div>
 
-                  {/* Belirgin Yükleme Alanı / Dropzone */}
                   <label className="border-2 border-dashed border-blue-300 hover:border-blue-500 bg-blue-50/50 hover:bg-blue-50 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition text-center group shadow-inner">
                     <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
                       <Upload className="w-5 h-5" />
                     </div>
                     <span className="text-xs font-bold text-blue-700">
-                      Fotoğraf veya Belge Eklemek İçin Tıklayın
+                      Fotoğraf veya Fatura Belgesi Eklemek İçin Tıklayın
                     </span>
                     <span className="text-[11px] text-slate-500 mt-0.5">
-                      Fatura, servis tutanağı, parça veya bakım fotoğrafları (JPG, PNG, PDF - Birden fazla seçebilirsiniz)
+                      Fatura, servis tutanağı, parça veya bakım fotoğrafları (JPG, PNG, PDF)
                     </span>
                     <input
                       type="file"
@@ -879,197 +1506,7 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
         </div>
       )}
 
-      {/* ARAÇ EKLEME / DÜZENLEME MODALI */}
-      {aracFormAcik && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-slate-900 text-base">
-                {duzenlenenArac ? 'Araç / Ekipman Bilgilerini Düzenle' : 'Yeni Araç / Ekipman Kartı'}
-              </h3>
-              <button onClick={() => setAracFormAcik(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const form = e.target as any;
-                const saatTakibi = form.takipTuru.value === 'saat';
-                const durum = form.durum.value;
-
-                const yeni: Arac = {
-                  AracId: duzenlenenArac?.AracId || Date.now(),
-                  PlakaVeyaKod: form.plaka.value,
-                  AracTipi: form.tur.value,
-                  MarkaModel: form.marka.value,
-                  ModelYili: Number(form.yil.value) || new Date().getFullYear(),
-                  SasiSeriNo: form.sasi.value,
-                  ZimmetliKisi: form.zimmet.value,
-                  GuncelKmVeyaSaat: Number(form.guncelSayac.value) || 0,
-                  BakimAraligiKmVeyaSaat: Number(form.aralikSayac.value) || (saatTakibi ? 250 : 10000),
-                  BakimAraligiAy: Number(form.aralikAy.value) || 12,
-                  SonBakimTarihi: form.sonBakimTarihi.value || new Date().toISOString().split('T')[0],
-                  SonBakimKmVeyaSaat: Number(form.guncelSayac.value) || 0,
-                  SaatTakibiMi: saatTakibi,
-                  Durum: durum,
-                  AktifMi: durum !== 'Elden Çıkarıldı / Satıldı',
-                  Notlar: form.notlar.value,
-                  BakimGecmisi: duzenlenenArac?.BakimGecmisi || []
-                };
-
-                onSaveArac(yeni);
-                setAracFormAcik(false);
-              }}
-              className="space-y-3 text-xs sm:text-sm"
-            >
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">Plaka veya Ekipman Kodu:</label>
-                <input
-                  name="plaka"
-                  defaultValue={duzenlenenArac?.PlakaVeyaKod || ''}
-                  placeholder="Örn: 07 RND 45 veya FK-01"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-mono font-bold"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Araç / Ekipman Türü:</label>
-                  <select
-                    name="tur"
-                    defaultValue={duzenlenenArac?.AracTipi || 'Kamyonet / Sevkiyat'}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white"
-                  >
-                    <option value="Kamyonet / Sevkiyat">Kamyonet / Sevkiyat</option>
-                    <option value="Forklift (Dizel/Elektrik)">Forklift (Dizel/Elektrik)</option>
-                    <option value="Otomobil (Binek)">Otomobil (Binek)</option>
-                    <option value="Transpalet / Yükleyici">Transpalet / Yükleyici</option>
-                    <option value="Tavan Vinci / Makine">Tavan Vinci / Makine</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Takip Birimi:</label>
-                  <select
-                    name="takipTuru"
-                    defaultValue={duzenlenenArac?.SaatTakibiMi ? 'saat' : 'km'}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white font-bold"
-                  >
-                    <option value="km">Kilometre (KM)</option>
-                    <option value="saat">Çalışma Saati (Saat)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Marka &amp; Model:</label>
-                  <input
-                    name="marka"
-                    defaultValue={duzenlenenArac?.MarkaModel || ''}
-                    placeholder="Örn: Ford Transit 350L"
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Model Yılı:</label>
-                  <input
-                    name="yil"
-                    defaultValue={duzenlenenArac?.ModelYili || new Date().getFullYear()}
-                    onKeyDown={sadeceRakamGiris}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-mono"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Güncel Sayaç (KM / Saat):</label>
-                  <input
-                    name="guncelSayac"
-                    defaultValue={duzenlenenArac?.GuncelKmVeyaSaat ?? 0}
-                    onKeyDown={sadeceRakamGiris}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-mono font-bold"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Bakım Periyodu (KM / Saat):</label>
-                  <input
-                    name="aralikSayac"
-                    defaultValue={duzenlenenArac?.BakimAraligiKmVeyaSaat ?? 10000}
-                    onKeyDown={sadeceRakamGiris}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-mono"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <PersonelCombobox
-                    name="zimmet"
-                    label="Zimmetli Personel:"
-                    personeller={yerelPersoneller}
-                    value={formZimmetli}
-                    onChange={(val) => setFormZimmetli(val)}
-                    placeholder="Personel seçin veya yazın..."
-                    helperText="Çalışanlarımız arasından seçebilir veya özel yazabilirsiniz."
-                  />
-                </div>
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Durum:</label>
-                  <select
-                    name="durum"
-                    defaultValue={duzenlenenArac?.Durum || 'Faal'}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white"
-                  >
-                    <option value="Faal">Faal</option>
-                    <option value="Bakımda / Serviste">Bakımda / Serviste</option>
-                    <option value="Arızalı">Arızalı</option>
-                    <option value="Elden Çıkarıldı / Satıldı">Elden Çıkarıldı / Satıldı</option>
-                  </select>
-                </div>
-              </div>
-
-              <input type="hidden" name="sasi" defaultValue={duzenlenenArac?.SasiSeriNo || ''} />
-              <input type="hidden" name="aralikAy" defaultValue={duzenlenenArac?.BakimAraligiAy || 12} />
-              <input type="hidden" name="sonBakimTarihi" defaultValue={duzenlenenArac?.SonBakimTarihi || ''} />
-
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">Araç Notları:</label>
-                <textarea
-                  name="notlar"
-                  rows={2}
-                  defaultValue={duzenlenenArac?.Notlar || ''}
-                  placeholder="Kritik parça değişimleri, lastik durumu vb."
-                  className="w-full p-2 rounded-lg border border-slate-200 text-xs"
-                />
-              </div>
-
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAracFormAcik(false)}
-                  className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100 text-xs font-semibold"
-                >
-                  İptal
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm"
-                >
-                  {duzenlenenArac ? 'Değişiklikleri Kaydet' : 'Aracı Ekle'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* LIGHTBOX (FOTOĞRAF VE BELGE TAM BOY İNCELEME) MODALI */}
+      {/* LIGHTBOX MODALI */}
       {lightboxDosya && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
           <div className="relative max-w-4xl w-full bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border border-slate-800 flex flex-col">
