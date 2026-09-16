@@ -14,7 +14,6 @@ import {
   ShieldAlert,
   Users,
   Cog,
-  FileText,
   ShieldCheck,
   Database,
   HardHat
@@ -284,70 +283,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           );
         })()}
       </div>
-
-      {/* 6331 İSG Sağlık Raporu & Eğitim Uyarıları Paneli */}
-      {ozet?.isgUyarilari && ozet.isgUyarilari.length > 0 && (
-        <div className="bg-slate-900 border border-rose-900/60 rounded-2xl p-5 shadow-xl text-white">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center font-bold">
-                <ShieldAlert className="w-5 h-5 text-rose-400 animate-pulse" />
-              </div>
-              <div>
-                <h2 className="font-bold text-white text-sm sm:text-base flex items-center gap-2">
-                  <span>6331 İSG Sağlık Raporu &amp; Eğitim Uyarıları</span>
-                  <span className="px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 text-xs font-bold">
-                    {ozet.isgUyarilari.length} Kritik Durum
-                  </span>
-                </h2>
-                <p className="text-xs text-slate-400">
-                  Eksik veya süresi dolan periyodik sağlık raporları ve İSG sertifikaları
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => onNavigateTab('personel', 'isg')}
-              className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs transition-colors shadow-md flex items-center gap-1.5 self-start sm:self-auto shrink-0"
-            >
-              <span>İSG Paneline Git</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {ozet.isgUyarilari.map((u) => (
-              <div
-                key={u.id}
-                onClick={() => onNavigateTab('personel', 'isg', u.personelId, u.tur.startsWith('saglik') ? 'saglik' : 'egitim')}
-                className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
-                  u.durum === 'Kritik'
-                    ? 'bg-rose-950/50 border-rose-800/80 hover:bg-rose-900/60 text-rose-100'
-                    : 'bg-amber-950/40 border-amber-800/60 hover:bg-amber-900/50 text-amber-100'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="font-bold text-sm text-white flex items-center gap-1.5">
-                    <FileText className="w-4 h-4 text-rose-400 shrink-0" />
-                    <span>{u.personelAdSoyad}</span>
-                  </div>
-                  <span
-                    className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shrink-0 ${
-                      u.durum === 'Kritik'
-                        ? 'bg-rose-600 text-white'
-                        : 'bg-amber-500 text-slate-950'
-                    }`}
-                  >
-                    {u.tur === 'saglik_eksik' ? 'Rapor Eksik' : u.durum === 'Kritik' ? 'Süresi Doldu' : 'Yaklaştı'}
-                  </span>
-                </div>
-                <div className="mt-2 text-xs font-medium leading-relaxed opacity-90">
-                  {u.mesaj}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* İki Sütun: Sol Canlı Bakım Uyarıları | Sağ Ajanda & Hızlı İşlemler */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

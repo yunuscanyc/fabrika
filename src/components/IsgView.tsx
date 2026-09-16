@@ -23,7 +23,7 @@ import {
   Paperclip
 } from 'lucide-react';
 import { KkdZimmetTutanakModal } from './KkdZimmetTutanakModal';
-import { formatTarihTR, tarihAyEkle } from '../utils/dateUtils';
+import { formatTarihTR, tarihAyEkle, getBugunIso, tarihFarkiGun } from '../utils/dateUtils';
 
 interface IsgViewProps {
   personeller: Personel[];
@@ -135,6 +135,10 @@ export const IsgView: React.FC<IsgViewProps> = ({
     BelgeUrl: '',
     BelgeAdi: ''
   });
+
+  // Filtreler
+  const [saglikFiltre, setSaglikFiltre] = useState<'tumu' | 'eksik' | 'suresi_dolan' | 'yaklasan'>('tumu');
+  const [egitimFiltre, setEgitimFiltre] = useState<'tumu' | 'eksik' | 'suresi_dolan' | 'yaklasan'>('tumu');
 
   const handleSaglikDosyaYukle = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -366,6 +370,75 @@ export const IsgView: React.FC<IsgViewProps> = ({
   const seciliPersonel = personeller.find(p => p.PersonelId === seciliPersonelId) || personeller[0] || null;
   const personelZimmetleri = zimmetler.filter(z => z.PersonelId === seciliPersonelId);
 
+  // === 6331 İSG YASAL VE DENETİM ANALİZİ ===
+  const bugunStr = getBugunIso();
+  const aktifPersoneller = personeller.filter(p => p.DurumAktifMi);
+
+  // 1) Sağlık Raporu Eksik veya Süresi Dolanlar
+  const saglikRaporuOlanPersonelIdler = new Set<number>();
+  const saglikRaporuOlanAdlar = new Set<string>();
+  saglikRaporlari.forEach(r => {
+    if (r.PersonelId) saglikRaporuOlanPersonelIdler.add(Number(r.PersonelId));
+    if (r.PersonelAdSoyad) saglikRaporuOlanAdlar.add(String(r.PersonelAdSoyad).toLowerCase().trim());
+  });
+
+  const saglikRaporuEksikPersoneller = aktifPersoneller.filter(p => {
+    const pid = Number(p.PersonelId);
+    const adNorm = (p.AdSoyad || '').toLowerCase().trim();
+    return !saglikRaporuOlanPersonelIdler.has(pid) && !saglikRaporuOlanAdlar.has(adNorm);
+  });
+
+  const saglikSuresiDolanlar: { rapor: PersonelSaglikRaporu; personel?: Personel; kalanGun: number }[] = [];
+  const saglikYaklasanlar: { rapor: PersonelSaglikRaporu; personel?: Personel; kalanGun: number }[] = [];
+
+  saglikRaporlari.forEach(r => {
+    const p = personeller.find(x => x.PersonelId === r.PersonelId);
+    const gelecekTarih = r.GelecekMuayeneTarihi || tarihAyEkle(r.MuayeneTarihi, r.GecerlilikSuresiAy || 12);
+    const kalanGun = tarihFarkiGun(bugunStr, gelecekTarih);
+    if (kalanGun < 0) {
+      saglikSuresiDolanlar.push({ rapor: r, personel: p, kalanGun });
+    } else if (kalanGun <= 30) {
+      saglikYaklasanlar.push({ rapor: r, personel: p, kalanGun });
+    }
+  });
+
+  // 2) İSG Eğitimi Eksik veya Süresi Dolanlar
+  const egitimiOlanPersonelIdler = new Set<number>();
+  const egitimiOlanAdlar = new Set<string>();
+  egitimler.forEach(e => {
+    if (e.PersonelId) egitimiOlanPersonelIdler.add(Number(e.PersonelId));
+    if (e.PersonelAdSoyad) egitimiOlanAdlar.add(String(e.PersonelAdSoyad).toLowerCase().trim());
+  });
+
+  const egitimiEksikPersoneller = aktifPersoneller.filter(p => {
+    const pid = Number(p.PersonelId);
+    const adNorm = (p.AdSoyad || '').toLowerCase().trim();
+    return !egitimiOlanPersonelIdler.has(pid) && !egitimiOlanAdlar.has(adNorm);
+  });
+
+  const egitimSuresiDolanlar: { egitim: IsgEgitimi; personel?: Personel; kalanGun: number }[] = [];
+  const egitimYaklasanlar: { egitim: IsgEgitimi; personel?: Personel; kalanGun: number }[] = [];
+
+  egitimler.forEach(e => {
+    const p = personeller.find(x => x.PersonelId === e.PersonelId);
+    const gelecekTarih = e.GelecekEgitimTarihi || tarihAyEkle(e.EgitimTarihi, (e.GecerlilikYil || 2) * 12);
+    const kalanGun = tarihFarkiGun(bugunStr, gelecekTarih);
+    if (kalanGun < 0) {
+      egitimSuresiDolanlar.push({ egitim: e, personel: p, kalanGun });
+    } else if (kalanGun <= 30) {
+      egitimYaklasanlar.push({ egitim: e, personel: p, kalanGun });
+    }
+  });
+
+  // 3) KKD Zimmeti Olmayan Personeller
+  const zimmetiOlanPersonelIdler = new Set<number>();
+  zimmetler.forEach(z => {
+    if (z.PersonelId) zimmetiOlanPersonelIdler.add(Number(z.PersonelId));
+  });
+  const kkdEksikPersoneller = aktifPersoneller.filter(p => !zimmetiOlanPersonelIdler.has(Number(p.PersonelId)));
+
+  const toplamKritikEksikler = saglikRaporuEksikPersoneller.length + saglikSuresiDolanlar.length + egitimiEksikPersoneller.length + egitimSuresiDolanlar.length;
+
   const handleYeniKkdAc = () => {
     setKkdChecklist(varsayilanKkdListesi.map(item => ({ ...item })));
     setKkdFormTarih(new Date().toISOString().split('T')[0]);
@@ -500,7 +573,12 @@ export const IsgView: React.FC<IsgViewProps> = ({
             }`}
           >
             <Package className="w-3.5 h-3.5" />
-            KKD Zimmet Takibi
+            <span>KKD Zimmet</span>
+            {kkdEksikPersoneller.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.2 rounded-full bg-amber-950 text-amber-300 border border-amber-800 text-[10px] font-bold">
+                {kkdEksikPersoneller.length}
+              </span>
+            )}
           </button>
 
           <button
@@ -510,7 +588,12 @@ export const IsgView: React.FC<IsgViewProps> = ({
             }`}
           >
             <HeartPulse className="w-3.5 h-3.5" />
-            Sağlık Raporları
+            <span>Sağlık Raporları</span>
+            {saglikRaporuEksikPersoneller.length + saglikSuresiDolanlar.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.2 rounded-full bg-rose-950 text-rose-300 border border-rose-800 text-[10px] font-bold">
+                {saglikRaporuEksikPersoneller.length + saglikSuresiDolanlar.length}
+              </span>
+            )}
           </button>
 
           <button
@@ -520,10 +603,194 @@ export const IsgView: React.FC<IsgViewProps> = ({
             }`}
           >
             <GraduationCap className="w-3.5 h-3.5" />
-            İSG Eğitimleri
+            <span>İSG Eğitimleri</span>
+            {egitimiEksikPersoneller.length + egitimSuresiDolanlar.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.2 rounded-full bg-blue-950 text-blue-300 border border-blue-800 text-[10px] font-bold">
+                {egitimiEksikPersoneller.length + egitimSuresiDolanlar.length}
+              </span>
+            )}
           </button>
         </div>
       </div>
+
+      {/* 6331 İSG Yasal Denetim & Eksiklik Merkezi (Yalnızca İSG Panelinde Görünür) */}
+      {toplamKritikEksikler > 0 && (
+        <div className="bg-slate-900 border border-rose-800/60 rounded-xl p-4 shadow-lg text-white space-y-3">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-800">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center font-bold shrink-0">
+                <ShieldAlert className="w-4 h-4 text-rose-400" />
+              </div>
+              <div>
+                <h2 className="font-bold text-white text-sm flex items-center gap-2">
+                  <span>6331 İSG Yasal Uygunluk &amp; Eksik Kayıt Takibi</span>
+                  <span className="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[11px] font-bold">
+                    {toplamKritikEksikler} Uyarı
+                  </span>
+                </h2>
+                <p className="text-[11px] text-slate-400">
+                  Fabrika personellerinin 6331 sayılı kanuna göre eksik veya süresi dolan muayene ve eğitimleri
+                </p>
+              </div>
+            </div>
+
+            {/* Hızlı Filtre Butonları */}
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+              {saglikRaporuEksikPersoneller.length > 0 && (
+                <button
+                  onClick={() => { setSekme('saglik'); setSaglikFiltre('eksik'); }}
+                  className="px-2.5 py-1 rounded-lg bg-rose-950/90 hover:bg-rose-900 border border-rose-800 text-rose-300 text-xs font-medium transition flex items-center gap-1"
+                >
+                  <HeartPulse className="w-3 h-3 text-rose-400" />
+                  <span>{saglikRaporuEksikPersoneller.length} Sağlık Raporu Eksik</span>
+                </button>
+              )}
+              {saglikSuresiDolanlar.length > 0 && (
+                <button
+                  onClick={() => { setSekme('saglik'); setSaglikFiltre('suresi_dolan'); }}
+                  className="px-2.5 py-1 rounded-lg bg-rose-950/90 hover:bg-rose-900 border border-rose-800 text-rose-300 text-xs font-medium transition flex items-center gap-1"
+                >
+                  <AlertTriangle className="w-3 h-3 text-rose-400" />
+                  <span>{saglikSuresiDolanlar.length} Rapor Süresi Doldu</span>
+                </button>
+              )}
+              {egitimiEksikPersoneller.length > 0 && (
+                <button
+                  onClick={() => { setSekme('egitim'); setEgitimFiltre('eksik'); }}
+                  className="px-2.5 py-1 rounded-lg bg-blue-950/90 hover:bg-blue-900 border border-blue-800 text-blue-300 text-xs font-medium transition flex items-center gap-1"
+                >
+                  <GraduationCap className="w-3 h-3 text-blue-400" />
+                  <span>{egitimiEksikPersoneller.length} İSG Eğitimi Eksik</span>
+                </button>
+              )}
+              {egitimSuresiDolanlar.length > 0 && (
+                <button
+                  onClick={() => { setSekme('egitim'); setEgitimFiltre('suresi_dolan'); }}
+                  className="px-2.5 py-1 rounded-lg bg-blue-950/90 hover:bg-blue-900 border border-blue-800 text-blue-300 text-xs font-medium transition flex items-center gap-1"
+                >
+                  <AlertTriangle className="w-3 h-3 text-blue-400" />
+                  <span>{egitimSuresiDolanlar.length} Eğitim Süresi Doldu</span>
+                </button>
+              )}
+              {kkdEksikPersoneller.length > 0 && (
+                <button
+                  onClick={() => setSekme('kkd')}
+                  className="px-2.5 py-1 rounded-lg bg-amber-950/90 hover:bg-amber-900 border border-amber-800 text-amber-300 text-xs font-medium transition flex items-center gap-1"
+                >
+                  <Package className="w-3 h-3 text-amber-400" />
+                  <span>{kkdEksikPersoneller.length} KKD Zimmeti Yok</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Eksik Personeller İçin Hızlı İşlem Kartları */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-44 overflow-y-auto pr-1">
+            {saglikRaporuEksikPersoneller.map(p => (
+              <div
+                key={`saglik-eksik-${p.PersonelId}`}
+                className="bg-slate-950 border border-rose-900/60 rounded-lg p-2 flex items-center justify-between gap-2"
+              >
+                <div className="min-w-0">
+                  <div className="font-semibold text-xs text-white truncate">{p.AdSoyad}</div>
+                  <div className="text-[10px] text-rose-400 font-medium truncate">Sağlık Raporu Kaydı Yok</div>
+                </div>
+                <button
+                  onClick={() => {
+                    setSekme('saglik');
+                    setDuzenlenecekSaglik(null);
+                    setSaglikForm({
+                      PersonelId: p.PersonelId,
+                      MuayeneTuru: 'Periyodik Sağlık Muayenesi',
+                      MuayeneTarihi: new Date().toISOString().split('T')[0],
+                      GecerlilikSuresiAy: 12,
+                      SaglikKurulusu: 'Yetkili OSGB Sağlık Birimi',
+                      Sonuc: 'Çalışmaya Uygundur',
+                      RaporNo: '',
+                      Aciklama: '',
+                      BelgeUrl: '',
+                      BelgeAdi: ''
+                    });
+                    setSaglikModalAcik(true);
+                  }}
+                  className="px-2 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white font-bold text-[10px] transition shrink-0"
+                >
+                  + Rapor Ekle
+                </button>
+              </div>
+            ))}
+
+            {saglikSuresiDolanlar.map(s => (
+              <div
+                key={`saglik-sure-${s.rapor.RaporId}`}
+                className="bg-slate-950 border border-rose-900/60 rounded-lg p-2 flex items-center justify-between gap-2"
+              >
+                <div className="min-w-0">
+                  <div className="font-semibold text-xs text-white truncate">{s.personel?.AdSoyad || `ID: ${s.rapor.PersonelId}`}</div>
+                  <div className="text-[10px] text-rose-400 font-medium truncate">Rapor süresi {Math.abs(s.kalanGun)} gün önce doldu</div>
+                </div>
+                <button
+                  onClick={() => handleSaglikModalAc(s.rapor)}
+                  className="px-2 py-1 rounded bg-rose-700 hover:bg-rose-600 text-white font-bold text-[10px] transition shrink-0"
+                >
+                  Yenile
+                </button>
+              </div>
+            ))}
+
+            {egitimiEksikPersoneller.map(p => (
+              <div
+                key={`egitim-eksik-${p.PersonelId}`}
+                className="bg-slate-950 border border-blue-900/60 rounded-lg p-2 flex items-center justify-between gap-2"
+              >
+                <div className="min-w-0">
+                  <div className="font-semibold text-xs text-white truncate">{p.AdSoyad}</div>
+                  <div className="text-[10px] text-blue-400 font-medium truncate">Temel İSG Eğitimi Yok</div>
+                </div>
+                <button
+                  onClick={() => {
+                    setSekme('egitim');
+                    setDuzenlenecekEgitim(null);
+                    setEgitimForm({
+                      PersonelId: p.PersonelId,
+                      EgitimKonusu: 'Temel İSG Eğitimi (Tehlikeli Sınıf)',
+                      EgiticiAdSoyad: 'İSG Uzmanı - OSGB',
+                      EgitimTarihi: new Date().toISOString().split('T')[0],
+                      SureSaat: 12,
+                      GecerlilikYil: 2,
+                      Aciklama: '',
+                      BelgeUrl: '',
+                      BelgeAdi: ''
+                    });
+                    setEgitimModalAcik(true);
+                  }}
+                  className="px-2 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-bold text-[10px] transition shrink-0"
+                >
+                  + Eğitim Ekle
+                </button>
+              </div>
+            ))}
+
+            {egitimSuresiDolanlar.map(e => (
+              <div
+                key={`egitim-sure-${e.egitim.EgitimId}`}
+                className="bg-slate-950 border border-blue-900/60 rounded-lg p-2 flex items-center justify-between gap-2"
+              >
+                <div className="min-w-0">
+                  <div className="font-semibold text-xs text-white truncate">{e.personel?.AdSoyad || `ID: ${e.egitim.PersonelId}`}</div>
+                  <div className="text-[10px] text-blue-400 font-medium truncate">Eğitim süresi {Math.abs(e.kalanGun)} gün önce doldu</div>
+                </div>
+                <button
+                  onClick={() => handleEgitimModalAc(e.egitim)}
+                  className="px-2 py-1 rounded bg-blue-700 hover:bg-blue-600 text-white font-bold text-[10px] transition shrink-0"
+                >
+                  Yenile
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* KKD Sekmesi */}
       {sekme === 'kkd' && (
@@ -739,83 +1006,227 @@ export const IsgView: React.FC<IsgViewProps> = ({
             </button>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-300">
-              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
-                <tr>
-                  <th className="py-3 px-4">Personel</th>
-                  <th className="py-3 px-3">Muayene / Rapor Türü</th>
-                  <th className="py-3 px-3">Muayene Tarihi</th>
-                  <th className="py-3 px-3 text-center">Geçerlilik</th>
-                  <th className="py-3 px-3 text-center">Gelecek Muayene</th>
-                  <th className="py-3 px-3 text-center">Sonuç</th>
-                  <th className="py-3 px-3 text-center">Belge</th>
-                  <th className="py-3 px-4">Açıklama / Hekim Notu</th>
-                  <th className="py-3 px-3 text-right">İşlemler</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {saglikRaporlari.map((r) => {
-                  const p = personeller.find(x => x.PersonelId === r.PersonelId);
-                  const gelecekTarih = r.GelecekMuayeneTarihi || tarihAyEkle(r.MuayeneTarihi, r.GecerlilikSuresiAy || 12);
-                  return (
-                    <tr key={r.RaporId} className="hover:bg-slate-800/30">
-                      <td className="py-3 px-4 font-semibold text-white">{p?.AdSoyad || `ID: ${r.PersonelId}`}</td>
-                      <td className="py-3 px-3 font-medium text-rose-300">{r.MuayeneTuru || r.RaporTuru || 'Periyodik Sağlık Muayenesi'}</td>
-                      <td className="py-3 px-3 font-mono text-slate-400">{formatTarihTR(r.MuayeneTarihi)}</td>
-                      <td className="py-3 px-3 text-center font-semibold text-amber-400">{r.GecerlilikSuresiAy || 12} Ay</td>
-                      <td className="py-3 px-3 font-mono text-amber-300 font-bold">{formatTarihTR(gelecekTarih)}</td>
-                      <td className="py-3 px-3 text-center">
-                        <span className={`px-2.5 py-0.5 rounded-full font-semibold text-[11px] border ${
-                          r.Sonuc === 'Çalışamaz'
-                            ? 'bg-rose-950 text-rose-400 border-rose-800'
-                            : r.Sonuc === 'Kısıtlı Çalışabilir'
-                            ? 'bg-amber-950 text-amber-400 border-amber-800'
-                            : 'bg-emerald-950 text-emerald-400 border-emerald-800'
-                        }`}>
-                          {r.Sonuc || 'Çalışmaya Uygundur'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 text-center">
-                        {r.BelgeUrl ? (
-                          <button
-                            type="button"
-                            onClick={() => setLightboxDosya({ DosyaAdi: r.BelgeAdi || `${p?.AdSoyad || 'Personel'} - Sağlık Raporu`, DosyaIcerigi: r.BelgeUrl! })}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-800 text-rose-300 hover:text-white font-medium text-[11px] transition shadow-xs"
-                            title="Rapor Belgesini Önizle"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            <span>Önizle</span>
-                          </button>
-                        ) : (
-                          <span className="text-slate-600 text-xs">-</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-slate-400 max-w-xs truncate">{r.Aciklama || '-'}</td>
-                      <td className="py-3 px-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={() => handleSaglikModalAc(r)}
-                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-400 hover:text-blue-300 transition-colors"
-                            title="Düzenle"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleSaglikSil(r.RaporId)}
-                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 text-rose-400 hover:text-rose-300 transition-colors"
-                            title="Sil"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+          {/* Durum & Filtre Butonları */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setSaglikFiltre('tumu')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                saglikFiltre === 'tumu'
+                  ? 'bg-rose-600 text-white shadow-sm'
+                  : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+              }`}
+            >
+              Tüm Raporlar ({saglikRaporlari.length})
+            </button>
+            <button
+              onClick={() => setSaglikFiltre('eksik')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 ${
+                saglikFiltre === 'eksik'
+                  ? 'bg-rose-950 text-rose-300 border border-rose-600'
+                  : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+              }`}
+            >
+              <HeartPulse className="w-3.5 h-3.5 text-rose-400" />
+              <span>Raporu Eksik Çalışanlar</span>
+              {saglikRaporuEksikPersoneller.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-rose-600 text-white text-[10px] font-bold">
+                  {saglikRaporuEksikPersoneller.length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setSaglikFiltre('suresi_dolan')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 ${
+                saglikFiltre === 'suresi_dolan'
+                  ? 'bg-rose-950 text-rose-300 border border-rose-600'
+                  : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+              }`}
+            >
+              <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+              <span>Süresi Dolanlar</span>
+              {saglikSuresiDolanlar.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-rose-600 text-white text-[10px] font-bold">
+                  {saglikSuresiDolanlar.length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setSaglikFiltre('yaklasan')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 ${
+                saglikFiltre === 'yaklasan'
+                  ? 'bg-amber-950 text-amber-300 border border-amber-600'
+                  : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5 text-amber-400" />
+              <span>Yenilemesi Yaklaşanlar</span>
+              {saglikYaklasanlar.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-amber-600 text-white text-[10px] font-bold">
+                  {saglikYaklasanlar.length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Eksik Sağlık Raporu Görünümü */}
+          {saglikFiltre === 'eksik' ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-300">
+                <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+                  <tr>
+                    <th className="py-3 px-4">Personel</th>
+                    <th className="py-3 px-3">Departman / Görev</th>
+                    <th className="py-3 px-3">İşe Giriş Tarihi</th>
+                    <th className="py-3 px-3 text-center">Yasal Uyum Durumu</th>
+                    <th className="py-3 px-3 text-right">İşlem</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {saglikRaporuEksikPersoneller.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-10 text-center text-emerald-400 font-semibold">
+                        ✓ Tüm aktif çalışanların sağlık muayene raporu kaydı mevcuttur.
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  ) : (
+                    saglikRaporuEksikPersoneller.map(p => (
+                      <tr key={p.PersonelId} className="hover:bg-slate-800/30">
+                        <td className="py-3 px-4 font-semibold text-white">{p.AdSoyad}</td>
+                        <td className="py-3 px-3 text-slate-300">{p.Departman || p.Gorev || '-'}</td>
+                        <td className="py-3 px-3 font-mono text-slate-400">{formatTarihTR(p.IseGirisTarihi)}</td>
+                        <td className="py-3 px-3 text-center">
+                          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-950 text-rose-300 border border-rose-800">
+                            6331 Sağlık Raporu Eksik
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          <button
+                            onClick={() => {
+                              setDuzenlenecekSaglik(null);
+                              setSaglikForm({
+                                PersonelId: p.PersonelId,
+                                MuayeneTuru: 'Periyodik Sağlık Muayenesi',
+                                MuayeneTarihi: new Date().toISOString().split('T')[0],
+                                GecerlilikSuresiAy: 12,
+                                SaglikKurulusu: 'Yetkili OSGB Sağlık Birimi',
+                                Sonuc: 'Çalışmaya Uygundur',
+                                RaporNo: '',
+                                Aciklama: '',
+                                BelgeUrl: '',
+                                BelgeAdi: ''
+                              });
+                              setSaglikModalAcik(true);
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs transition"
+                          >
+                            + Rapor Tanımla
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-300">
+                <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+                  <tr>
+                    <th className="py-3 px-4">Personel</th>
+                    <th className="py-3 px-3">Muayene / Rapor Türü</th>
+                    <th className="py-3 px-3">Muayene Tarihi</th>
+                    <th className="py-3 px-3 text-center">Geçerlilik</th>
+                    <th className="py-3 px-3 text-center">Gelecek Muayene</th>
+                    <th className="py-3 px-3 text-center">Sonuç</th>
+                    <th className="py-3 px-3 text-center">Belge</th>
+                    <th className="py-3 px-4">Açıklama / Hekim Notu</th>
+                    <th className="py-3 px-3 text-right">İşlemler</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {saglikRaporlari
+                    .filter((r) => {
+                      if (saglikFiltre === 'tumu') return true;
+                      const gelecekTarih = r.GelecekMuayeneTarihi || tarihAyEkle(r.MuayeneTarihi, r.GecerlilikSuresiAy || 12);
+                      const kalanGun = tarihFarkiGun(bugunStr, gelecekTarih);
+                      if (saglikFiltre === 'suresi_dolan') return kalanGun < 0;
+                      if (saglikFiltre === 'yaklasan') return kalanGun >= 0 && kalanGun <= 30;
+                      return true;
+                    })
+                    .map((r) => {
+                      const p = personeller.find(x => x.PersonelId === r.PersonelId);
+                      const gelecekTarih = r.GelecekMuayeneTarihi || tarihAyEkle(r.MuayeneTarihi, r.GecerlilikSuresiAy || 12);
+                      const kalanGun = tarihFarkiGun(bugunStr, gelecekTarih);
+                      return (
+                        <tr key={r.RaporId} className="hover:bg-slate-800/30">
+                          <td className="py-3 px-4 font-semibold text-white">{p?.AdSoyad || `ID: ${r.PersonelId}`}</td>
+                          <td className="py-3 px-3 font-medium text-rose-300">{r.MuayeneTuru || r.RaporTuru || 'Periyodik Sağlık Muayenesi'}</td>
+                          <td className="py-3 px-3 font-mono text-slate-400">{formatTarihTR(r.MuayeneTarihi)}</td>
+                          <td className="py-3 px-3 text-center font-semibold text-amber-400">{r.GecerlilikSuresiAy || 12} Ay</td>
+                          <td className="py-3 px-3 text-center font-mono font-bold">
+                            <span className={kalanGun < 0 ? 'text-rose-400' : kalanGun <= 30 ? 'text-amber-400' : 'text-slate-200'}>
+                              {formatTarihTR(gelecekTarih)}
+                            </span>
+                            {kalanGun < 0 && (
+                              <div className="text-[10px] text-rose-400 font-bold">Süresi Doldu ({Math.abs(kalanGun)}g)</div>
+                            )}
+                            {kalanGun >= 0 && kalanGun <= 30 && (
+                              <div className="text-[10px] text-amber-400 font-bold">{kalanGun} gün kaldı</div>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span className={`px-2.5 py-0.5 rounded-full font-semibold text-[11px] border ${
+                              r.Sonuc === 'Çalışamaz'
+                                ? 'bg-rose-950 text-rose-400 border-rose-800'
+                                : r.Sonuc === 'Kısıtlı Çalışabilir'
+                                ? 'bg-amber-950 text-amber-400 border-amber-800'
+                                : 'bg-emerald-950 text-emerald-400 border-emerald-800'
+                            }`}>
+                              {r.Sonuc || 'Çalışmaya Uygundur'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            {r.BelgeUrl ? (
+                              <button
+                                type="button"
+                                onClick={() => setLightboxDosya({ DosyaAdi: r.BelgeAdi || `${p?.AdSoyad || 'Personel'} - Sağlık Raporu`, DosyaIcerigi: r.BelgeUrl! })}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-800 text-rose-300 hover:text-white font-medium text-[11px] transition shadow-xs"
+                                title="Rapor Belgesini Önizle"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>Önizle</span>
+                              </button>
+                            ) : (
+                              <span className="text-slate-600 text-xs">-</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-slate-400 max-w-xs truncate">{r.Aciklama || '-'}</td>
+                          <td className="py-3 px-3 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => handleSaglikModalAc(r)}
+                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-400 hover:text-blue-300 transition-colors"
+                                title="Düzenle"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleSaglikSil(r.RaporId)}
+                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 text-rose-400 hover:text-rose-300 transition-colors"
+                                title="Sil"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -841,75 +1252,218 @@ export const IsgView: React.FC<IsgViewProps> = ({
             </button>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-300">
-              <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
-                <tr>
-                  <th className="py-3 px-4">Personel</th>
-                  <th className="py-3 px-4">Eğitim Konusu</th>
-                  <th className="py-3 px-3">Eğitici / Kurum</th>
-                  <th className="py-3 px-3">Eğitim Tarihi</th>
-                  <th className="py-3 px-2 text-center">Süre</th>
-                  <th className="py-3 px-2 text-center">Geçerlilik</th>
-                  <th className="py-3 px-3">Gelecek Yenileme</th>
-                  <th className="py-3 px-3 text-center">Sertifika / Belge</th>
-                  <th className="py-3 px-4">Açıklama</th>
-                  <th className="py-3 px-3 text-right">İşlemler</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {egitimler.map((e) => {
-                  const p = personeller.find(x => x.PersonelId === e.PersonelId);
-                  const gelecekEgitimTarihi = tarihAyEkle(e.EgitimTarihi, (e.GecerlilikYil || 2) * 12);
-                  return (
-                    <tr key={e.EgitimId} className="hover:bg-slate-800/30">
-                      <td className="py-3 px-4 font-semibold text-white">{p?.AdSoyad || `ID: ${e.PersonelId || '-'}`}</td>
-                      <td className="py-3 px-4 font-semibold text-blue-300">{e.EgitimKonusu || (e as any).EgitimAdi}</td>
-                      <td className="py-3 px-3 text-slate-300">{e.EgiticiAdSoyad || (e as any).EgitimciKurum}</td>
-                      <td className="py-3 px-3 font-mono text-slate-400">{formatTarihTR(e.EgitimTarihi)}</td>
-                      <td className="py-3 px-2 text-center font-bold text-white">{e.SureSaat || (e as any).EgitimSuresiSaat} Saat</td>
-                      <td className="py-3 px-2 text-center font-bold text-amber-400">{e.GecerlilikYil || 2} Yıl</td>
-                      <td className="py-3 px-3 font-mono text-blue-300 font-bold">{formatTarihTR(gelecekEgitimTarihi)}</td>
-                      <td className="py-3 px-3 text-center">
-                        {(e as any).BelgeUrl ? (
-                          <button
-                            type="button"
-                            onClick={() => setLightboxDosya({ DosyaAdi: (e as any).BelgeAdi || `${p?.AdSoyad || 'Personel'} - İSG Eğitimi Sertifikası`, DosyaIcerigi: (e as any).BelgeUrl! })}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-950/80 hover:bg-blue-900 border border-blue-800 text-blue-300 hover:text-white font-medium text-[11px] transition shadow-xs"
-                            title="Eğitim Belgesini Önizle"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            <span>Önizle</span>
-                          </button>
-                        ) : (
-                          <span className="text-slate-600 text-xs">-</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-slate-400 max-w-xs truncate">{e.Aciklama || '-'}</td>
-                      <td className="py-3 px-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={() => handleEgitimModalAc(e)}
-                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-400 hover:text-blue-300 transition-colors"
-                            title="Düzenle"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleEgitimSil(e.EgitimId)}
-                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 text-rose-400 hover:text-rose-300 transition-colors"
-                            title="Sil"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+          {/* Durum & Filtre Butonları */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setEgitimFiltre('tumu')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                egitimFiltre === 'tumu'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+              }`}
+            >
+              Tüm Eğitimler ({egitimler.length})
+            </button>
+            <button
+              onClick={() => setEgitimFiltre('eksik')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 ${
+                egitimFiltre === 'eksik'
+                  ? 'bg-blue-950 text-blue-300 border border-blue-600'
+                  : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+              }`}
+            >
+              <GraduationCap className="w-3.5 h-3.5 text-blue-400" />
+              <span>Eğitimi Eksik Çalışanlar</span>
+              {egitimiEksikPersoneller.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-blue-600 text-white text-[10px] font-bold">
+                  {egitimiEksikPersoneller.length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setEgitimFiltre('suresi_dolan')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 ${
+                egitimFiltre === 'suresi_dolan'
+                  ? 'bg-blue-950 text-blue-300 border border-blue-600'
+                  : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+              }`}
+            >
+              <AlertTriangle className="w-3.5 h-3.5 text-blue-400" />
+              <span>Süresi Dolanlar</span>
+              {egitimSuresiDolanlar.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-blue-600 text-white text-[10px] font-bold">
+                  {egitimSuresiDolanlar.length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setEgitimFiltre('yaklasan')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 ${
+                egitimFiltre === 'yaklasan'
+                  ? 'bg-amber-950 text-amber-300 border border-amber-600'
+                  : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5 text-amber-400" />
+              <span>Yenilemesi Yaklaşanlar</span>
+              {egitimYaklasanlar.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-amber-600 text-white text-[10px] font-bold">
+                  {egitimYaklasanlar.length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Eksik İSG Eğitimi Görünümü */}
+          {egitimFiltre === 'eksik' ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-300">
+                <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+                  <tr>
+                    <th className="py-3 px-4">Personel</th>
+                    <th className="py-3 px-3">Departman / Görev</th>
+                    <th className="py-3 px-3">İşe Giriş Tarihi</th>
+                    <th className="py-3 px-3 text-center">Yasal Uyum Durumu</th>
+                    <th className="py-3 px-3 text-right">İşlem</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {egitimiEksikPersoneller.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-10 text-center text-emerald-400 font-semibold">
+                        ✓ Tüm aktif çalışanların temel İSG eğitim kaydı mevcuttur.
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  ) : (
+                    egitimiEksikPersoneller.map(p => (
+                      <tr key={p.PersonelId} className="hover:bg-slate-800/30">
+                        <td className="py-3 px-4 font-semibold text-white">{p.AdSoyad}</td>
+                        <td className="py-3 px-3 text-slate-300">{p.Departman || p.Gorev || '-'}</td>
+                        <td className="py-3 px-3 font-mono text-slate-400">{formatTarihTR(p.IseGirisTarihi)}</td>
+                        <td className="py-3 px-3 text-center">
+                          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-950 text-blue-300 border border-blue-800">
+                            Temel İSG Eğitimi Eksik
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          <button
+                            onClick={() => {
+                              setDuzenlenecekEgitim(null);
+                              setEgitimForm({
+                                PersonelId: p.PersonelId,
+                                EgitimKonusu: 'Temel İSG Eğitimi (Tehlikeli Sınıf)',
+                                EgiticiAdSoyad: 'İSG Uzmanı - OSGB',
+                                EgitimTarihi: new Date().toISOString().split('T')[0],
+                                SureSaat: 12,
+                                GecerlilikYil: 2,
+                                Aciklama: '',
+                                BelgeUrl: '',
+                                BelgeAdi: ''
+                              });
+                              setEgitimModalAcik(true);
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition"
+                          >
+                            + Eğitim Tanımla
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-300">
+                <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+                  <tr>
+                    <th className="py-3 px-4">Personel</th>
+                    <th className="py-3 px-4">Eğitim Konusu</th>
+                    <th className="py-3 px-3">Eğitici / Kurum</th>
+                    <th className="py-3 px-3">Eğitim Tarihi</th>
+                    <th className="py-3 px-2 text-center">Süre</th>
+                    <th className="py-3 px-2 text-center">Geçerlilik</th>
+                    <th className="py-3 px-3 text-center">Gelecek Yenileme</th>
+                    <th className="py-3 px-3 text-center">Sertifika / Belge</th>
+                    <th className="py-3 px-4">Açıklama</th>
+                    <th className="py-3 px-3 text-right">İşlemler</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {egitimler
+                    .filter((e) => {
+                      if (egitimFiltre === 'tumu') return true;
+                      const gelecekEgitimTarihi = tarihAyEkle(e.EgitimTarihi, (e.GecerlilikYil || 2) * 12);
+                      const kalanGun = tarihFarkiGun(bugunStr, gelecekEgitimTarihi);
+                      if (egitimFiltre === 'suresi_dolan') return kalanGun < 0;
+                      if (egitimFiltre === 'yaklasan') return kalanGun >= 0 && kalanGun <= 30;
+                      return true;
+                    })
+                    .map((e) => {
+                      const p = personeller.find(x => x.PersonelId === e.PersonelId);
+                      const gelecekEgitimTarihi = tarihAyEkle(e.EgitimTarihi, (e.GecerlilikYil || 2) * 12);
+                      const kalanGun = tarihFarkiGun(bugunStr, gelecekEgitimTarihi);
+                      return (
+                        <tr key={e.EgitimId} className="hover:bg-slate-800/30">
+                          <td className="py-3 px-4 font-semibold text-white">{p?.AdSoyad || `ID: ${e.PersonelId || '-'}`}</td>
+                          <td className="py-3 px-4 font-semibold text-blue-300">{e.EgitimKonusu || (e as any).EgitimAdi}</td>
+                          <td className="py-3 px-3 text-slate-300">{e.EgiticiAdSoyad || (e as any).EgitimciKurum}</td>
+                          <td className="py-3 px-3 font-mono text-slate-400">{formatTarihTR(e.EgitimTarihi)}</td>
+                          <td className="py-3 px-2 text-center font-bold text-white">{e.SureSaat || (e as any).EgitimSuresiSaat} Saat</td>
+                          <td className="py-3 px-2 text-center font-bold text-amber-400">{e.GecerlilikYil || 2} Yıl</td>
+                          <td className="py-3 px-3 text-center font-mono font-bold">
+                            <span className={kalanGun < 0 ? 'text-rose-400' : kalanGun <= 30 ? 'text-amber-400' : 'text-blue-300'}>
+                              {formatTarihTR(gelecekEgitimTarihi)}
+                            </span>
+                            {kalanGun < 0 && (
+                              <div className="text-[10px] text-rose-400 font-bold">Süresi Doldu ({Math.abs(kalanGun)}g)</div>
+                            )}
+                            {kalanGun >= 0 && kalanGun <= 30 && (
+                              <div className="text-[10px] text-amber-400 font-bold">{kalanGun} gün kaldı</div>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            {(e as any).BelgeUrl ? (
+                              <button
+                                type="button"
+                                onClick={() => setLightboxDosya({ DosyaAdi: (e as any).BelgeAdi || `${p?.AdSoyad || 'Personel'} - İSG Eğitimi Sertifikası`, DosyaIcerigi: (e as any).BelgeUrl! })}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-950/80 hover:bg-blue-900 border border-blue-800 text-blue-300 hover:text-white font-medium text-[11px] transition shadow-xs"
+                                title="Eğitim Belgesini Önizle"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>Önizle</span>
+                              </button>
+                            ) : (
+                              <span className="text-slate-600 text-xs">-</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-slate-400 max-w-xs truncate">{e.Aciklama || '-'}</td>
+                          <td className="py-3 px-3 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => handleEgitimModalAc(e)}
+                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-400 hover:text-blue-300 transition-colors"
+                                title="Düzenle"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleEgitimSil(e.EgitimId)}
+                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 text-rose-400 hover:text-rose-300 transition-colors"
+                                title="Sil"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
