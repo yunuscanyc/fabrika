@@ -317,8 +317,15 @@ function normalizeArac(row: any) {
     SonBakimTarihi: formatDate(getProp(row, 'SonBakimTarihi', 'sonbakimtarihi')) || getBugunStr(),
     SonBakimKmVeyaSaat: Number(getProp(row, 'SonBakimKmVeyaSaat', 'sonbakimkmveyasaat') || 0),
     SaatTakibiMi: Boolean(getProp(row, 'SaatTakibiMi', 'saattakibimi')),
-    MuayeneBitisTarihi: formatDate(getProp(row, 'MuayeneBitisTarihi', 'muayenebitistarihi')),
+    MuayeneTarihi: formatDate(getProp(row, 'MuayeneTarihi', 'muayenetarihi', 'sonmuayenetarihi')),
+    MuayeneGecerlilikYil: Number(getProp(row, 'MuayeneGecerlilikYil', 'muayenegecerlilikyil', 'muayenesuresi') || 1),
+    MuayeneBitisTarihi: formatDate(getProp(row, 'MuayeneBitisTarihi', 'muayenebitistarihi', 'muayenegecerliliktarihi')),
+    SigortaSirketi: String(getProp(row, 'SigortaSirketi', 'sigortasirketi', 'sigortafirma') || ''),
+    SigortaPoliceNo: String(getProp(row, 'SigortaPoliceNo', 'sigortapoliceno', 'sigortano') || ''),
     SigortaBitisTarihi: formatDate(getProp(row, 'SigortaBitisTarihi', 'sigortabitistarihi')),
+    KaskoSirketi: String(getProp(row, 'KaskoSirketi', 'kaskosirketi', 'kaskofirma') || ''),
+    KaskoPoliceNo: String(getProp(row, 'KaskoPoliceNo', 'kaskopoliceno', 'kaskono') || ''),
+    KaskoBitisTarihi: formatDate(getProp(row, 'KaskoBitisTarihi', 'kaskobitistarihi')),
     Durum: durum,
     AktifMi: aktif !== undefined ? Boolean(aktif) : durum !== 'Elden Çıkarıldı / Satıldı',
     Notlar: String(getProp(row, 'Notlar', 'notlar') || ''),
@@ -2221,6 +2228,18 @@ async function checkDbConnection() {
         if (!hasCol('AktifMi') && !hasCol('aktifmi')) {
           await pool.query(`ALTER TABLE ${detectedTables.araclar} ADD COLUMN IF NOT EXISTS "AktifMi" BOOLEAN DEFAULT true`);
         }
+        await pool.query(`
+          ALTER TABLE ${detectedTables.araclar} 
+          ADD COLUMN IF NOT EXISTS "MuayeneTarihi" VARCHAR(50),
+          ADD COLUMN IF NOT EXISTS "MuayeneGecerlilikYil" INT DEFAULT 1,
+          ADD COLUMN IF NOT EXISTS "MuayeneBitisTarihi" VARCHAR(50),
+          ADD COLUMN IF NOT EXISTS "SigortaSirketi" VARCHAR(150) DEFAULT '',
+          ADD COLUMN IF NOT EXISTS "SigortaPoliceNo" VARCHAR(100) DEFAULT '',
+          ADD COLUMN IF NOT EXISTS "SigortaBitisTarihi" VARCHAR(50),
+          ADD COLUMN IF NOT EXISTS "KaskoSirketi" VARCHAR(150) DEFAULT '',
+          ADD COLUMN IF NOT EXISTS "KaskoPoliceNo" VARCHAR(100) DEFAULT '',
+          ADD COLUMN IF NOT EXISTS "KaskoBitisTarihi" VARCHAR(50)
+        `);
       } catch (alterErr: any) {
         console.error('[DB ARAC ALTER COLUMNS ERROR]', alterErr.message);
       }
@@ -2242,8 +2261,15 @@ async function checkDbConnection() {
             "SonBakimTarihi" VARCHAR(50),
             "SonBakimKmVeyaSaat" NUMERIC DEFAULT 0,
             "SaatTakibiMi" BOOLEAN DEFAULT false,
+            "MuayeneTarihi" VARCHAR(50),
+            "MuayeneGecerlilikYil" INT DEFAULT 1,
             "MuayeneBitisTarihi" VARCHAR(50),
+            "SigortaSirketi" VARCHAR(150) DEFAULT '',
+            "SigortaPoliceNo" VARCHAR(100) DEFAULT '',
             "SigortaBitisTarihi" VARCHAR(50),
+            "KaskoSirketi" VARCHAR(150) DEFAULT '',
+            "KaskoPoliceNo" VARCHAR(100) DEFAULT '',
+            "KaskoBitisTarihi" VARCHAR(50),
             "Durum" VARCHAR(50) DEFAULT 'Faal',
             "AktifMi" BOOLEAN DEFAULT true,
             "Notlar" TEXT DEFAULT ''
@@ -3066,33 +3092,133 @@ app.get('/api/ozet', async (req, res) => {
       }
     });
 
-    // Araç Bakım Uyarıları
+    // Araç Bakım & Muayene & Sigorta & Kasko Uyarıları
+    let bakimBekleyenAracSayisi = 0;
+    let muayeneBekleyenAracSayisi = 0;
+    let sigortaBekleyenAracSayisi = 0;
+
     araclar.filter(a => a.AktifMi).forEach(a => {
+      // 1) Periyodik KM / Saat Bakımı
       const kalanSayac = (a.SonBakimKmVeyaSaat + a.BakimAraligiKmVeyaSaat) - a.GuncelKmVeyaSaat;
       const birim = a.SaatTakibiMi ? 'saat' : 'km';
 
       if (kalanSayac <= 0) {
+        bakimBekleyenAracSayisi++;
         bakimUyarilari.push({
-          id: `arac-${a.AracId}`,
+          id: `arac-bakim-${a.AracId}`,
           tur: 'arac',
           ad: `${a.PlakaVeyaKod} (${a.MarkaModel})`,
           kod: a.PlakaVeyaKod,
           durum: 'Gecikmis',
-          mesaj: `Bakım süresi ${Math.abs(kalanSayac)} ${birim} geçti!`,
+          mesaj: `Periyodik bakım süresi ${Math.abs(kalanSayac)} ${birim} geçti!`,
           kalanBirim: kalanSayac,
           birim
         });
       } else if (kalanSayac <= (a.SaatTakibiMi ? 50 : 1000)) {
+        bakimBekleyenAracSayisi++;
         bakimUyarilari.push({
-          id: `arac-${a.AracId}`,
+          id: `arac-bakim-${a.AracId}`,
           tur: 'arac',
           ad: `${a.PlakaVeyaKod} (${a.MarkaModel})`,
           kod: a.PlakaVeyaKod,
           durum: 'Yaklasiyor',
-          mesaj: `Bakıma ${kalanSayac} ${birim} kaldı`,
+          mesaj: `Periyodik bakıma ${kalanSayac} ${birim} kaldı`,
           kalanBirim: kalanSayac,
           birim
         });
+      }
+
+      // 2) TÜVTÜRK Muayene Bitiş Tarihi (1 aydan az kalanlar kırmızı uyarı)
+      if (a.MuayeneBitisTarihi) {
+        const diffMs = new Date(a.MuayeneBitisTarihi).getTime() - new Date(bugunStr).getTime();
+        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        if (diffDays <= 0) {
+          muayeneBekleyenAracSayisi++;
+          bakimUyarilari.push({
+            id: `arac-muayene-${a.AracId}`,
+            tur: 'muayene',
+            ad: `${a.PlakaVeyaKod} (${a.MarkaModel})`,
+            kod: a.PlakaVeyaKod,
+            durum: 'Gecikmis',
+            mesaj: `TÜVTÜRK muayene süresi ${Math.abs(diffDays)} gün önce doldu! (${a.MuayeneBitisTarihi})`,
+            kalanGun: diffDays,
+            birim: 'gun'
+          });
+        } else if (diffDays <= 30) {
+          muayeneBekleyenAracSayisi++;
+          bakimUyarilari.push({
+            id: `arac-muayene-${a.AracId}`,
+            tur: 'muayene',
+            ad: `${a.PlakaVeyaKod} (${a.MarkaModel})`,
+            kod: a.PlakaVeyaKod,
+            durum: 'Yaklasiyor',
+            mesaj: `TÜVTÜRK muayenesine ${diffDays} gün kaldı (Bitiş: ${a.MuayeneBitisTarihi})`,
+            kalanGun: diffDays,
+            birim: 'gun'
+          });
+        }
+      }
+
+      // 3) Trafik Sigortası Bitiş Tarihi (1 aydan az kalanlar kırmızı uyarı)
+      if (a.SigortaBitisTarihi) {
+        const diffMs = new Date(a.SigortaBitisTarihi).getTime() - new Date(bugunStr).getTime();
+        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        if (diffDays <= 0) {
+          sigortaBekleyenAracSayisi++;
+          bakimUyarilari.push({
+            id: `arac-sigorta-${a.AracId}`,
+            tur: 'sigorta',
+            ad: `${a.PlakaVeyaKod} (${a.MarkaModel})`,
+            kod: a.PlakaVeyaKod,
+            durum: 'Gecikmis',
+            mesaj: `Trafik sigortası süresi ${Math.abs(diffDays)} gün önce bitti! (${a.SigortaBitisTarihi})`,
+            kalanGun: diffDays,
+            birim: 'gun'
+          });
+        } else if (diffDays <= 30) {
+          sigortaBekleyenAracSayisi++;
+          bakimUyarilari.push({
+            id: `arac-sigorta-${a.AracId}`,
+            tur: 'sigorta',
+            ad: `${a.PlakaVeyaKod} (${a.MarkaModel})`,
+            kod: a.PlakaVeyaKod,
+            durum: 'Yaklasiyor',
+            mesaj: `Trafik sigortasına ${diffDays} gün kaldı (Bitiş: ${a.SigortaBitisTarihi})`,
+            kalanGun: diffDays,
+            birim: 'gun'
+          });
+        }
+      }
+
+      // 4) Kasko Bitiş Tarihi (1 aydan az kalanlar kırmızı uyarı)
+      if (a.KaskoBitisTarihi) {
+        const diffMs = new Date(a.KaskoBitisTarihi).getTime() - new Date(bugunStr).getTime();
+        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        if (diffDays <= 0) {
+          sigortaBekleyenAracSayisi++;
+          bakimUyarilari.push({
+            id: `arac-kasko-${a.AracId}`,
+            tur: 'kasko',
+            ad: `${a.PlakaVeyaKod} (${a.MarkaModel})`,
+            kod: a.PlakaVeyaKod,
+            durum: 'Gecikmis',
+            mesaj: `Kasko poliçesi ${Math.abs(diffDays)} gün önce bitti! (${a.KaskoBitisTarihi})`,
+            kalanGun: diffDays,
+            birim: 'gun'
+          });
+        } else if (diffDays <= 30) {
+          sigortaBekleyenAracSayisi++;
+          bakimUyarilari.push({
+            id: `arac-kasko-${a.AracId}`,
+            tur: 'kasko',
+            ad: `${a.PlakaVeyaKod} (${a.MarkaModel})`,
+            kod: a.PlakaVeyaKod,
+            durum: 'Yaklasiyor',
+            mesaj: `Kaskoya ${diffDays} gün kaldı (Bitiş: ${a.KaskoBitisTarihi})`,
+            kalanGun: diffDays,
+            birim: 'gun'
+          });
+        }
       }
     });
 
@@ -3182,7 +3308,10 @@ app.get('/api/ozet', async (req, res) => {
       tamamlananProje: projeler.filter(p => p.Durum === 'Tamamlandı').length,
       toplamArac: araclar.length,
       aktifArac: araclar.filter(a => a.AktifMi).length,
-      bakimBekleyenArac: bakimUyarilari.filter(b => b.tur === 'arac').length,
+      bakimBekleyenArac: bakimBekleyenAracSayisi,
+      muayeneBekleyenArac: muayeneBekleyenAracSayisi,
+      sigortaBekleyenArac: sigortaBekleyenAracSayisi,
+      toplamAracUyarisi: bakimUyarilari.filter(b => ['arac', 'muayene', 'sigorta', 'kasko'].includes(b.tur)).length,
       toplamMakine: makineler.length,
       aktifMakine: makineler.filter(m => m.AktifMi).length,
       bakimBekleyenMakine: bakimUyarilari.filter(b => b.tur === 'makine').length,
@@ -3561,8 +3690,15 @@ app.post('/api/araclar', async (req, res) => {
       SonBakimTarihi: formatDate(req.body.SonBakimTarihi) || getBugunStr(),
       SonBakimKmVeyaSaat: Number(req.body.GuncelKmVeyaSaat) || 0,
       SaatTakibiMi: Boolean(req.body.SaatTakibiMi),
-      MuayeneBitisTarihi: req.body.MuayeneBitisTarihi || null,
-      SigortaBitisTarihi: req.body.SigortaBitisTarihi || null,
+      MuayeneTarihi: formatDate(req.body.MuayeneTarihi) || null,
+      MuayeneGecerlilikYil: Number(req.body.MuayeneGecerlilikYil) || 1,
+      MuayeneBitisTarihi: formatDate(req.body.MuayeneBitisTarihi) || null,
+      SigortaSirketi: req.body.SigortaSirketi || '',
+      SigortaPoliceNo: req.body.SigortaPoliceNo || '',
+      SigortaBitisTarihi: formatDate(req.body.SigortaBitisTarihi) || null,
+      KaskoSirketi: req.body.KaskoSirketi || '',
+      KaskoPoliceNo: req.body.KaskoPoliceNo || '',
+      KaskoBitisTarihi: formatDate(req.body.KaskoBitisTarihi) || null,
       Durum: req.body.Durum || 'Faal',
       AktifMi: req.body.Durum !== 'Elden Çıkarıldı / Satıldı',
       Notlar: req.body.Notlar || '',
@@ -3588,8 +3724,15 @@ app.post('/api/araclar', async (req, res) => {
           { key: 'SonBakimTarihi', candidates: ['SonBakimTarihi', 'sonbakimtarihi'] },
           { key: 'SonBakimKmVeyaSaat', candidates: ['SonBakimKmVeyaSaat', 'sonbakimkmveyasaat', 'sonbakimkm'] },
           { key: 'SaatTakibiMi', candidates: ['SaatTakibiMi', 'saattakibimi'] },
+          { key: 'MuayeneTarihi', candidates: ['MuayeneTarihi', 'muayenetarihi'] },
+          { key: 'MuayeneGecerlilikYil', candidates: ['MuayeneGecerlilikYil', 'muayenegecerlilikyil'] },
           { key: 'MuayeneBitisTarihi', candidates: ['MuayeneBitisTarihi', 'muayenebitistarihi'] },
+          { key: 'SigortaSirketi', candidates: ['SigortaSirketi', 'sigortasirketi'] },
+          { key: 'SigortaPoliceNo', candidates: ['SigortaPoliceNo', 'sigortapoliceno'] },
           { key: 'SigortaBitisTarihi', candidates: ['SigortaBitisTarihi', 'sigortabitistarihi'] },
+          { key: 'KaskoSirketi', candidates: ['KaskoSirketi', 'kaskosirketi'] },
+          { key: 'KaskoPoliceNo', candidates: ['KaskoPoliceNo', 'kaskopoliceno'] },
+          { key: 'KaskoBitisTarihi', candidates: ['KaskoBitisTarihi', 'kaskobitistarihi'] },
           { key: 'Durum', candidates: ['Durum', 'durum'] },
           { key: 'AktifMi', candidates: ['AktifMi', 'aktifmi'] },
           { key: 'Notlar', candidates: ['Notlar', 'notlar', 'not'] }
@@ -3682,8 +3825,15 @@ app.put('/api/araclar/:id', async (req, res) => {
         { key: 'SonBakimTarihi', candidates: ['SonBakimTarihi', 'sonbakimtarihi'] },
         { key: 'SonBakimKmVeyaSaat', candidates: ['SonBakimKmVeyaSaat', 'sonbakimkmveyasaat', 'sonbakimkm'] },
         { key: 'SaatTakibiMi', candidates: ['SaatTakibiMi', 'saattakibimi'] },
+        { key: 'MuayeneTarihi', candidates: ['MuayeneTarihi', 'muayenetarihi'] },
+        { key: 'MuayeneGecerlilikYil', candidates: ['MuayeneGecerlilikYil', 'muayenegecerlilikyil'] },
         { key: 'MuayeneBitisTarihi', candidates: ['MuayeneBitisTarihi', 'muayenebitistarihi'] },
+        { key: 'SigortaSirketi', candidates: ['SigortaSirketi', 'sigortasirketi'] },
+        { key: 'SigortaPoliceNo', candidates: ['SigortaPoliceNo', 'sigortapoliceno'] },
         { key: 'SigortaBitisTarihi', candidates: ['SigortaBitisTarihi', 'sigortabitistarihi'] },
+        { key: 'KaskoSirketi', candidates: ['KaskoSirketi', 'kaskosirketi'] },
+        { key: 'KaskoPoliceNo', candidates: ['KaskoPoliceNo', 'kaskopoliceno'] },
+        { key: 'KaskoBitisTarihi', candidates: ['KaskoBitisTarihi', 'kaskobitistarihi'] },
         { key: 'Durum', candidates: ['Durum', 'durum'] },
         { key: 'AktifMi', candidates: ['AktifMi', 'aktifmi'] },
         { key: 'Notlar', candidates: ['Notlar', 'notlar', 'not'] }
@@ -3700,7 +3850,7 @@ app.put('/api/araclar/:id', async (req, res) => {
             setClauses.push(`"${dbCol}" = $${paramIdx++}`);
             let val = req.body[m.key];
             if (m.key === 'AktifMi') val = Boolean(val);
-            if (['GuncelKmVeyaSaat', 'BakimAraligiKmVeyaSaat', 'BakimAraligiAy', 'SonBakimKmVeyaSaat', 'ModelYili'].includes(m.key)) {
+            if (['GuncelKmVeyaSaat', 'BakimAraligiKmVeyaSaat', 'BakimAraligiAy', 'SonBakimKmVeyaSaat', 'ModelYili', 'MuayeneGecerlilikYil'].includes(m.key)) {
               val = Number(val);
             }
             values.push(val);

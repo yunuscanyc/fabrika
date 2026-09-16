@@ -530,6 +530,7 @@ export default function App() {
             onNavigateTab={handleNavigateTab}
             dbStatus={dbStatus}
             onOpenDbModal={() => setDbModalOpen(true)}
+            onToggleTamamlandi={handleToggleTamamlandi}
           />
         )}
 

@@ -256,8 +256,15 @@ export interface Arac {
   SonBakimTarihi?: string | null;
   SonBakimKmVeyaSaat: number;
   SaatTakibiMi: boolean;
+  MuayeneTarihi?: string | null;
+  MuayeneGecerlilikYil?: number;
   MuayeneBitisTarihi?: string | null;
+  SigortaSirketi?: string | null;
+  SigortaPoliceNo?: string | null;
   SigortaBitisTarihi?: string | null;
+  KaskoSirketi?: string | null;
+  KaskoPoliceNo?: string | null;
+  KaskoBitisTarihi?: string | null;
   Durum: string; // Faal, Bakımda/Serviste, Arızalı, Elden Çıkarıldı / Satıldı
   AktifMi: boolean;
   Notlar?: string | null;
@@ -280,14 +287,14 @@ export interface Hatirlatici {
 
 export interface BakimUyarisi {
   id: string;
-  tur: 'arac' | 'makine';
+  tur: 'arac' | 'makine' | 'muayene' | 'sigorta' | 'kasko';
   ad: string;
   kod: string;
   durum: 'Gecikmis' | 'Yaklasiyor' | 'ZamaniGeldi';
   mesaj: string;
   kalanGun?: number;
   kalanBirim?: number;
-  birim: 'km' | 'saat';
+  birim?: 'km' | 'saat' | 'gun';
 }
 
 export interface IsgUyarisi {
@@ -308,7 +315,7 @@ export interface OzetGorevItem {
   kategori?: string;
   onemDerecesi?: string;
   tamamlandiMi: boolean;
-  etiket: 'BUGÜN' | 'GEÇİKMİŞ' | 'SON 5 GÜN' | 'GELECEK';
+  etiket: 'BUGÜN' | 'GEÇİKMİŞ' | 'SON 5 GÜN' | 'GELECEK 5 GÜN' | 'GELECEK';
 }
 
 export interface OzetIstatistikler {
@@ -318,6 +325,9 @@ export interface OzetIstatistikler {
   toplamArac: number;
   aktifArac: number;
   bakimBekleyenArac: number;
+  muayeneBekleyenArac?: number;
+  sigortaBekleyenArac?: number;
+  toplamAracUyarisi?: number;
   toplamMakine: number;
   aktifMakine: number;
   bakimBekleyenMakine: number;
