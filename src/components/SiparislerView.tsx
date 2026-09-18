@@ -1183,7 +1183,7 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
                           <datalist id={`katalog-urun-listesi-${index}`}>
                             {catItems.map((item) => (
                               <option key={item.Id || item.MalzemeAdi} value={item.MalzemeAdi}>
-                                {item.Marka ? `${item.Marka} - ${item.Model || ''}` : ''}
+                                {item.Model ? item.Model : ''}
                               </option>
                             ))}
                           </datalist>

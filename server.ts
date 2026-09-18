@@ -2598,7 +2598,8 @@ async function checkDbConnection() {
         await pool.query(`
           ALTER TABLE ${detectedTables.malzemeSiparisleri} 
           ADD COLUMN IF NOT EXISTS "Marka" VARCHAR(150),
-          ADD COLUMN IF NOT EXISTS "Model" VARCHAR(255)
+          ADD COLUMN IF NOT EXISTS "Model" VARCHAR(255),
+          ADD COLUMN IF NOT EXISTS "Kalemler" TEXT
         `);
       } catch (alterErr: any) {
         console.error('[DB MALZEME SIPARIS ALTER COLUMNS ERROR]', alterErr.message);
@@ -3072,118 +3073,116 @@ const MALZEME_KATALOG_FILE = path.join(DATA_DIR, 'mem_malzeme_katalog.json');
 
 export const VARSAYILAN_MALZEME_KATALOG = [
   // 1. Cam & Ayna
-  { Id: 1, Kategori: 'Cam & Ayna', MalzemeAdi: 'Flotal Ayna', Marka: 'Şişecam', Model: 'Flotal E Gümüş Ayna 4mm (Düz Rodajlı)', VarsayilanBirim: 'Metrekare (m²)', Aciklama: '4mm net flotal gümüş ayna' },
-  { Id: 2, Kategori: 'Cam & Ayna', MalzemeAdi: 'Flotal Ayna', Marka: 'Şişecam', Model: 'Flotal Füme Ayna 4mm (Düz Rodajlı)', VarsayilanBirim: 'Metrekare (m²)', Aciklama: '4mm füme dekoratif reflekte ayna' },
-  { Id: 3, Kategori: 'Cam & Ayna', MalzemeAdi: 'Flotal Ayna', Marka: 'Şişecam', Model: 'Flotal Bronz Ayna 4mm (Düz Rodajlı)', VarsayilanBirim: 'Metrekare (m²)', Aciklama: '4mm bronz sıcak ton dekoratif ayna' },
-  { Id: 4, Kategori: 'Cam & Ayna', MalzemeAdi: 'Temperli Şeffaf Cam', Marka: 'Şişecam', Model: '6mm Şeffaf Temperli Düz Rodajlı Cam', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Dolap kapakları ve raflar için temperli cam' },
-  { Id: 5, Kategori: 'Cam & Ayna', MalzemeAdi: 'Temperli Şeffaf Cam', Marka: 'Şişecam', Model: '8mm Şeffaf Temperli Rodajlı Cam Masa Tablası', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Masa ve sehpa üstü ağır yük camı' },
-  { Id: 6, Kategori: 'Cam & Ayna', MalzemeAdi: 'Extra Clear Düşük Demirli Cam', Marka: 'AGC Flat Glass', Model: 'Planibel Clearvision 6mm Extra Clear Temperli', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Yeşillik barındırmayan kristal şeffaf cam' },
-  { Id: 7, Kategori: 'Cam & Ayna', MalzemeAdi: 'Extra Clear Düşük Demirli Cam', Marka: 'AGC Flat Glass', Model: 'Planibel Clearvision 8mm Extra Clear Temperli', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Kristal netlikte ekstra şeffaf kalın cam' },
-  { Id: 8, Kategori: 'Cam & Ayna', MalzemeAdi: 'Satine / Buzlu Cam', Marka: 'Yorglas', Model: '4mm Mat Satine Asit İndirme Cam', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Işığı geçiren yarı saydam pürüzsüz yüzey' },
-  { Id: 9, Kategori: 'Cam & Ayna', MalzemeAdi: 'Oluklu / Nervürlü Cam (Fluted)', Marka: 'Yorglas', Model: 'Reeded / Nervürlü Fluted 6mm Çizgili Cam', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Vintage & modern mobilya kapak camı' },
-  { Id: 10, Kategori: 'Cam & Ayna', MalzemeAdi: 'Boyalı Cam (Lacobel)', Marka: 'AGC Flat Glass', Model: 'Lacobel 9005 Parlak Siyah 4mm', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Arka yüzeyi boyalı parlak siyah panel camı' },
-  { Id: 11, Kategori: 'Cam & Ayna', MalzemeAdi: 'Boyalı Cam (Lacobel)', Marka: 'AGC Flat Glass', Model: 'Lacobel 9003 Saf Beyaz 4mm', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Arka yüzeyi boyalı parlak opak beyaz cam' },
+  { Id: 1, Kategori: 'Cam & Ayna', MalzemeAdi: 'Düz Flotal Ayna', Marka: '', Model: '4mm Rodajlı', VarsayilanBirim: 'Metrekare (m²)', Aciklama: '4mm net gümüş ayna' },
+  { Id: 2, Kategori: 'Cam & Ayna', MalzemeAdi: 'Füme Ayna', Marka: '', Model: '4mm Rodajlı', VarsayilanBirim: 'Metrekare (m²)', Aciklama: '4mm dekoratif füme ayna' },
+  { Id: 3, Kategori: 'Cam & Ayna', MalzemeAdi: 'Bronz Ayna', Marka: '', Model: '4mm Rodajlı', VarsayilanBirim: 'Metrekare (m²)', Aciklama: '4mm dekoratif bronz ayna' },
+  { Id: 4, Kategori: 'Cam & Ayna', MalzemeAdi: 'Temperli Şeffaf Cam (6mm)', Marka: '', Model: '6mm Rodajlı', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Dolap kapakları ve raflar için temperli cam' },
+  { Id: 5, Kategori: 'Cam & Ayna', MalzemeAdi: 'Temperli Şeffaf Cam (8mm)', Marka: '', Model: '8mm Rodajlı', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Masa ve sehpa üstü camı' },
+  { Id: 6, Kategori: 'Cam & Ayna', MalzemeAdi: 'Extra Clear (Ekstra Şeffaf) Cam', Marka: '', Model: '6mm Temperli', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Düşük demirli kristal şeffaf cam' },
+  { Id: 7, Kategori: 'Cam & Ayna', MalzemeAdi: 'Satine / Buzlu Cam', Marka: '', Model: '4mm Asit İndirme', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Mat yarı saydam cam' },
+  { Id: 8, Kategori: 'Cam & Ayna', MalzemeAdi: 'Oluklu / Fluted Çizgili Cam', Marka: '', Model: '6mm Fluted', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Nervürlü mobilya kapak camı' },
+  { Id: 9, Kategori: 'Cam & Ayna', MalzemeAdi: 'Boyalı Cam (Lacobel)', Marka: '', Model: '4mm Parlak Siyah / Beyaz', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Arka yüzeyi boyalı kaplama camı' },
+  { Id: 10, Kategori: 'Cam & Ayna', MalzemeAdi: 'Lamine Cam (3+3 / 4+4)', Marka: '', Model: 'Güvenlik Camı', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Kırılınca dağılmayan emniyet camı' },
 
   // 2. Mobilya Aksesuarı & Hırdavat
-  { Id: 12, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Frenli Menteşe', Marka: 'Blum', Model: 'Clip Top Blumotion 110° Düz Frenli Menteşe', VarsayilanBirim: 'Adet', Aciklama: 'Entegre frenli standart düz kapak menteşesi' },
-  { Id: 13, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Frenli Menteşe', Marka: 'Blum', Model: 'Clip Top Blumotion 110° Deveboynu Menteşe', VarsayilanBirim: 'Adet', Aciklama: 'Orta bölme iç kapak deveboynu menteşesi' },
-  { Id: 14, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Frenli Menteşe', Marka: 'Samet', Model: 'Master Frenli Menteşe 110° Düz Tabanlı', VarsayilanBirim: 'Adet', Aciklama: '3D ayarlı yumuşak kapanan frenli menteşe' },
-  { Id: 15, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Frenli Menteşe', Marka: 'Hettich', Model: 'Sensys 8645i 110° Entegre Sessiz Frenli', VarsayilanBirim: 'Adet', Aciklama: 'Alman menşeili premium dolap menteşesi' },
-  { Id: 16, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Gizli Ray / Frenli Çekmece Rayı', Marka: 'Blum', Model: 'Movento 500mm 40kg Tip-On Blumotion Gizli Ray', VarsayilanBirim: 'Takım', Aciklama: 'Kulpsuz bas-aç ve frenli yumuşak kapanma tam açılım' },
-  { Id: 17, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Gizli Ray / Frenli Çekmece Rayı', Marka: 'Blum', Model: 'Tandem 500mm Frenli Blumotion Kısmi Açılım', VarsayilanBirim: 'Takım', Aciklama: 'Ahşap çekmeceler için alttan gizli frenli ray' },
-  { Id: 18, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Gizli Ray / Frenli Çekmece Rayı', Marka: 'Samet', Model: 'Slidea Frenli Gizli Ray 500mm', VarsayilanBirim: 'Takım', Aciklama: 'Kendinden yavaşlatıcılı ahşap çekmece rayı' },
-  { Id: 19, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Gizli Ray / Frenli Çekmece Rayı', Marka: 'Hettich', Model: 'Quadro V6 500mm Silent System Tam Açılım', VarsayilanBirim: 'Takım', Aciklama: 'Çelik bilyalı hassas ve sessiz gizli ray takımı' },
-  { Id: 20, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'İnce Yanaklı Çekmece Sistemi', Marka: 'Blum', Model: 'Legrabox Pure 500mm Mat Antrasit / Siyah', VarsayilanBirim: 'Takım', Aciklama: '12.8mm düz ince çelik yanaklı lüks çekmece' },
-  { Id: 21, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'İnce Yanaklı Çekmece Sistemi', Marka: 'Blum', Model: 'Tandembox Antaro 500mm İpek Beyaz / Gri', VarsayilanBirim: 'Takım', Aciklama: 'Bordürlü veya cam panelli çift cidarlı çekmece' },
-  { Id: 22, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'İnce Yanaklı Çekmece Sistemi', Marka: 'Samet', Model: 'FlowBox Slim Çekmece Sistemi 500mm Antrasit', VarsayilanBirim: 'Takım', Aciklama: 'İnce metal yanaklı modern çekmece takımı' },
-  { Id: 23, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'İnce Yanaklı Çekmece Sistemi', Marka: 'Hettich', Model: 'AvanTech YOU İnce Yanak Çekmece 500mm Gümüş', VarsayilanBirim: 'Takım', Aciklama: '13mm düz hatlı tasarım çekmece kiti' },
-  { Id: 24, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Kalkar Kapak Mekanizması', Marka: 'Blum', Model: 'Aventos HF İki Kapaklı Katlanır Kalkar Set', VarsayilanBirim: 'Takım', Aciklama: 'Üst mutfak dolapları için çift kanatlı kalkar' },
-  { Id: 25, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Kalkar Kapak Mekanizması', Marka: 'Blum', Model: 'Aventos HK-S Tek Kapaklı Kompakt Kalkar Mekanizma', VarsayilanBirim: 'Takım', Aciklama: 'Küçük ve orta boy kalkar kapaklar için frenli' },
-  { Id: 26, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Kalkar Kapak Mekanizması', Marka: 'Samet', Model: 'D-Lite Lift Frenli Kalkar Kapak Mekanizması', VarsayilanBirim: 'Takım', Aciklama: 'İnce gövdeli menteşesiz kalkar kapak seti' },
-  { Id: 27, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Kalkar Kapak Mekanizması', Marka: 'Hafele', Model: 'Free flap 1.7 Frenli Kalkar Kapak Donanımı', VarsayilanBirim: 'Takım', Aciklama: 'Kompakt tasarım çok kademeli durdurma' },
-  { Id: 28, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Sürgü Kapak Sistemi', Marka: 'Hafele', Model: 'Slido Classic 50VF Frenli Gardırop Sürgü Mekanizması', VarsayilanBirim: 'Takım', Aciklama: 'Çift yöne frenli alttan/üstten taşımalı sürgü' },
-  { Id: 29, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Sürgü Kapak Sistemi', Marka: 'Hettich', Model: 'TopLine XL 80kg Üstten Asma Frenli Sürgü Sistemi', VarsayilanBirim: 'Takım', Aciklama: 'Geniş ve ağır gardırop kapakları için sessiz sürgü' },
-  { Id: 30, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Gardırop İçi Aksesuar & Kiler', Marka: 'Vauth-Sagel', Model: 'CornerStone Döner Köşe Kiler Sepeti 900mm', VarsayilanBirim: 'Takım', Aciklama: 'Kör köşe modülü dışarı çıkan çift tepsi kiler' },
-  { Id: 31, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Gardırop İçi Aksesuar & Kiler', Marka: 'Hafele', Model: 'Hidrolik Gardırop Asansörü 830-1150mm Krom/Siyah', VarsayilanBirim: 'Adet', Aciklama: 'Yüksek dolap askılığı indirme mekanizması' },
-  { Id: 32, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Kulp & Profil Kulp', Marka: 'Çebi', Model: 'Gola Alüminyum Profil Kulp L/C Tip Mat Siyah 4mt', VarsayilanBirim: 'Boy (6mt)', Aciklama: 'Kulpsuz mutfak dolabı entegre gola profili' },
-  { Id: 33, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Kulp & Profil Kulp', Marka: 'Hafele', Model: 'Mat Siyah D Kulp 160mm Eksen Çinko Alaşım', VarsayilanBirim: 'Adet', Aciklama: 'Modern masif ve lake dolap kulpu' },
+  { Id: 11, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Frenli Menteşe', Marka: '', Model: 'Düz Taban', VarsayilanBirim: 'Adet', Aciklama: 'Entegre frenli yavaş kapanan kapak menteşesi' },
+  { Id: 12, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Frensiz Menteşe', Marka: '', Model: 'Düz / Deveboynu', VarsayilanBirim: 'Adet', Aciklama: 'Standart frensiz kapak menteşesi' },
+  { Id: 13, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Deveboynu Menteşe', Marka: '', Model: 'Orta Bölme', VarsayilanBirim: 'Adet', Aciklama: 'İç kapaklar için deveboynu menteşe' },
+  { Id: 14, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Bas-Aç (Tip-On) Menteşe', Marka: '', Model: 'Yaylı / Yaysız', VarsayilanBirim: 'Adet', Aciklama: 'Kulpsuz kapaklar için bas-aç menteşe' },
+  { Id: 15, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Frenli Gizli Çekmece Rayı', Marka: '', Model: '50cm Tam Açılım', VarsayilanBirim: 'Takım', Aciklama: 'Alttan gizli frenli çekmece rayı' },
+  { Id: 16, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Frensiz Gizli Çekmece Rayı', Marka: '', Model: '50cm Kısmi Açılım', VarsayilanBirim: 'Takım', Aciklama: 'Alttan gizli standart çekmece rayı' },
+  { Id: 17, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Bas-Aç (Tip-On) Gizli Ray', Marka: '', Model: '50cm Kulpsuz', VarsayilanBirim: 'Takım', Aciklama: 'Bas-aç mekanizmalı kulpsuz gizli ray' },
+  { Id: 18, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Teleskopik Bilyalı Ray', Marka: '', Model: '45mm / 50cm', VarsayilanBirim: 'Takım', Aciklama: 'Yan montaj bilyalı çekmece rayı' },
+  { Id: 19, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Frenli Teleskopik Ray', Marka: '', Model: '45mm / 50cm Frenli', VarsayilanBirim: 'Takım', Aciklama: 'Yavaşlatıcılı yan bilyalı ray' },
+  { Id: 20, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'İnce Yanaklı Çekmece Sistemi', Marka: '', Model: '50cm Antrasit / Siyah', VarsayilanBirim: 'Takım', Aciklama: 'Metal yanaklı modern çekmece kiti' },
+  { Id: 21, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Kalkar Kapak Mekanizması', Marka: '', Model: 'Çift Kapak Katlanır', VarsayilanBirim: 'Takım', Aciklama: 'Üst dolaplar için kalkar kapak seti' },
+  { Id: 22, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Gazlı Amortisör (Piston)', Marka: '', Model: '80N / 100N / 120N', VarsayilanBirim: 'Adet', Aciklama: 'Kapak kaldırma pistonu' },
+  { Id: 23, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Sürgü Kapak Sistemi', Marka: '', Model: 'Üstten Asma Frenli', VarsayilanBirim: 'Takım', Aciklama: 'Gardırop sürgü kapak mekanizması' },
+  { Id: 24, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Kör Köşe Kiler Sepeti', Marka: '', Model: 'Döner / Çekmeli', VarsayilanBirim: 'Takım', Aciklama: 'Mutfak kör köşe modül mekanizması' },
+  { Id: 25, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Boy Kiler Sepeti', Marka: '', Model: '45cm / 60cm Raylı', VarsayilanBirim: 'Takım', Aciklama: 'Mutfak boy kiler ünitesi' },
+  { Id: 26, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Hidrolik Gardırop Asansörü', Marka: '', Model: '830-1150mm', VarsayilanBirim: 'Adet', Aciklama: 'Yüksek askılık indirme aparatı' },
+  { Id: 27, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Gola Profil Kulp (L / C Tip)', Marka: '', Model: 'Mat Siyah / Alüminyum', VarsayilanBirim: 'Boy (6mt)', Aciklama: 'Kulpsuz dolaplar için profil' },
+  { Id: 28, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'D Kulp / Çekme Kulp', Marka: '', Model: '160mm / 192mm', VarsayilanBirim: 'Adet', Aciklama: 'Metal dolap ve çekmece kulpu' },
+  { Id: 29, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Düğme Kulp', Marka: '', Model: 'Pirinç / Siyah', VarsayilanBirim: 'Adet', Aciklama: 'Nokta düğme kulp' },
+  { Id: 30, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Bas-Aç Mandalı (Tip-On Latch)', Marka: '', Model: 'Mıknatıslı', VarsayilanBirim: 'Adet', Aciklama: 'Kulpsuz kapaklar için çıtçıt bas-aç' },
+  { Id: 31, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Minifiks Bağlantı Seti', Marka: '', Model: 'Mil + Gövde + Dübel', VarsayilanBirim: 'Takım', Aciklama: 'Gövde birleştirme minifiks seti' },
+  { Id: 32, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Raf Pimi & Düz Destek', Marka: '', Model: 'Şeffaf / Metal', VarsayilanBirim: 'Adet', Aciklama: 'Ayarlanabilir raf tutucu pim' },
+  { Id: 33, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Flanş & Askı Borusu', Marka: '', Model: 'Krom / Oval 3mt', VarsayilanBirim: 'Boy (6mt)', Aciklama: 'Gardırop elbise askı borusu' },
+  { Id: 34, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'L Bağlantı Braketi / Köşebent', Marka: '', Model: 'Plastik / Metal', VarsayilanBirim: 'Adet', Aciklama: 'Modül sabitleme L braket' },
 
   // 3. MDF & Ahşap Panel
-  { Id: 34, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'MDFLam 18mm', Marka: 'Kastamonu Entegre', Model: 'Vision D153 Antrasit Gri 2100x2800x18mm', VarsayilanBirim: 'Plaka', Aciklama: '1. sınıf çift yüz melamin kaplı MDF' },
-  { Id: 35, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'MDFLam 18mm', Marka: 'Kastamonu Entegre', Model: 'Evogloss D112 High Gloss Parlak Beyaz 18mm', VarsayilanBirim: 'Plaka', Aciklama: 'Yüksek parlaklıklı PVC/PET kaplı panel' },
-  { Id: 36, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'MDFLam 18mm', Marka: 'Starwood', Model: 'Starpan 18mm Beyaz Gövdelik MDFLam 2100x2800', VarsayilanBirim: 'Plaka', Aciklama: 'Dolap iç gövdeleri için standart beyaz MDFLam' },
-  { Id: 37, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'MDFLam 18mm', Marka: 'Starwood', Model: 'Supramat Mat Siyah 18mm İpeksi Dokunuş', VarsayilanBirim: 'Plaka', Aciklama: 'Parmak izi tutmayan süper mat yüzey' },
-  { Id: 38, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'MDFLam 18mm', Marka: 'AGT', Model: 'Supramat 734 Soft Touch Macaron Yeşil 18mm', VarsayilanBirim: 'Plaka', Aciklama: 'Yumuşak dokulu çizilmez lüks mat panel' },
-  { Id: 39, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'MDFLam 18mm', Marka: 'AGT', Model: 'MDFLam Milano Ceviz 18mm Doğal Doku', VarsayilanBirim: 'Plaka', Aciklama: 'Ahşap senkronize damarlı ceviz melamin' },
-  { Id: 40, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'MDFLam 18mm', Marka: 'Kronospan', Model: 'K365 Koyu Meşe Melamin MDFLam 18mm', VarsayilanBirim: 'Plaka', Aciklama: 'Derin gözenekli rustik meşe dekor' },
-  { Id: 41, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'MDFLam 18mm', Marka: 'Egger', Model: 'PerfectSense Matt U999 Siyah 18mm Anti-Fingerprint', VarsayilanBirim: 'Plaka', Aciklama: 'Kadifemsi mat parmak izi bırakmayan lüks panel' },
-  { Id: 42, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'MDFLam 18mm', Marka: 'Egger', Model: 'H3303 Doğal Hamilton Meşe 18mm', VarsayilanBirim: 'Plaka', Aciklama: 'Senkron gözenekli doğal meşe kaplama hissi' },
-  { Id: 43, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'Ham MDF', Marka: 'Kastamonu Entegre', Model: 'Medpan Ham MDF 18mm 2100x2800', VarsayilanBirim: 'Plaka', Aciklama: 'Lake boya ve kaplama için pürüzsüz ham levha' },
-  { Id: 44, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'Ham MDF', Marka: 'Çamsan', Model: 'Ham MDF 8mm / 18mm / 25mm CNC Kalite', VarsayilanBirim: 'Plaka', Aciklama: 'Yüksek yoğunluklu CNC oymaya uygun MDF' },
-  { Id: 45, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'Suya Dayanıklı Yeşil MDF', Marka: 'Kronospan', Model: 'Neme Dayanıklı MR Yeşil MDF 18mm Hydrofuge', VarsayilanBirim: 'Plaka', Aciklama: 'Banyo ve mutfak bazaları için neme dirençli' },
-  { Id: 46, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'Yangına Dayanıklı MDF', Marka: 'Kronospan', Model: 'FR Yangın Geciktirici Kırmızı MDF 18mm', VarsayilanBirim: 'Plaka', Aciklama: 'Otel ve kamu projeleri için B-s1,d0 sertifikalı' },
-  { Id: 47, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'Kompakt Laminat', Marka: 'Pelikan', Model: 'İç Mekan Siyah Göbekli Kompakt Laminat 12mm', VarsayilanBirim: 'Plaka', Aciklama: 'Suya ve darbeye tam dayanıklı tezgah ve masa' },
+  { Id: 35, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: '18mm Ham MDF', Marka: '', Model: '2100x2800', VarsayilanBirim: 'Plaka', Aciklama: 'Ham MDF panel' },
+  { Id: 36, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: '18mm Beyaz Lam MDF', Marka: '', Model: 'Gövdelik Mat / Gloss', VarsayilanBirim: 'Plaka', Aciklama: 'Çift yüz beyaz melamin kaplı MDF' },
+  { Id: 37, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: '18mm Renkli Lam MDF', Marka: '', Model: 'Gri / Siyah / Krem', VarsayilanBirim: 'Plaka', Aciklama: 'Düz renk melamin MDF' },
+  { Id: 38, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: '18mm Ahşap Desenli Lam MDF', Marka: '', Model: 'Meşe / Ceviz / Çam', VarsayilanBirim: 'Plaka', Aciklama: 'Ahşap dekor melamin kaplı MDF' },
+  { Id: 39, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: '18mm High Gloss (Parlak) MDF', Marka: '', Model: 'Parlak Yüzey', VarsayilanBirim: 'Plaka', Aciklama: 'Yüksek parlaklıklı kapak paneli' },
+  { Id: 40, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: '18mm Supermat (İpeksi Mat) MDF', Marka: '', Model: 'Soft Touch Anti-Fingerprint', VarsayilanBirim: 'Plaka', Aciklama: 'Parmak izi bırakmayan ipeksi mat MDF' },
+  { Id: 41, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: '8mm Arkalık MDF', Marka: '', Model: 'Ham / Tek Yüz Beyaz', VarsayilanBirim: 'Plaka', Aciklama: 'Dolap arkalık ve çekmece altı levhası' },
+  { Id: 42, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: '18mm Suya Dayanıklı Yeşil MDF', Marka: '', Model: 'Hydrofuge MR', VarsayilanBirim: 'Plaka', Aciklama: 'Banyo ve ıslak hacimler için neme dirençli MDF' },
+  { Id: 43, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: '18mm Yangına Dayanıklı Kırmızı MDF', Marka: '', Model: 'FR Alev Geciktirici', VarsayilanBirim: 'Plaka', Aciklama: 'Yangına dayanıklı özel MDF' },
+  { Id: 44, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: '18mm Ham Sunta', Marka: '', Model: 'Yonga Levha', VarsayilanBirim: 'Plaka', Aciklama: 'Ham yonga levha' },
+  { Id: 45, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: '18mm Lam Sunta (SuntaLam)', Marka: '', Model: 'Beyaz / Ahşap Desen', VarsayilanBirim: 'Plaka', Aciklama: 'Melamin kaplı yonga levha' },
+  { Id: 46, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: '12mm Kompakt Laminat', Marka: '', Model: 'Siyah Göbek', VarsayilanBirim: 'Plaka', Aciklama: 'Suya ve darbeye tam dayanıklı panel' },
+  { Id: 47, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: '18mm Marin Kontraplak (Plywood)', Marka: '', Model: 'Huş (Birch) Katmanlı', VarsayilanBirim: 'Plaka', Aciklama: 'Marin su kontrası levha' },
+  { Id: 48, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'PVC Kenar Bandı (0.40mm / 1mm / 2mm)', Marka: '', Model: '22mm / 45mm En', VarsayilanBirim: 'Metre (mt)', Aciklama: 'MDF ve sunta kenar kaplama bandı' },
 
   // 4. Mobilya İskeleti & Metal Karkas
-  { Id: 48, Kategori: 'Mobilya İskeleti & Metal Karkas', MalzemeAdi: 'Kutu Profil (DKP)', Marka: 'Özel Fabrika İmalatı', Model: '20x20x1.5mm DKP Kutu Profil (Siyah Elektrostatik Fırın Boya)', VarsayilanBirim: 'Boy (6mt)', Aciklama: 'Kitaplık ve masa karkası için hassas çekme profil' },
-  { Id: 49, Kategori: 'Mobilya İskeleti & Metal Karkas', MalzemeAdi: 'Kutu Profil (DKP)', Marka: 'Özel Fabrika İmalatı', Model: '40x20x2.0mm DKP Dikdörtgen Kutu Profil', VarsayilanBirim: 'Boy (6mt)', Aciklama: 'Masa ayağı ve konsol taşıyıcı çelik profil' },
-  { Id: 50, Kategori: 'Mobilya İskeleti & Metal Karkas', MalzemeAdi: 'Paslanmaz Profil & Sac', Marka: 'Özel Fabrika İmalatı', Model: '304 Kalite Mat Fırçalı Satine Paslanmaz 30x30x2mm', VarsayilanBirim: 'Boy (6mt)', Aciklama: 'Korozyona dayanıklı lüks satine paslanmaz çelik' },
-  { Id: 51, Kategori: 'Mobilya İskeleti & Metal Karkas', MalzemeAdi: 'Pirinç / PVD Kaplama Ayak', Marka: 'Özel Fabrika İmalatı', Model: 'Titanyum Gold Fırçalı PVD Kaplama Koltuk Ayağı & Baza', VarsayilanBirim: 'Takım', Aciklama: 'Kararmaz titanyum pirinç kaplamalı metal karkas' },
-  { Id: 52, Kategori: 'Mobilya İskeleti & Metal Karkas', MalzemeAdi: 'Alüminyum Çerçeve Profili', Marka: 'Hafele', Model: 'İnce Cam Kapak Profili Mat Siyah 20x20 Menteşe Yuvalı', VarsayilanBirim: 'Boy (6mt)', Aciklama: 'Camlı vitrin ve giyinme odası dolap kapağı' },
-  { Id: 53, Kategori: 'Mobilya İskeleti & Metal Karkas', MalzemeAdi: 'Konik Metal Ayak', Marka: 'Çebi / Samet', Model: 'Konik Mat Siyah Sehpa/Koltuk Ayağı H:150mm Vidalı', VarsayilanBirim: 'Adet', Aciklama: 'Tabanı silikon keçeli açılı metal ayak' },
-  { Id: 54, Kategori: 'Mobilya İskeleti & Metal Karkas', MalzemeAdi: 'Konik Metal Ayak', Marka: 'Çebi / Samet', Model: 'Gold Pirinç Yüksüklü Konik Siyah Metal Ayak H:200mm', VarsayilanBirim: 'Adet', Aciklama: 'Ucu pirinç detaylı modern mobilya ayağı' },
+  { Id: 49, Kategori: 'Mobilya İskeleti & Metal Karkas', MalzemeAdi: '20x20mm DKP Kutu Profil', Marka: '', Model: '1.5mm Et Kalınlığı', VarsayilanBirim: 'Boy (6mt)', Aciklama: 'İskelet ve karkas çelik profil' },
+  { Id: 50, Kategori: 'Mobilya İskeleti & Metal Karkas', MalzemeAdi: '30x30mm DKP Kutu Profil', Marka: '', Model: '2.0mm Et Kalınlığı', VarsayilanBirim: 'Boy (6mt)', Aciklama: 'Kutu profil' },
+  { Id: 51, Kategori: 'Mobilya İskeleti & Metal Karkas', MalzemeAdi: '40x20mm DKP Kutu Profil', Marka: '', Model: '2.0mm Et Kalınlığı', VarsayilanBirim: 'Boy (6mt)', Aciklama: 'Dikdörtgen kutu profil' },
+  { Id: 52, Kategori: 'Mobilya İskeleti & Metal Karkas', MalzemeAdi: 'Paslanmaz Çelik Profil (304 Kalite)', Marka: '', Model: 'Satine Fırçalı / Parlak', VarsayilanBirim: 'Boy (6mt)', Aciklama: 'Korozyona dayanıklı paslanmaz profil' },
+  { Id: 53, Kategori: 'Mobilya İskeleti & Metal Karkas', MalzemeAdi: 'Alüminyum Cam Çerçeve Profili', Marka: '', Model: 'Mat Siyah / Anodize', VarsayilanBirim: 'Boy (6mt)', Aciklama: 'Cam kapak alüminyum çerçevesi' },
+  { Id: 54, Kategori: 'Mobilya İskeleti & Metal Karkas', MalzemeAdi: 'Alüminyum Süpürgelik & Baza Profili', Marka: '', Model: 'H:100mm / H:120mm', VarsayilanBirim: 'Boy (6mt)', Aciklama: 'Mutfak alt baza alüminyum profili' },
+  { Id: 55, Kategori: 'Mobilya İskeleti & Metal Karkas', MalzemeAdi: 'Konik Metal Mobilya Ayağı', Marka: '', Model: 'H:15cm / H:20cm Mat Siyah / Gold', VarsayilanBirim: 'Adet', Aciklama: 'Koltuk ve sehpa metal ayağı' },
+  { Id: 56, Kategori: 'Mobilya İskeleti & Metal Karkas', MalzemeAdi: 'Döküm Metal Masa Ayağı', Marka: '', Model: 'Özel İmalat Fırın Boyalı', VarsayilanBirim: 'Takım', Aciklama: 'Masa ve karkas taşıyıcı ayak' },
 
   // 5. Masif Kereste & Kaplama
-  { Id: 55, Kategori: 'Masif Kereste & Kaplama', MalzemeAdi: 'Doğal Ahşap Kaplama', Marka: 'Ege Ahşap / Tuna', Model: '0.6mm Doğal Freze Amerikan Meşe Kaplama', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Düz çizgili freze desenli doğal meşe levha' },
-  { Id: 56, Kategori: 'Masif Kereste & Kaplama', MalzemeAdi: 'Doğal Ahşap Kaplama', Marka: 'İthal Kaplama', Model: '0.6mm Doğal Amerikan Siyah Ceviz Kaplama', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Zengin hareli koyu ton ceviz kaplama' },
-  { Id: 57, Kategori: 'Masif Kereste & Kaplama', MalzemeAdi: 'Masif Kereste', Marka: 'Orman İşletme / İthal', Model: '1. Sınıf Fırınlanmış Amerikan Meşe Kalas 50mm (KD 8-10%)', VarsayilanBirim: 'Metreküp (m³)', Aciklama: 'Nem oranı %8-10 fırınlanmış masa tablası kerestesi' },
-  { Id: 58, Kategori: 'Masif Kereste & Kaplama', MalzemeAdi: 'Masif Kereste', Marka: 'İthal Kereste', Model: '1. Sınıf Fırınlanmış Amerikan Siyah Ceviz 50mm', VarsayilanBirim: 'Metreküp (m³)', Aciklama: 'Budaksız homojen renkli fırınlı ceviz kereste' },
-  { Id: 59, Kategori: 'Masif Kereste & Kaplama', MalzemeAdi: 'Masif Kereste', Marka: 'İthal Kereste', Model: 'Fırınlanmış Masif İroko Kereste (Dış Mekan)', VarsayilanBirim: 'Metreküp (m³)', Aciklama: 'Bahçe ve ıslak mekan mobilyaları için suya dayanıklı' },
-  { Id: 60, Kategori: 'Masif Kereste & Kaplama', MalzemeAdi: 'Marin Kontraplak (Plywood)', Marka: 'İthal Plywood', Model: '18mm Huş (Birch) Marin Kontraplak WBP Tutkallı', VarsayilanBirim: 'Plaka', Aciklama: 'Yüksek mukavemetli katmanlı marin huş kontraplak' },
+  { Id: 57, Kategori: 'Masif Kereste & Kaplama', MalzemeAdi: '0.6mm Doğal Meşe Kaplama', Marka: '', Model: 'Freze / Hareli', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Doğal meşe ahşap kaplama' },
+  { Id: 58, Kategori: 'Masif Kereste & Kaplama', MalzemeAdi: '0.6mm Doğal Ceviz Kaplama', Marka: '', Model: 'Amerikan Ceviz', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Doğal ceviz kaplama' },
+  { Id: 59, Kategori: 'Masif Kereste & Kaplama', MalzemeAdi: '0.6mm Doğal Kayın Kaplama', Marka: '', Model: 'Düz Freze', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Doğal kayın kaplama' },
+  { Id: 60, Kategori: 'Masif Kereste & Kaplama', MalzemeAdi: '50mm Fırınlanmış Meşe Kereste', Marka: '', Model: 'KD %8-10 Nem', VarsayilanBirim: 'Metreküp (m³)', Aciklama: 'Fırınlı masif meşe kalas' },
+  { Id: 61, Kategori: 'Masif Kereste & Kaplama', MalzemeAdi: '50mm Fırınlanmış Ceviz Kereste', Marka: '', Model: 'KD %8-10 Nem', VarsayilanBirim: 'Metreküp (m³)', Aciklama: 'Fırınlı masif ceviz kalas' },
+  { Id: 62, Kategori: 'Masif Kereste & Kaplama', MalzemeAdi: 'Fırınlanmış İroko Kereste (Dış Mekan)', Marka: '', Model: 'Suya Dayanıklı', VarsayilanBirim: 'Metreküp (m³)', Aciklama: 'Bahçe ve ıslak hacim masif ahşabı' },
 
   // 6. Cila, Lake & Boya Kimyasalları
-  { Id: 61, Kategori: 'Cila, Lake & Boya Kimyasalları', MalzemeAdi: 'İpek Mat Lake Boya', Marka: 'Genç Boya', Model: 'VP500 İpek Mat Lake Sonkat RAL 9003 Saf Beyaz', VarsayilanBirim: 'Kg', Aciklama: 'Sararmaya dirençli pürüzsüz ipek mat lake sonkat' },
-  { Id: 62, Kategori: 'Cila, Lake & Boya Kimyasalları', MalzemeAdi: 'İpek Mat Lake Boya', Marka: 'Genç Boya', Model: 'VP500 İpek Mat Lake Sonkat (Özel Müşteri RAL/NCS Kodu)', VarsayilanBirim: 'Kg', Aciklama: 'Müşteri onaylı özel ton lake boya imalatı' },
-  { Id: 63, Kategori: 'Cila, Lake & Boya Kimyasalları', MalzemeAdi: 'İpek Mat Lake Boya', Marka: 'Sayerlack', Model: 'TZ99 İpek Mat Poliüretan Lake Sonkat (Gloss 15-20)', VarsayilanBirim: 'Kg', Aciklama: 'İtalyan lüks mobilya lake sonkat boyası' },
-  { Id: 64, Kategori: 'Cila, Lake & Boya Kimyasalları', MalzemeAdi: 'Poliüretan Lake Astar', Marka: 'Genç Boya', Model: 'TP545 Poliüretan Beyaz Dolgu Astarı Yüksek Örtücülü', VarsayilanBirim: 'Kg', Aciklama: 'MDF kenar ve yüzey kapatıcı kolay zımparalanan astar' },
-  { Id: 65, Kategori: 'Cila, Lake & Boya Kimyasalları', MalzemeAdi: 'Poliüretan Lake Astar', Marka: 'Sayerlack', Model: 'TU0020 Beyaz PU Dolgu Astarı Hızlı Kuruyan', VarsayilanBirim: 'Kg', Aciklama: 'Yüksek mikron kalınlığı veren lüks astar' },
-  { Id: 66, Kategori: 'Cila, Lake & Boya Kimyasalları', MalzemeAdi: 'Akrilik Şeffaf Vernik', Marka: 'Genç Boya', Model: 'AC600 Sararmaz Şeffaf Akrilik Mat Vernik (Gloss 10)', VarsayilanBirim: 'Kg', Aciklama: 'Doğal ahşap kaplamanın rengini bozmayan sararmaz vernik' },
-  { Id: 67, Kategori: 'Cila, Lake & Boya Kimyasalları', MalzemeAdi: 'Akrilik Şeffaf Vernik', Marka: 'Sayerlack', Model: 'TZ6200 Şeffaf Akrilik Mat Vernik (Doğal Ahşap Dokusu)', VarsayilanBirim: 'Kg', Aciklama: 'Dokunulduğunda ham ahşap hissi veren mat vernik' },
-  { Id: 68, Kategori: 'Cila, Lake & Boya Kimyasalları', MalzemeAdi: 'Ahşap Renklendirici Boya', Marka: 'Sayerlack', Model: 'SU Serisi Su Bazlı Ahşap Renklendirici (Ceviz/Meşe)', VarsayilanBirim: 'Litre', Aciklama: 'Damarları patlatan konsantre ahşap boyası' },
-  { Id: 69, Kategori: 'Cila, Lake & Boya Kimyasalları', MalzemeAdi: 'Tiner & Sertleştirici', Marka: 'Genç Boya', Model: 'TP100 Poliüretan Tiner & HP500 Sertleştirici Set', VarsayilanBirim: 'Takım', Aciklama: 'Boya ve vernik katalizör karışım seti' },
+  { Id: 63, Kategori: 'Cila, Lake & Boya Kimyasalları', MalzemeAdi: 'İpek Mat Lake Sonkat Boya', Marka: '', Model: 'RAL / Özel Ton', VarsayilanBirim: 'Kg', Aciklama: 'Pürüzsüz ipek mat lake boya' },
+  { Id: 64, Kategori: 'Cila, Lake & Boya Kimyasalları', MalzemeAdi: 'Parlak Lake Sonkat Boya', Marka: '', Model: 'High Gloss', VarsayilanBirim: 'Kg', Aciklama: 'Parlak lake boya' },
+  { Id: 65, Kategori: 'Cila, Lake & Boya Kimyasalları', MalzemeAdi: 'Poliüretan Beyaz Dolgu Astarı', Marka: '', Model: 'Örtücü Astar', VarsayilanBirim: 'Kg', Aciklama: 'Boya öncesi zımparalık astar' },
+  { Id: 66, Kategori: 'Cila, Lake & Boya Kimyasalları', MalzemeAdi: 'Sararmaz Akrilik Şeffaf Mat Vernik', Marka: '', Model: 'Gloss 10', VarsayilanBirim: 'Kg', Aciklama: 'Doğal kaplama koruyucu vernik' },
+  { Id: 67, Kategori: 'Cila, Lake & Boya Kimyasalları', MalzemeAdi: 'Su Bazlı Ahşap Renklendirici', Marka: '', Model: 'Ceviz / Meşe / Siyah', VarsayilanBirim: 'Litre', Aciklama: 'Ahşap renklendirici ahşap boyası' },
+  { Id: 68, Kategori: 'Cila, Lake & Boya Kimyasalları', MalzemeAdi: 'Poliüretan Tiner & Sertleştirici Set', Marka: '', Model: 'Katalizör Seti', VarsayilanBirim: 'Takım', Aciklama: 'Boya tineri ve sertleştirici' },
+  { Id: 69, Kategori: 'Cila, Lake & Boya Kimyasalları', MalzemeAdi: 'Ahşap Tutkalı (PVA / D3 / D4)', Marka: '', Model: 'Su Bazlı', VarsayilanBirim: 'Kg', Aciklama: 'Ahşap birleştirme tutkalı' },
+  { Id: 70, Kategori: 'Cila, Lake & Boya Kimyasalları', MalzemeAdi: 'Hızlı Yapıştırıcı (MDF Kit)', Marka: '', Model: 'Siyanomakrilat + Aktivatör', VarsayilanBirim: 'Takım', Aciklama: 'MDF sprey hızlı yapıştırıcı' },
+  { Id: 71, Kategori: 'Cila, Lake & Boya Kimyasalları', MalzemeAdi: 'Şeffaf Silikon / Nötr Silikon', Marka: '', Model: '310ml Kartuş', VarsayilanBirim: 'Adet', Aciklama: 'Sızdırmazlık ve yapıştırma silikonu' },
 
   // 7. Sünger, Kumaş & Deri Döşeme
-  { Id: 70, Kategori: 'Sünger, Kumaş & Deri Döşeme', MalzemeAdi: '35 DNS HR Rahat Koltuk Süngeri', Marka: 'İşbir Sünger', Model: '35 DNS HR Yüksek Esneklik Blok Sünger 12cm', VarsayilanBirim: 'Metreküp (m³)', Aciklama: 'Çökmeye karşı 10 yıl garantili konforlu oturum süngeri' },
-  { Id: 71, Kategori: 'Sünger, Kumaş & Deri Döşeme', MalzemeAdi: '32 DNS Gri Sert Sünger', Marka: 'Form Sünger', Model: '32 DNS Sert Oturum & Sandalye Süngeri 8cm/10cm', VarsayilanBirim: 'Metreküp (m³)', Aciklama: 'Restoran ve otel sandalyeleri için formunu koruyan sünger' },
-  { Id: 72, Kategori: 'Sünger, Kumaş & Deri Döşeme', MalzemeAdi: '28 DNS Yumuşak Sırt Süngeri', Marka: 'İşbir Sünger', Model: '28 DNS Soft Sırt & Kırlent Süngeri 6cm', VarsayilanBirim: 'Metreküp (m³)', Aciklama: 'Yumuşak sırt yaslanma süngeri' },
-  { Id: 73, Kategori: 'Sünger, Kumaş & Deri Döşeme', MalzemeAdi: 'Silikonize Elyaf', Marka: 'Form Sünger', Model: '300gr/m² Laminasyonlu Silikonize Rulo Elyaf', VarsayilanBirim: 'Metre (mt)', Aciklama: 'Sünger üstü yumuşatıcı ve kumaş kaydırmaz elyaf' },
-  { Id: 74, Kategori: 'Sünger, Kumaş & Deri Döşeme', MalzemeAdi: 'Bukle / Boucle Döşemelik Kumaş', Marka: 'Kadifeteks / Sertex', Model: 'Teddy Bukle Krem / Ekru Dokulu Döşemelik Kumaş', VarsayilanBirim: 'Metre (mt)', Aciklama: 'Modern berjer ve puf için kalın dokuma bukle kumaş' },
-  { Id: 75, Kategori: 'Sünger, Kumaş & Deri Döşeme', MalzemeAdi: 'Nubuk & Süet Kumaş', Marka: 'Sertex', Model: 'Antrasit Su İtici Leke Tutmaz Premium Nubuk', VarsayilanBirim: 'Metre (mt)', Aciklama: 'Kolay temizlenen kadifemsi silinebilir nubuk' },
-  { Id: 76, Kategori: 'Sünger, Kumaş & Deri Döşeme', MalzemeAdi: 'Hakiki Dana Derisi', Marka: 'Yerli Tabakhane', Model: '1.2-1.4mm Hakiki Mobilyalık Dana Derisi (Taba / Siyah)', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Lüks makam koltuğu ve berjer için tam damarlı hakiki deri' },
+  { Id: 72, Kategori: 'Sünger, Kumaş & Deri Döşeme', MalzemeAdi: '35 DNS HR Koltuk Süngeri', Marka: '', Model: '12cm Blok Sünger', VarsayilanBirim: 'Metreküp (m³)', Aciklama: 'Yüksek esneklik konforlu oturum süngeri' },
+  { Id: 73, Kategori: 'Sünger, Kumaş & Deri Döşeme', MalzemeAdi: '32 DNS Gri Sert Sünger', Marka: '', Model: '8cm / 10cm', VarsayilanBirim: 'Metreküp (m³)', Aciklama: 'Formunu koruyan sert sünger' },
+  { Id: 74, Kategori: 'Sünger, Kumaş & Deri Döşeme', MalzemeAdi: '28 DNS Yumuşak Sırt Süngeri', Marka: '', Model: '6cm Soft', VarsayilanBirim: 'Metreküp (m³)', Aciklama: 'Sırt ve yaslanma süngeri' },
+  { Id: 75, Kategori: 'Sünger, Kumaş & Deri Döşeme', MalzemeAdi: 'Silikonize Rulo Elyaf', Marka: '', Model: '300gr/m²', VarsayilanBirim: 'Metre (mt)', Aciklama: 'Kumaş altı yumuşatıcı elyaf' },
+  { Id: 76, Kategori: 'Sünger, Kumaş & Deri Döşeme', MalzemeAdi: 'Bukle (Boucle) Döşemelik Kumaş', Marka: '', Model: 'Krem / Ekru Dokulu', VarsayilanBirim: 'Metre (mt)', Aciklama: 'Dokulu berjer kumaşı' },
+  { Id: 77, Kategori: 'Sünger, Kumaş & Deri Döşeme', MalzemeAdi: 'Nubuk & Süet Döşemelik Kumaş', Marka: '', Model: 'Leke Tutmaz', VarsayilanBirim: 'Metre (mt)', Aciklama: 'Silinebilir nubuk kumaş' },
+  { Id: 78, Kategori: 'Sünger, Kumaş & Deri Döşeme', MalzemeAdi: 'Hakiki Dana Derisi', Marka: '', Model: '1.2-1.4mm Taba / Siyah', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Mobilyalık hakiki deri' },
 
   // 8. Mermer, Granit & Porselen Tezgah
-  { Id: 77, Kategori: 'Mermer, Granit & Porselen Tezgah', MalzemeAdi: 'Geniş Ebat Porselen Plaka', Marka: 'Laminam', Model: 'Pietra di Savoia Grigia 1620x3240x12mm Porselen Masa Tablası', VarsayilanBirim: 'Plaka', Aciklama: 'Çizilmez, leke tutmaz, yanmaz dev porselen levha' },
-  { Id: 78, Kategori: 'Mermer, Granit & Porselen Tezgah', MalzemeAdi: 'Geniş Ebat Porselen Plaka', Marka: 'Neolith', Model: 'Calacatta Gold Silk 1600x3200x12mm Porselen Ada Tezgahı', VarsayilanBirim: 'Plaka', Aciklama: 'Altın damarlı ipeksi mat mutfak ve banyo porseleni' },
-  { Id: 79, Kategori: 'Mermer, Granit & Porselen Tezgah', MalzemeAdi: 'Kuvars Kompoze Taş', Marka: 'Belenco', Model: 'Metropol Gri 20mm Parlak Mutfak Tablası', VarsayilanBirim: 'Plaka', Aciklama: 'Gözeneksiz antibakteriyel kuvars taş levha' },
-  { Id: 80, Kategori: 'Mermer, Granit & Porselen Tezgah', MalzemeAdi: 'Kuvars Kompoze Taş', Marka: 'Çimstone', Model: 'Arcadia 20mm Parlak Beyaz Kuvars Taş', VarsayilanBirim: 'Plaka', Aciklama: 'Kuvars kompoze çizilmeye dayanıklı plaka' },
-  { Id: 81, Kategori: 'Mermer, Granit & Porselen Tezgah', MalzemeAdi: 'Doğal Mermer Tablası', Marka: 'Doğal Mermer Ocağı', Model: 'Toros Siyahı Doğal Mermer 20mm Pahlı & Cilalı', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Beyaz kılcal damarlı siyah doğal mermer plaka' },
-  { Id: 82, Kategori: 'Mermer, Granit & Porselen Tezgah', MalzemeAdi: 'Doğal Mermer Tablası', Marka: 'Doğal Mermer Ocağı', Model: 'Calacatta İtalyan Doğal Mermer 20mm Honlu', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'İtalyan menşeili lüks doğal mermer tabla' },
+  { Id: 79, Kategori: 'Mermer, Granit & Porselen Tezgah', MalzemeAdi: 'Geniş Ebat Porselen Plaka', Marka: '', Model: '12mm Çizilmez', VarsayilanBirim: 'Plaka', Aciklama: 'Dev porselen tezgah plakatı' },
+  { Id: 80, Kategori: 'Mermer, Granit & Porselen Tezgah', MalzemeAdi: 'Kuvars Kompoze Taş Plaka', Marka: '', Model: '20mm Mutfak Tablası', VarsayilanBirim: 'Plaka', Aciklama: 'Kuvars taş levha' },
+  { Id: 81, Kategori: 'Mermer, Granit & Porselen Tezgah', MalzemeAdi: 'Doğal Calacatta Mermer Tabla', Marka: '', Model: '20mm Honlu / Cilalı', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Doğal mermer plaka' },
+  { Id: 82, Kategori: 'Mermer, Granit & Porselen Tezgah', MalzemeAdi: 'Doğal Toros Siyahı Mermer Tabla', Marka: '', Model: '20mm Cilalı', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Siyah doğal mermer' },
 
   // 9. Aydınlatma & LED Profilleri
-  { Id: 83, Kategori: 'Aydınlatma & LED Profilleri', MalzemeAdi: 'Noktasız COB Şerit LED', Marka: 'Hafele Loox', Model: 'Loox5 24V COB LED 3000K Günışığı 8mm (Noktasız Kesintisiz Işık)', VarsayilanBirim: 'Metre (mt)', Aciklama: 'Göz almayan homojen difüze ışık şeridi' },
-  { Id: 84, Kategori: 'Aydınlatma & LED Profilleri', MalzemeAdi: 'Noktasız COB Şerit LED', Marka: 'Samsung LED', Model: '24V COB LED 4000K Doğal Beyaz 10W/m IP20', VarsayilanBirim: 'Metre (mt)', Aciklama: 'Yüksek lümenli dolap içi aydınlatma LED şeridi' },
-  { Id: 85, Kategori: 'Aydınlatma & LED Profilleri', MalzemeAdi: 'LED Alüminyum Kanal Profil', Marka: 'Hafele', Model: 'Gömme Siyah Alüminyum Buzlu Kapaklı LED Kanalı 2mt', VarsayilanBirim: 'Boy (6mt)', Aciklama: 'Dolap rafı ve baza altına sıfır gömme alüminyum kanal' },
-  { Id: 86, Kategori: 'Aydınlatma & LED Profilleri', MalzemeAdi: 'Slim LED Güç Kaynağı (Trafo)', Marka: 'Mean Well', Model: 'LRS-100-24 (24V 4.5A 100W Slim Metal Kasa Trafo)', VarsayilanBirim: 'Adet', Aciklama: 'Mobilya arkasına sığabilen ultra ince LED trafosu' },
-  { Id: 87, Kategori: 'Aydınlatma & LED Profilleri', MalzemeAdi: 'Slim LED Güç Kaynağı (Trafo)', Marka: 'Mean Well', Model: 'LRS-200-24 (24V 8.8A 200W Slim Metal Kasa Trafo)', VarsayilanBirim: 'Adet', Aciklama: 'Büyük giyinme odaları ve ada mutfak LED besleme trafosu' },
-  { Id: 88, Kategori: 'Aydınlatma & LED Profilleri', MalzemeAdi: 'Mobilya İçi Sensör / Anahtar', Marka: 'Hafele Loox', Model: 'Loox5 Kızılötesi Çift Kapak Sensörü 24V', VarsayilanBirim: 'Adet', Aciklama: 'Kapak açıldığında otomatik yanan dolap içi sensör' },
-  { Id: 89, Kategori: 'Aydınlatma & LED Profilleri', MalzemeAdi: 'Gömme Masa Üstü Priz & Şarj', Marka: 'Hafele', Model: 'Pop-Up 3lü Priz + USB-A/Type-C Hızlı Şarj Kulesi Mat Siyah', VarsayilanBirim: 'Adet', Aciklama: 'Toplantı ve çalışma masası tablasına bas-aç gömme kule' },
+  { Id: 83, Kategori: 'Aydınlatma & LED Profilleri', MalzemeAdi: '24V COB Noktasız Şerit LED', Marka: '', Model: '3000K / 4000K', VarsayilanBirim: 'Metre (mt)', Aciklama: 'Homojen noktasız LED ışık' },
+  { Id: 84, Kategori: 'Aydınlatma & LED Profilleri', MalzemeAdi: 'Gömme Alüminyum LED Kanal Profil & Difüzör', Marka: '', Model: 'Siyah / Eloksal 2mt', VarsayilanBirim: 'Boy (6mt)', Aciklama: 'Gömme alüminyum LED profili' },
+  { Id: 85, Kategori: 'Aydınlatma & LED Profilleri', MalzemeAdi: '24V Slim Metal Kasa Trafo', Marka: '', Model: '100W / 200W', VarsayilanBirim: 'Adet', Aciklama: 'İnce LED besleme trafosu' },
+  { Id: 86, Kategori: 'Aydınlatma & LED Profilleri', MalzemeAdi: 'Kapak Sensörü / Switch', Marka: '', Model: 'Kızılötesi 24V', VarsayilanBirim: 'Adet', Aciklama: 'Dolap içi sensör' },
+  { Id: 87, Kategori: 'Aydınlatma & LED Profilleri', MalzemeAdi: 'Gömme Pop-Up Masa Üstü Priz Kulesi', Marka: '', Model: '3lü Priz + USB-A/Type-C', VarsayilanBirim: 'Adet', Aciklama: 'Masaya gömme priz kulesi' },
 
   // 10. Paketleme & Sevkiyat Malzemesi
-  { Id: 90, Kategori: 'Paketleme & Sevkiyat Malzemesi', MalzemeAdi: 'Baloncuklu Naylon (Patpat)', Marka: 'Standart Ambalaj', Model: '100cm Çift Kat Kalın Patpat Rulo 50m (Mobilya Koruma)', VarsayilanBirim: 'Top', Aciklama: 'Lake ve cam parçaları darbelerden koruyucu patpat rulo' },
-  { Id: 91, Kategori: 'Paketleme & Sevkiyat Malzemesi', MalzemeAdi: 'Streç Film', Marka: '3M / Standart', Model: '50cm 23 Mikron Süper Dayanıklı Sanayi Tipi El Streç Filmi 300m', VarsayilanBirim: 'Top', Aciklama: 'Paket sarma ve tozdan koruma elastik streç film' },
-  { Id: 92, Kategori: 'Paketleme & Sevkiyat Malzemesi', MalzemeAdi: 'Karton Köşebent', Marka: 'Standart Ambalaj', Model: '10x10cm L Tipi Kalın Mukavva Köşebent 2mt', VarsayilanBirim: 'Boy (6mt)', Aciklama: 'Mobilya köşelerinin ezilmesini önleyen sert köşe kartonu' },
-  { Id: 93, Kategori: 'Paketleme & Sevkiyat Malzemesi', MalzemeAdi: 'Strafor Köşe Takozu', Marka: 'Standart Ambalaj', Model: '40 DNS EPS 3 Boyutlu Köşe Koruma Takozu', VarsayilanBirim: 'Adet', Aciklama: 'Modül ve masa köşelerine takılan darbe emici takoz' },
-  { Id: 94, Kategori: 'Paketleme & Sevkiyat Malzemesi', MalzemeAdi: 'Koli Bandı', Marka: 'Ve-Ge', Model: '45mm x 100m Şeffaf Akrilik Güçlü Koli Bandı', VarsayilanBirim: 'Adet', Aciklama: 'Koli ve ambalaj sabitleme yapışkan bandı' }
+  { Id: 88, Kategori: 'Paketleme & Sevkiyat Malzemesi', MalzemeAdi: 'Baloncuklu Naylon (Patpat)', Marka: '', Model: '100cm Çift Kat 50m Rulo', VarsayilanBirim: 'Top', Aciklama: 'Koruyucu patpat rulo' },
+  { Id: 89, Kategori: 'Paketleme & Sevkiyat Malzemesi', MalzemeAdi: 'Sanayi Tipi Streç Film', Marka: '', Model: '50cm 23 Mikron', VarsayilanBirim: 'Top', Aciklama: 'Paket sarma streç filmi' },
+  { Id: 90, Kategori: 'Paketleme & Sevkiyat Malzemesi', MalzemeAdi: 'Karton L Köşebent', Marka: '', Model: '10x10cm 2mt', VarsayilanBirim: 'Boy (6mt)', Aciklama: 'Köşe koruma mukavvası' },
+  { Id: 91, Kategori: 'Paketleme & Sevkiyat Malzemesi', MalzemeAdi: 'EPS Strafor Köşe Takozu', Marka: '', Model: '3 Boyutlu Köşe Protektörü', VarsayilanBirim: 'Adet', Aciklama: 'Strafor köşe koruyucu' },
+  { Id: 92, Kategori: 'Paketleme & Sevkiyat Malzemesi', MalzemeAdi: 'Şeffaf Koli Bandı', Marka: '', Model: '45mm x 100m', VarsayilanBirim: 'Adet', Aciklama: 'Güçlü ambalaj bandı' }
 ];
 
 let memMalzemeKatalog: any[] = [...VARSAYILAN_MALZEME_KATALOG];
@@ -3212,12 +3211,8 @@ function loadMemMalzemeKatalog(): any[] | null {
   return null;
 }
 
-const loadedMalzemeKatalog = loadMemMalzemeKatalog();
-if (loadedMalzemeKatalog && loadedMalzemeKatalog.length > 0) {
-  memMalzemeKatalog = loadedMalzemeKatalog;
-} else {
-  saveMemMalzemeKatalog();
-}
+memMalzemeKatalog = [...VARSAYILAN_MALZEME_KATALOG];
+saveMemMalzemeKatalog();
 
 let memDepartmanlar: any[] = [
   { Id: 1, Ad: 'Tasarım & Mimarlık' },
@@ -7562,39 +7557,51 @@ app.get('/api/siparisler', async (req, res) => {
       try {
         const dbRes = await pool.query(`SELECT * FROM ${detectedTables.malzemeSiparisleri} ORDER BY "Id" DESC`);
         if (dbRes.rows.length > 0) {
-          list = dbRes.rows.map(r => ({
-            Id: Number(getProp(r, 'Id', 'id')),
-            SiparisNo: String(getProp(r, 'SiparisNo', 'siparisno') || ''),
-            ProjeAdi: String(getProp(r, 'ProjeAdi', 'projeadi') || ''),
-            Kategori: String(getProp(r, 'Kategori', 'kategori') || ''),
-            MalzemeAdi: String(getProp(r, 'MalzemeAdi', 'malzemeadi') || ''),
-            Marka: String(getProp(r, 'Marka', 'marka') || ''),
-            Model: String(getProp(r, 'Model', 'model') || ''),
-            Miktar: Number(getProp(r, 'Miktar', 'miktar') || 1),
-            Birim: String(getProp(r, 'Birim', 'birim') || 'Adet'),
-            Olculer: String(getProp(r, 'Olculer', 'olculer') || ''),
-            Aciklama: String(getProp(r, 'Aciklama', 'aciklama') || ''),
-            Aciliyet: String(getProp(r, 'Aciliyet', 'aciliyet') || 'Normal'),
-            TerminTarihi: String(getProp(r, 'TerminTarihi', 'termintarihi') || ''),
-            Tarih: String(getProp(r, 'Tarih', 'tarih') || ''),
-            TalepEden: String(getProp(r, 'TalepEden', 'talepeden') || ''),
-            Durum: String(getProp(r, 'Durum', 'durum') || 'Bekliyor'),
-            KilitliMi: Boolean(getProp(r, 'KilitliMi', 'kilitlimi')),
-            KilitleyenKisi: String(getProp(r, 'KilitleyenKisi', 'kilitleyenkisi') || ''),
-            KilitTarihi: String(getProp(r, 'KilitTarihi', 'kilittarihi') || ''),
-            KilitNotu: String(getProp(r, 'KilitNotu', 'kilitnotu') || ''),
-            TedarikciFirma: String(getProp(r, 'TedarikciFirma', 'tedarikcifirma') || ''),
-            SiparisTarihi: String(getProp(r, 'SiparisTarihi', 'siparistarihi') || ''),
-            TahminiTutar: getProp(r, 'TahminiTutar', 'tahminitutar') ? Number(getProp(r, 'TahminiTutar', 'tahminitutar')) : null,
-            FaturaIrsaliyeNo: String(getProp(r, 'FaturaIrsaliyeNo', 'faturairsaliyeno') || ''),
-            SatinalmaNotu: String(getProp(r, 'SatinalmaNotu', 'satinalmanotu') || ''),
-            Kalemler: [],
-            Belgeler: [],
-            FotoSayisi: 0,
-            OkunduMu: Boolean(getProp(r, 'OkunduMu', 'okundumu')),
-            OlusturanRol: String(getProp(r, 'OlusturanRol', 'olusturanrol') || 'ustabasi'),
-            GuncellemeTarihi: String(getProp(r, 'GuncellemeTarihi', 'guncellemetarihi') || '')
-          }));
+          list = dbRes.rows.map(r => {
+            let dbKalemler: any[] = [];
+            const rawKalemler = getProp(r, 'Kalemler', 'kalemler');
+            if (rawKalemler) {
+              if (typeof rawKalemler === 'string') {
+                try { dbKalemler = JSON.parse(rawKalemler); } catch (e) {}
+              } else if (Array.isArray(rawKalemler)) {
+                dbKalemler = rawKalemler;
+              }
+            }
+
+            return {
+              Id: Number(getProp(r, 'Id', 'id')),
+              SiparisNo: String(getProp(r, 'SiparisNo', 'siparisno') || ''),
+              ProjeAdi: String(getProp(r, 'ProjeAdi', 'projeadi') || ''),
+              Kategori: String(getProp(r, 'Kategori', 'kategori') || ''),
+              MalzemeAdi: String(getProp(r, 'MalzemeAdi', 'malzemeadi') || ''),
+              Marka: String(getProp(r, 'Marka', 'marka') || ''),
+              Model: String(getProp(r, 'Model', 'model') || ''),
+              Miktar: Number(getProp(r, 'Miktar', 'miktar') || 1),
+              Birim: String(getProp(r, 'Birim', 'birim') || 'Adet'),
+              Olculer: String(getProp(r, 'Olculer', 'olculer') || ''),
+              Aciklama: String(getProp(r, 'Aciklama', 'aciklama') || ''),
+              Aciliyet: String(getProp(r, 'Aciliyet', 'aciliyet') || 'Normal'),
+              TerminTarihi: String(getProp(r, 'TerminTarihi', 'termintarihi') || ''),
+              Tarih: String(getProp(r, 'Tarih', 'tarih') || ''),
+              TalepEden: String(getProp(r, 'TalepEden', 'talepeden') || ''),
+              Durum: String(getProp(r, 'Durum', 'durum') || 'Bekliyor'),
+              KilitliMi: Boolean(getProp(r, 'KilitliMi', 'kilitlimi')),
+              KilitleyenKisi: String(getProp(r, 'KilitleyenKisi', 'kilitleyenkisi') || ''),
+              KilitTarihi: String(getProp(r, 'KilitTarihi', 'kilittarihi') || ''),
+              KilitNotu: String(getProp(r, 'KilitNotu', 'kilitnotu') || ''),
+              TedarikciFirma: String(getProp(r, 'TedarikciFirma', 'tedarikcifirma') || ''),
+              SiparisTarihi: String(getProp(r, 'SiparisTarihi', 'siparistarihi') || ''),
+              TahminiTutar: getProp(r, 'TahminiTutar', 'tahminitutar') ? Number(getProp(r, 'TahminiTutar', 'tahminitutar')) : null,
+              FaturaIrsaliyeNo: String(getProp(r, 'FaturaIrsaliyeNo', 'faturairsaliyeno') || ''),
+              SatinalmaNotu: String(getProp(r, 'SatinalmaNotu', 'satinalmanotu') || ''),
+              Kalemler: dbKalemler,
+              Belgeler: [],
+              FotoSayisi: 0,
+              OkunduMu: Boolean(getProp(r, 'OkunduMu', 'okundumu')),
+              OlusturanRol: String(getProp(r, 'OlusturanRol', 'olusturanrol') || 'ustabasi'),
+              GuncellemeTarihi: String(getProp(r, 'GuncellemeTarihi', 'guncellemetarihi') || '')
+            };
+          });
 
           // Ekli belgeleri yükle
           if (detectedTables.malzemeSiparisBelgeler) {
@@ -7833,9 +7840,9 @@ app.post('/api/siparisler', async (req, res) => {
             "Olculer", "Aciklama", "Aciliyet", "TerminTarihi", "Tarih", "TalepEden",
             "Durum", "KilitliMi", "KilitleyenKisi", "KilitTarihi", "KilitNotu",
             "TedarikciFirma", "SiparisTarihi", "TahminiTutar", "FaturaIrsaliyeNo",
-            "SatinalmaNotu", "OkunduMu", "OlusturanRol", "GuncellemeTarihi"
+            "SatinalmaNotu", "OkunduMu", "OlusturanRol", "GuncellemeTarihi", "Kalemler"
           ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29
           )
         `, [
           newSiparis.Id, newSiparis.SiparisNo, newSiparis.ProjeAdi, newSiparis.Kategori, newSiparis.MalzemeAdi,
@@ -7844,7 +7851,7 @@ app.post('/api/siparisler', async (req, res) => {
           newSiparis.TerminTarihi, newSiparis.Tarih, newSiparis.TalepEden, newSiparis.Durum, newSiparis.KilitliMi,
           newSiparis.KilitleyenKisi, newSiparis.KilitTarihi, newSiparis.KilitNotu, newSiparis.TedarikciFirma,
           newSiparis.SiparisTarihi, newSiparis.TahminiTutar, newSiparis.FaturaIrsaliyeNo, newSiparis.SatinalmaNotu,
-          newSiparis.OkunduMu, newSiparis.OlusturanRol, newSiparis.GuncellemeTarihi
+          newSiparis.OkunduMu, newSiparis.OlusturanRol, newSiparis.GuncellemeTarihi, JSON.stringify(kalemler)
         ]);
 
         if (detectedTables.malzemeSiparisBelgeler && belgeler.length > 0) {
@@ -7972,15 +7979,15 @@ app.put('/api/siparisler/:id', async (req, res) => {
             "Olculer" = $8, "Aciklama" = $9, "Aciliyet" = $10, "TerminTarihi" = $11, "TalepEden" = $12,
             "Durum" = $13, "KilitliMi" = $14, "KilitleyenKisi" = $15, "KilitTarihi" = $16, "KilitNotu" = $17,
             "TedarikciFirma" = $18, "SiparisTarihi" = $19, "TahminiTutar" = $20, "FaturaIrsaliyeNo" = $21,
-            "SatinalmaNotu" = $22, "GuncellemeTarihi" = $23
-          WHERE "Id" = $24 OR "Id"::text = $25::text
+            "SatinalmaNotu" = $22, "GuncellemeTarihi" = $23, "Kalemler" = $24
+          WHERE "Id" = $25 OR "Id"::text = $26::text
         `, [
           updatedSiparis.ProjeAdi, updatedSiparis.Kategori, updatedSiparis.MalzemeAdi, updatedSiparis.Marka, updatedSiparis.Model,
           updatedSiparis.Miktar, updatedSiparis.Birim, updatedSiparis.Olculer, updatedSiparis.Aciklama, updatedSiparis.Aciliyet,
           updatedSiparis.TerminTarihi, updatedSiparis.TalepEden, updatedSiparis.Durum, updatedSiparis.KilitliMi,
           updatedSiparis.KilitleyenKisi, updatedSiparis.KilitTarihi, updatedSiparis.KilitNotu, updatedSiparis.TedarikciFirma,
           updatedSiparis.SiparisTarihi, updatedSiparis.TahminiTutar, updatedSiparis.FaturaIrsaliyeNo, updatedSiparis.SatinalmaNotu,
-          updatedSiparis.GuncellemeTarihi, isNaN(numId) ? -1 : numId, String(rawId)
+          updatedSiparis.GuncellemeTarihi, JSON.stringify(kalemler), isNaN(numId) ? -1 : numId, String(rawId)
         ]);
       } catch (dbErr: any) {
         console.error('[DB SIPARIS UPDATE ERROR]', dbErr.message);
