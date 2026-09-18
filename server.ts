@@ -1369,25 +1369,42 @@ async function syncHatirlaticiAttachmentState(hatirlaticiId: number, belgeler: a
     if (directPhotoCol) {
       // Find type of directPhotoCol to convert appropriately
       let isBytea = false;
+      let isVarchar = false;
+      let maxLen = 0;
       try {
         const dtRes = await pool.query(`
-          SELECT data_type 
+          SELECT data_type, character_maximum_length 
           FROM information_schema.columns 
-          WHERE table_name = $1 AND column_name = $2
-        `, [detectedTables.hatirlaticilar.replace(/"/g, ''), directPhotoCol]);
-        if (dtRes.rows.length > 0 && dtRes.rows[0].data_type === 'bytea') {
-          isBytea = true;
+          WHERE (table_name = $1 OR table_name = $2) AND column_name = $3
+        `, [
+          detectedTables.hatirlaticilar.replace(/"/g, ''),
+          detectedTables.hatirlaticilar.replace(/"/g, '').toLowerCase(),
+          directPhotoCol
+        ]);
+        if (dtRes.rows.length > 0) {
+          const dt = (dtRes.rows[0].data_type || '').toLowerCase();
+          if (dt === 'bytea') isBytea = true;
+          if (dt === 'character varying' || dt === 'varchar') {
+            isVarchar = true;
+            maxLen = Number(dtRes.rows[0].character_maximum_length) || 255;
+          }
         }
       } catch (e) {}
 
-      updates.push(`"${directPhotoCol}" = $${paramIndex++}`);
       const fileContent = belgeler.length > 0 ? (belgeler[0].DosyaIcerigi || belgeler[0].base64 || '') : '';
       if (isBytea && typeof fileContent === 'string' && fileContent.includes('base64,')) {
+        updates.push(`"${directPhotoCol}" = $${paramIndex++}`);
         const base64Data = fileContent.split('base64,')[1];
         vals.push(Buffer.from(base64Data, 'base64'));
       } else if (isBytea && typeof fileContent === 'string' && !fileContent.startsWith('data:')) {
+        updates.push(`"${directPhotoCol}" = $${paramIndex++}`);
         vals.push(Buffer.from(fileContent, 'base64'));
+      } else if (isVarchar && typeof fileContent === 'string' && fileContent.length > (maxLen || 255)) {
+        // Varchar kolonu dosya adını tutuyor olabilir, devasa base64 varchar'a sığmaz
+        updates.push(`"${directPhotoCol}" = $${paramIndex++}`);
+        vals.push(belgeler.length > 0 ? String(belgeler[0].DosyaAdi || 'foto.png').substring(0, maxLen || 255) : null);
       } else {
+        updates.push(`"${directPhotoCol}" = $${paramIndex++}`);
         vals.push(fileContent || null);
       }
     }
@@ -4525,6 +4542,7 @@ app.get('/api/hatirlaticilar', async (req, res) => {
 
 app.post('/api/hatirlaticilar', async (req, res) => {
   try {
+    const belgelerList = (req.body.Belgeler && Array.isArray(req.body.Belgeler)) ? req.body.Belgeler : [];
     const yeni = {
       Id: req.body.Id || Date.now(),
       Baslik: req.body.Baslik,
@@ -4534,21 +4552,21 @@ app.post('/api/hatirlaticilar', async (req, res) => {
       TamamlandiMi: Boolean(req.body.TamamlandiMi ?? false),
       OnemDerecesi: req.body.OnemDerecesi || 'Normal',
       SorumluPersonelId: req.body.SorumluPersonelId ? Number(req.body.SorumluPersonelId) : null,
-      Belgeler: req.body.Belgeler || []
+      Belgeler: belgelerList,
+      FotoSayisi: belgelerList.length
     };
 
     if (isDbConnected && detectedTables.hatirlaticilar) {
       try {
         const inserted = await saveHatirlaticiToDb(null, yeni, true);
         if (inserted) {
-          if (detectedTables.hatirlaticiBelgeler && req.body.Belgeler && Array.isArray(req.body.Belgeler)) {
-            await saveHatirlaticiBelgelerToDb(inserted.Id, req.body.Belgeler);
-            inserted.Belgeler = req.body.Belgeler;
-            inserted.FotoSayisi = req.body.Belgeler.length;
-          } else {
-            inserted.Belgeler = [];
-            inserted.FotoSayisi = 0;
+          try {
+            await saveHatirlaticiBelgelerToDb(inserted.Id, belgelerList);
+          } catch (bErr: any) {
+            console.error('[DB ATTACHMENTS ERROR]', bErr.message);
           }
+          inserted.Belgeler = belgelerList;
+          inserted.FotoSayisi = belgelerList.length;
           memHatirlaticilar.unshift(inserted);
           saveMemHatirlaticilar();
           return res.status(201).json(inserted);
@@ -4558,11 +4576,12 @@ app.post('/api/hatirlaticilar', async (req, res) => {
       }
     }
 
-    const memYeni = { ...yeni, FotoSayisi: yeni.Belgeler.length };
+    const memYeni = { ...yeni };
     memHatirlaticilar.unshift(memYeni);
     saveMemHatirlaticilar();
     res.status(201).json(memYeni);
   } catch (err: any) {
+    console.error('[POST HATIRLATICI ERROR]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -4584,8 +4603,12 @@ app.put('/api/hatirlaticilar/:id', async (req, res) => {
       try {
         const updated = await saveHatirlaticiToDb(id, patchData, false);
         if (updated) {
-          if (detectedTables.hatirlaticiBelgeler && req.body.Belgeler !== undefined) {
-            await saveHatirlaticiBelgelerToDb(id, req.body.Belgeler);
+          if (req.body.Belgeler !== undefined && Array.isArray(req.body.Belgeler)) {
+            try {
+              await saveHatirlaticiBelgelerToDb(id, req.body.Belgeler);
+            } catch (bErr: any) {
+              console.error('[DB UPDATE ATTACHMENTS ERROR]', bErr.message);
+            }
             updated.Belgeler = req.body.Belgeler;
             updated.FotoSayisi = req.body.Belgeler.length;
           }
@@ -4634,8 +4657,10 @@ app.delete('/api/hatirlaticilar/:id', async (req, res) => {
         };
         const idCol = mapCol(['Id', 'GorevId', 'HatirlaticiId']) || 'Id';
 
-        if (detectedTables.hatirlaticiBelgeler) {
+        try {
           await deleteHatirlaticiBelgelerFromDb(id);
+        } catch (bErr: any) {
+          console.error('[DB DELETE ATTACHMENTS ERROR]', bErr.message);
         }
         await pool.query(`DELETE FROM ${detectedTables.hatirlaticilar} WHERE "${idCol}" = $1`, [id]);
         memHatirlaticilar = memHatirlaticilar.filter(h => h.Id !== id);

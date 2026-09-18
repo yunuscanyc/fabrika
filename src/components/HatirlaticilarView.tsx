@@ -18,15 +18,16 @@ import {
   Eye,
   FileText,
   AlertTriangle,
-  FileCheck
+  FileCheck,
+  Loader2
 } from 'lucide-react';
 
 interface HatirlaticilarViewProps {
   hatirlaticilar: Hatirlatici[];
-  onAddHatirlatici: (h: Partial<Hatirlatici>) => void;
+  onAddHatirlatici: (h: Partial<Hatirlatici>) => Promise<any> | void;
   onToggleTamamlandi: (id: number, tamamlandi: boolean) => void;
-  onUpdateHatirlatici?: (id: number, fields: Partial<Hatirlatici>) => void;
-  onDeleteHatirlatici: (id: number) => void;
+  onUpdateHatirlatici?: (id: number, fields: Partial<Hatirlatici>) => Promise<any> | void;
+  onDeleteHatirlatici: (id: number) => Promise<any> | void;
 }
 
 export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
@@ -38,6 +39,8 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
 }) => {
   const [modalAcik, setModalAcik] = useState(false);
   const [secilenHatirlatici, setSecilenHatirlatici] = useState<Hatirlatici | null>(null);
+  const [silinecekHatirlatici, setSilinecekHatirlatici] = useState<Hatirlatici | null>(null);
+  const [siliniyor, setSiliniyor] = useState(false);
   const [filtre, setFiltre] = useState<'hepsi' | 'bugun' | 'tamamlanmayan' | 'tamamlanan'>('hepsi');
   const [doubleClickHintId, setDoubleClickHintId] = useState<number | null>(null);
   const clickTrackerRef = useRef<{ id: number; time: number } | null>(null);
@@ -92,6 +95,9 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
   
   // Yeni Ekleme Formu için Ekler (Belgeler)
   const [yeniBelgeler, setYeniBelgeler] = useState<any[]>([]);
+  const [isProcessingFiles, setIsProcessingFiles] = useState(false);
+  const [kaydediliyor, setKaydediliyor] = useState(false);
+  const [kayitHatasi, setKayitHatasi] = useState<string | null>(null);
   
   // Detay/Güncelleme Formu için State'ler
   const [editBaslik, setEditBaslik] = useState('');
@@ -100,11 +106,64 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
   const [editKategori, setEditKategori] = useState<any>('Gorev');
   const [editOnem, setEditOnem] = useState<any>('Normal');
   const [editBelgeler, setEditBelgeler] = useState<any[]>([]);
+  const [guncelleniyor, setGuncelleniyor] = useState(false);
+  const [guncellemeHatasi, setGuncellemeHatasi] = useState<string | null>(null);
 
   // Fotoğraf Lightbox/Önizleme State
   const [lightboxDosya, setLightboxDosya] = useState<any | null>(null);
 
   const bugunStr = new Date().toISOString().split('T')[0];
+
+  // Görsel Sıkıştırma Fonksiyonu (Mobil kamera fotoğraflarını optimize eder, hızlı yükler)
+  const compressImageFile = (file: File, maxDim = 1200, quality = 0.8): Promise<string> => {
+    return new Promise((resolve) => {
+      if (!file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = () => resolve((reader.result as string) || '');
+        reader.onerror = () => resolve('');
+        reader.readAsDataURL(file);
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          if (width > height) {
+            if (width > maxDim) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            }
+          } else {
+            if (height > maxDim) {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve((e.target?.result as string) || '');
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          try {
+            resolve(canvas.toDataURL('image/jpeg', quality));
+          } catch {
+            resolve((e.target?.result as string) || '');
+          }
+        };
+        img.onerror = () => resolve((e.target?.result as string) || '');
+        img.src = (e.target?.result as string) || '';
+      };
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    });
+  };
 
   // Seçilen hatırlatıcı değiştiğinde güncelleme state'lerini doldur
   useEffect(() => {
@@ -168,18 +227,33 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
     return a.Tarih.localeCompare(b.Tarih);
   });
 
-  // Çoklu Dosya Yükleme (Base64) Helper
-  const handleDosyaYukle = (e: React.ChangeEvent<HTMLInputElement>, isEditMode: boolean) => {
+  // Çoklu Dosya Yükleme (Otomatik Optimizasyonlu Base64) Helper
+  const handleDosyaYukle = async (e: React.ChangeEvent<HTMLInputElement>, isEditMode: boolean) => {
     const files = e.target.files;
-    if (!files) return;
+    if (!files || files.length === 0) return;
 
-    Array.from(files).forEach((file: any) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64 = reader.result as string;
+    setIsProcessingFiles(true);
+    if (isEditMode) {
+      setGuncellemeHatasi(null);
+    } else {
+      setKayitHatasi(null);
+    }
+
+    try {
+      const fileList = Array.from(files) as File[];
+      for (const file of fileList) {
+        const base64 = await compressImageFile(file, 1200, 0.8);
+        if (!base64) continue;
+
+        // Gerçek taban boyutu hesaplama
+        const approxBytes = Math.round((base64.length * 3) / 4);
+        const boyutStr = approxBytes > 1024 * 1024 
+          ? (approxBytes / (1024 * 1024)).toFixed(1) + ' MB' 
+          : (approxBytes / 1024).toFixed(1) + ' KB';
+
         const yeniBelge = {
           DosyaAdi: file.name,
-          DosyaBoyutu: (file.size / 1024).toFixed(1) + ' KB',
+          DosyaBoyutu: boyutStr,
           YuklemeTarihi: new Date().toISOString().split('T')[0],
           DosyaIcerigi: base64
         };
@@ -189,12 +263,13 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
         } else {
           setYeniBelgeler(prev => [...prev, yeniBelge]);
         }
-      };
-      reader.readAsDataURL(file);
-    });
-
-    // Reset input value
-    e.target.value = '';
+      }
+    } catch (err: any) {
+      console.error('Dosya yükleme/sıkıştırma hatası:', err);
+    } finally {
+      setIsProcessingFiles(false);
+      e.target.value = '';
+    }
   };
 
   const dosyaSil = (index: number, isEditMode: boolean) => {
@@ -396,10 +471,10 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      onDeleteHatirlatici(h.Id);
+                      setSilinecekHatirlatici(h);
                     }}
                     className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50/80 transition-colors"
-                    title="Hatırlatıcıyı Sil"
+                    title="Hatırlatıcıyı Sil (Onay İster)"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -496,18 +571,34 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                   </span>
                   
                   {/* Dosya Seçme Butonu */}
-                  <label className="cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors">
-                    <Upload className="w-3.5 h-3.5" />
-                    Görsel Ekle
-                    <input
-                      type="file"
-                      multiple
-                      accept="image/*"
-                      onChange={(e) => handleDosyaYukle(e, true)}
-                      className="hidden"
-                    />
-                  </label>
+                  <div className="flex items-center gap-2">
+                    {isProcessingFiles && (
+                      <span className="text-[11px] text-blue-600 flex items-center gap-1 font-semibold animate-pulse">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        Görsel işleniyor...
+                      </span>
+                    )}
+                    <label className="cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors">
+                      <Upload className="w-3.5 h-3.5" />
+                      Görsel Ekle
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        onChange={(e) => handleDosyaYukle(e, true)}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
                 </div>
+
+                {/* Hata Bildirimi */}
+                {guncellemeHatasi && (
+                  <div className="mb-2 p-2.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start gap-1.5">
+                    <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                    <span>{guncellemeHatasi}</span>
+                  </div>
+                )}
 
                 {/* Dosya Önizleme Izgarası */}
                 {editBelgeler.length === 0 ? (
@@ -561,47 +652,78 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
 
             {/* İşlem Butonları */}
             <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  onToggleTamamlandi(secilenHatirlatici.Id, !secilenHatirlatici.TamamlandiMi);
-                  setSecilenHatirlatici(null);
-                }}
-                className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors ${
-                  secilenHatirlatici.TamamlandiMi 
-                    ? 'bg-slate-100 hover:bg-slate-200 text-slate-700' 
-                    : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200'
-                }`}
-              >
-                {secilenHatirlatici.TamamlandiMi ? 'Açık Göreve Çevir' : 'Tamamlandı Olarak İşaretle'}
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onToggleTamamlandi(secilenHatirlatici.Id, !secilenHatirlatici.TamamlandiMi);
+                    setSecilenHatirlatici(null);
+                  }}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors ${
+                    secilenHatirlatici.TamamlandiMi 
+                      ? 'bg-slate-100 hover:bg-slate-200 text-slate-700' 
+                      : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200'
+                  }`}
+                >
+                  {secilenHatirlatici.TamamlandiMi ? 'Açık Göreve Çevir' : 'Tamamlandı Olarak İşaretle'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSilinecekHatirlatici(secilenHatirlatici)}
+                  className="px-3 py-2 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 hover:border-red-300 border border-red-200 flex items-center gap-1 transition-colors"
+                  title="Hatırlatıcıyı Ajandadan Sil (Onay İster)"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Sil</span>
+                </button>
+              </div>
 
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setSecilenHatirlatici(null)}
+                  disabled={guncelleniyor}
                   className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 text-xs font-semibold"
                 >
                   Kapat
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
+                  disabled={guncelleniyor || isProcessingFiles}
+                  onClick={async () => {
                     if (onUpdateHatirlatici) {
-                      onUpdateHatirlatici(secilenHatirlatici.Id, {
-                        Baslik: editBaslik,
-                        Aciklama: editAciklama,
-                        Tarih: editTarih,
-                        Kategori: editKategori,
-                        OnemDerecesi: editOnem,
-                        Belgeler: editBelgeler
-                      });
+                      setGuncellemeHatasi(null);
+                      setGuncelleniyor(true);
+                      try {
+                        await onUpdateHatirlatici(secilenHatirlatici.Id, {
+                          Baslik: editBaslik,
+                          Aciklama: editAciklama,
+                          Tarih: editTarih,
+                          Kategori: editKategori,
+                          OnemDerecesi: editOnem,
+                          Belgeler: editBelgeler
+                        });
+                        setSecilenHatirlatici(null);
+                      } catch (err: any) {
+                        setGuncellemeHatasi(err?.message || 'Güncelleme sırasında bir hata oluştu.');
+                      } finally {
+                        setGuncelleniyor(false);
+                      }
+                    } else {
+                      setSecilenHatirlatici(null);
                     }
-                    setSecilenHatirlatici(null);
                   }}
-                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm flex items-center gap-1"
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 disabled:opacity-50 transition-colors"
                 >
-                  <span>Değişiklikleri Kaydet</span>
+                  {guncelleniyor ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Kaydediliyor...</span>
+                    </>
+                  ) : (
+                    <span>Değişiklikleri Kaydet</span>
+                  )}
                 </button>
               </div>
             </div>
@@ -615,25 +737,52 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
           <div className="bg-white rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-extrabold text-slate-900 text-base">Yeni Görev / Hatırlatıcı Ekle</h3>
-              <button onClick={() => setModalAcik(false)} className="text-slate-400 hover:text-slate-600">
+              <button 
+                onClick={() => {
+                  setModalAcik(false);
+                  setKayitHatasi(null);
+                  setYeniBelgeler([]);
+                }} 
+                className="text-slate-400 hover:text-slate-600"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
+            {/* Hata Bildirimi */}
+            {kayitHatasi && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold">Kayıt Başarısız Oldu</p>
+                  <p>{kayitHatasi}</p>
+                </div>
+              </div>
+            )}
+
             <form
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
+                setKayitHatasi(null);
+                setKaydediliyor(true);
                 const form = e.target as any;
-                onAddHatirlatici({
-                  Baslik: form.baslik.value,
-                  Aciklama: form.aciklama.value,
-                  Tarih: form.tarih.value || bugunStr,
-                  Kategori: form.kategori.value,
-                  TamamlandiMi: false,
-                  OnemDerecesi: form.onem.value,
-                  Belgeler: yeniBelgeler
-                });
-                setModalAcik(false);
+                try {
+                  await onAddHatirlatici({
+                    Baslik: form.baslik.value,
+                    Aciklama: form.aciklama.value,
+                    Tarih: form.tarih.value || bugunStr,
+                    Kategori: form.kategori.value,
+                    TamamlandiMi: false,
+                    OnemDerecesi: form.onem.value,
+                    Belgeler: yeniBelgeler
+                  });
+                  setModalAcik(false);
+                  setYeniBelgeler([]);
+                } catch (err: any) {
+                  setKayitHatasi(err?.message || 'Hatırlatıcı kaydedilirken bir hata oluştu. Lütfen tekrar deneyin.');
+                } finally {
+                  setKaydediliyor(false);
+                }
               }}
               className="space-y-4 text-xs sm:text-sm"
             >
@@ -695,17 +844,25 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                     <ImageIcon className="w-4 h-4 text-slate-500" />
                     Fotoğraf / Belge Ekle ({yeniBelgeler.length})
                   </span>
-                  <label className="cursor-pointer bg-slate-50 hover:bg-slate-100 text-slate-600 text-[11px] font-bold px-2 py-1 rounded-lg border border-slate-200 flex items-center gap-1">
-                    <Upload className="w-3 h-3" />
-                    Görsel Seç
-                    <input
-                      type="file"
-                      multiple
-                      accept="image/*"
-                      onChange={(e) => handleDosyaYukle(e, false)}
-                      className="hidden"
-                    />
-                  </label>
+                  <div className="flex items-center gap-2">
+                    {isProcessingFiles && (
+                      <span className="text-[11px] text-blue-600 flex items-center gap-1 font-semibold animate-pulse">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        Görsel işleniyor...
+                      </span>
+                    )}
+                    <label className="cursor-pointer bg-slate-50 hover:bg-slate-100 text-slate-600 text-[11px] font-bold px-2 py-1 rounded-lg border border-slate-200 flex items-center gap-1">
+                      <Upload className="w-3 h-3" />
+                      Görsel Seç
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        onChange={(e) => handleDosyaYukle(e, false)}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
                 </div>
 
                 {yeniBelgeler.length > 0 && (
@@ -747,19 +904,111 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setModalAcik(false)}
+                  disabled={kaydediliyor}
+                  onClick={() => {
+                    setModalAcik(false);
+                    setKayitHatasi(null);
+                    setYeniBelgeler([]);
+                  }}
                   className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100 text-xs font-semibold"
                 >
                   İptal
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm"
+                  disabled={kaydediliyor || isProcessingFiles}
+                  className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 disabled:opacity-50 transition-colors"
                 >
-                  Kaydet
+                  {kaydediliyor ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Kaydediliyor...</span>
+                    </>
+                  ) : (
+                    <span>Kaydet</span>
+                  )}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* SİLME ONAY MODALI (AJANDA & HATIRLATICI) */}
+      {silinecekHatirlatici && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 flex flex-col space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-extrabold text-slate-900 text-base">Hatırlatıcıyı Sil</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Bu ajanda hatırlatıcısını silmek istediğinize emin misiniz?
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs space-y-1">
+              <div className="font-bold text-slate-800 line-clamp-2">
+                {silinecekHatirlatici.Baslik}
+              </div>
+              <div className="text-[11px] text-slate-500 flex items-center gap-2">
+                <span>📅 {silinecekHatirlatici.Tarih}</span>
+                <span>•</span>
+                <span>🏷️ {silinecekHatirlatici.Kategori}</span>
+              </div>
+              {silinecekHatirlatici.Belgeler && silinecekHatirlatici.Belgeler.length > 0 && (
+                <div className="text-[11px] text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-200/60 flex items-center gap-1 font-medium mt-1">
+                  <ImageIcon className="w-3.5 h-3.5 shrink-0" />
+                  <span>Bu kayda ait {silinecekHatirlatici.Belgeler.length} adet ekli fotoğraf da silinecektir.</span>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                disabled={siliniyor}
+                onClick={() => setSilinecekHatirlatici(null)}
+                className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 text-xs font-semibold transition-colors"
+              >
+                Vazgeç
+              </button>
+              <button
+                type="button"
+                disabled={siliniyor}
+                onClick={async () => {
+                  setSiliniyor(true);
+                  try {
+                    await onDeleteHatirlatici(silinecekHatirlatici.Id);
+                    // Eğer detay modalı da bu öğeyi gösteriyorsa onu da kapat
+                    if (secilenHatirlatici && secilenHatirlatici.Id === silinecekHatirlatici.Id) {
+                      setSecilenHatirlatici(null);
+                    }
+                    setSilinecekHatirlatici(null);
+                  } catch (err: any) {
+                    console.error('Silme hatası:', err);
+                  } finally {
+                    setSiliniyor(false);
+                  }
+                }}
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 transition-colors disabled:opacity-50"
+              >
+                {siliniyor ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Siliniyor...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Evet, Sil</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

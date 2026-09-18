@@ -1,5 +1,23 @@
 [
   {
+    "Id": 1789723614484,
+    "Baslik": "Resimli Hatirlatici",
+    "Aciklama": "Gorsel Testi",
+    "Tarih": "2026-09-18",
+    "Kategori": "Gorev",
+    "TamamlandiMi": false,
+    "OnemDerecesi": "Normal",
+    "SorumluPersonelId": null,
+    "Belgeler": [
+      {
+        "DosyaAdi": "foto.png",
+        "DosyaBoyutu": "1.5 KB",
+        "DosyaIcerigi": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+      }
+    ],
+    "FotoSayisi": 1
+  },
+  {
     "Id": 1,
     "Baslik": "Jeneratör ve ön tarafa sundurma yapılması.",
     "Aciklama": "Sundurma demir karkas montajı ve çatı kaplama işleri tamamlandı",

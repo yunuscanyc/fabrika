@@ -440,7 +440,7 @@ export default function App() {
   };
 
   // Hatırlatıcı Ekle
-  const handleAddHatirlatici = async (h: Partial<Hatirlatici>) => {
+  const handleAddHatirlatici = async (h: Partial<Hatirlatici>): Promise<boolean> => {
     try {
       const res = await fetch('/api/hatirlaticilar', {
         method: 'POST',
@@ -454,8 +454,10 @@ export default function App() {
       const yeni = await res.json();
       setHatirlaticilar(prev => [yeni, ...prev]);
       fetch('/api/ozet').then(r => r.json()).then(setOzet);
+      return true;
     } catch (err) {
       console.error('Hatırlatıcı ekleme hatası:', err);
+      throw err;
     }
   };
 
@@ -523,19 +525,27 @@ export default function App() {
         prev.map(h => (h.Id === id ? guncellenen : h))
       );
       fetch('/api/ozet').then(r => r.json()).then(setOzet);
+      return guncellenen;
     } catch (err) {
       console.error('Hatırlatıcı güncelleme hatası:', err);
+      throw err;
     }
   };
 
   // Hatırlatıcı Sil
   const handleDeleteHatirlatici = async (id: number) => {
     try {
-      await fetch(`/api/hatirlaticilar/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/hatirlaticilar/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(`Sunucu Hatası (${res.status}): ${txt || res.statusText}`);
+      }
       setHatirlaticilar(prev => prev.filter(h => h.Id !== id));
       fetch('/api/ozet').then(r => r.json()).then(setOzet);
+      return true;
     } catch (err) {
       console.error('Hatırlatıcı silme hatası:', err);
+      throw err;
     }
   };
 
