@@ -446,16 +446,41 @@ export type SiparisDurumu =
 
 export type SiparisAciliyet = 'Normal' | 'Acil' | 'CokAcil';
 
-export interface MalzemeSiparisi {
+export interface MalzemeKatalogItem {
   Id: number;
-  SiparisNo: string;
-  ProjeAdi: string;
   Kategori: string;
   MalzemeAdi: string;
+  Marka?: string;
+  Model?: string;
+  VarsayilanBirim?: string;
+  Aciklama?: string;
+}
+
+export interface MalzemeSiparisKalemi {
+  Id?: string | number;
+  Kategori: string;
+  MalzemeAdi: string;
+  Marka?: string;
+  Model?: string;
   Miktar: number;
   Birim: string;
   Olculer?: string;
   Aciklama?: string;
+}
+
+export interface MalzemeSiparisi {
+  Id: number;
+  SiparisNo: string;
+  ProjeAdi: string;
+  Kategori?: string;
+  MalzemeAdi?: string;
+  Marka?: string;
+  Model?: string;
+  Miktar?: number;
+  Birim?: string;
+  Olculer?: string;
+  Aciklama?: string;
+  Kalemler?: MalzemeSiparisKalemi[];
   Aciliyet: SiparisAciliyet;
   TerminTarihi?: string;
   Tarih: string;

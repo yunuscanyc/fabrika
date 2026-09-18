@@ -92,6 +92,7 @@ let detectedTables: {
   sistemGuvenlik?: string;
   malzemeSiparisleri?: string;
   malzemeSiparisBelgeler?: string;
+  malzemeKatalog?: string;
 } = {};
 
 // Nesnelerden büyük/küçük harf duyarsız ve alternatif alan isimlerini okuma
@@ -1886,7 +1887,8 @@ async function checkDbConnection() {
       yevmiyeciler: matchTable(['Yevmiyeciler', 'yevmiyeciler', 'DisCalisanlar', 'dis_calisanlar']),
       projePersoneller: matchTable(['ProjePersonelleri', 'proje_personelleri', 'ProjePersoneller', 'proje_personeller', 'ProjeKadrosu', 'proje_kadrosu']),
       malzemeSiparisleri: matchTable(['MalzemeSiparisleri', 'malzeme_siparisleri', 'Siparisler', 'siparisler']),
-      malzemeSiparisBelgeler: matchTable(['MalzemeSiparisBelgeleri', 'malzeme_siparis_belgeleri', 'SiparisBelgeleri', 'siparis_belgeleri'])
+      malzemeSiparisBelgeler: matchTable(['MalzemeSiparisBelgeleri', 'malzeme_siparis_belgeleri', 'SiparisBelgeleri', 'siparis_belgeleri']),
+      malzemeKatalog: matchTable(['MalzemeKatalog', 'malzeme_katalog', 'MalzemeKatalogu', 'malzeme_katalogu', 'MalzemeKataloglari'])
     };
 
     if (!detectedTables.projeBelgeler) {
@@ -2591,6 +2593,18 @@ async function checkDbConnection() {
       }
     }
 
+    if (detectedTables.malzemeSiparisleri) {
+      try {
+        await pool.query(`
+          ALTER TABLE ${detectedTables.malzemeSiparisleri} 
+          ADD COLUMN IF NOT EXISTS "Marka" VARCHAR(150),
+          ADD COLUMN IF NOT EXISTS "Model" VARCHAR(255)
+        `);
+      } catch (alterErr: any) {
+        console.error('[DB MALZEME SIPARIS ALTER COLUMNS ERROR]', alterErr.message);
+      }
+    }
+
     if (!detectedTables.malzemeSiparisBelgeler) {
       try {
         await pool.query(`
@@ -2607,6 +2621,26 @@ async function checkDbConnection() {
         detectedTables.malzemeSiparisBelgeler = '"MalzemeSiparisBelgeleri"';
       } catch (createErr: any) {
         console.error('[DB] "MalzemeSiparisBelgeleri" tablosu oluşturulamadı:', createErr.message);
+      }
+    }
+
+    if (!detectedTables.malzemeKatalog) {
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS "MalzemeKatalog" (
+            "Id" SERIAL PRIMARY KEY,
+            "Kategori" VARCHAR(100) NOT NULL,
+            "MalzemeAdi" VARCHAR(255) NOT NULL,
+            "Marka" VARCHAR(150),
+            "Model" VARCHAR(255),
+            "VarsayilanBirim" VARCHAR(50) DEFAULT 'Adet',
+            "Aciklama" TEXT DEFAULT ''
+          )
+        `);
+        console.log('[DB] "MalzemeKatalog" tablosu hazırlandı.');
+        detectedTables.malzemeKatalog = '"MalzemeKatalog"';
+      } catch (createErr: any) {
+        console.error('[DB] "MalzemeKatalog" tablosu oluşturulamadı:', createErr.message);
       }
     }
 
@@ -2865,6 +2899,20 @@ function loadMemHatirlaticilar(): any[] | null {
   return null;
 }
 
+const loadedHatirlaticilar = loadMemHatirlaticilar();
+if (loadedHatirlaticilar && loadedHatirlaticilar.length > 0) {
+  const hasCompleted = loadedHatirlaticilar.some((h: any) => h.TamamlandiMi);
+  if (!hasCompleted) {
+    const defaultCompleted = memHatirlaticilar.filter(h => h.TamamlandiMi);
+    memHatirlaticilar = [...loadedHatirlaticilar, ...defaultCompleted];
+    saveMemHatirlaticilar();
+  } else {
+    memHatirlaticilar = loadedHatirlaticilar;
+  }
+} else {
+  saveMemHatirlaticilar();
+}
+
 let memMalzemeSiparisleri: any[] = [
   {
     Id: 1,
@@ -3020,19 +3068,155 @@ if (loadedMalzemeSiparisleri && loadedMalzemeSiparisleri.length > 0) {
 }
 
 // Başlangıçta diskteki mevcut veriyi yükle; yoksa kurtarılan verileri diske kaydet
-const loadedHatirlaticilar = loadMemHatirlaticilar();
-if (loadedHatirlaticilar && loadedHatirlaticilar.length > 0) {
-  // Eğer diskteki listede hiç tamamlanmış görev yoksa, varsayılan tamamlanmış görevleri birleştirerek kurtar
-  const hasCompleted = loadedHatirlaticilar.some((h: any) => h.TamamlandiMi);
-  if (!hasCompleted) {
-    const defaultCompleted = memHatirlaticilar.filter(h => h.TamamlandiMi);
-    memHatirlaticilar = [...loadedHatirlaticilar, ...defaultCompleted];
-    saveMemHatirlaticilar();
-  } else {
-    memHatirlaticilar = loadedHatirlaticilar;
+const MALZEME_KATALOG_FILE = path.join(DATA_DIR, 'mem_malzeme_katalog.json');
+
+export const VARSAYILAN_MALZEME_KATALOG = [
+  // 1. Cam & Ayna
+  { Id: 1, Kategori: 'Cam & Ayna', MalzemeAdi: 'Flotal Ayna', Marka: 'Şişecam', Model: 'Flotal E Gümüş Ayna 4mm (Düz Rodajlı)', VarsayilanBirim: 'Metrekare (m²)', Aciklama: '4mm net flotal gümüş ayna' },
+  { Id: 2, Kategori: 'Cam & Ayna', MalzemeAdi: 'Flotal Ayna', Marka: 'Şişecam', Model: 'Flotal Füme Ayna 4mm (Düz Rodajlı)', VarsayilanBirim: 'Metrekare (m²)', Aciklama: '4mm füme dekoratif reflekte ayna' },
+  { Id: 3, Kategori: 'Cam & Ayna', MalzemeAdi: 'Flotal Ayna', Marka: 'Şişecam', Model: 'Flotal Bronz Ayna 4mm (Düz Rodajlı)', VarsayilanBirim: 'Metrekare (m²)', Aciklama: '4mm bronz sıcak ton dekoratif ayna' },
+  { Id: 4, Kategori: 'Cam & Ayna', MalzemeAdi: 'Temperli Şeffaf Cam', Marka: 'Şişecam', Model: '6mm Şeffaf Temperli Düz Rodajlı Cam', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Dolap kapakları ve raflar için temperli cam' },
+  { Id: 5, Kategori: 'Cam & Ayna', MalzemeAdi: 'Temperli Şeffaf Cam', Marka: 'Şişecam', Model: '8mm Şeffaf Temperli Rodajlı Cam Masa Tablası', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Masa ve sehpa üstü ağır yük camı' },
+  { Id: 6, Kategori: 'Cam & Ayna', MalzemeAdi: 'Extra Clear Düşük Demirli Cam', Marka: 'AGC Flat Glass', Model: 'Planibel Clearvision 6mm Extra Clear Temperli', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Yeşillik barındırmayan kristal şeffaf cam' },
+  { Id: 7, Kategori: 'Cam & Ayna', MalzemeAdi: 'Extra Clear Düşük Demirli Cam', Marka: 'AGC Flat Glass', Model: 'Planibel Clearvision 8mm Extra Clear Temperli', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Kristal netlikte ekstra şeffaf kalın cam' },
+  { Id: 8, Kategori: 'Cam & Ayna', MalzemeAdi: 'Satine / Buzlu Cam', Marka: 'Yorglas', Model: '4mm Mat Satine Asit İndirme Cam', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Işığı geçiren yarı saydam pürüzsüz yüzey' },
+  { Id: 9, Kategori: 'Cam & Ayna', MalzemeAdi: 'Oluklu / Nervürlü Cam (Fluted)', Marka: 'Yorglas', Model: 'Reeded / Nervürlü Fluted 6mm Çizgili Cam', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Vintage & modern mobilya kapak camı' },
+  { Id: 10, Kategori: 'Cam & Ayna', MalzemeAdi: 'Boyalı Cam (Lacobel)', Marka: 'AGC Flat Glass', Model: 'Lacobel 9005 Parlak Siyah 4mm', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Arka yüzeyi boyalı parlak siyah panel camı' },
+  { Id: 11, Kategori: 'Cam & Ayna', MalzemeAdi: 'Boyalı Cam (Lacobel)', Marka: 'AGC Flat Glass', Model: 'Lacobel 9003 Saf Beyaz 4mm', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Arka yüzeyi boyalı parlak opak beyaz cam' },
+
+  // 2. Mobilya Aksesuarı & Hırdavat
+  { Id: 12, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Frenli Menteşe', Marka: 'Blum', Model: 'Clip Top Blumotion 110° Düz Frenli Menteşe', VarsayilanBirim: 'Adet', Aciklama: 'Entegre frenli standart düz kapak menteşesi' },
+  { Id: 13, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Frenli Menteşe', Marka: 'Blum', Model: 'Clip Top Blumotion 110° Deveboynu Menteşe', VarsayilanBirim: 'Adet', Aciklama: 'Orta bölme iç kapak deveboynu menteşesi' },
+  { Id: 14, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Frenli Menteşe', Marka: 'Samet', Model: 'Master Frenli Menteşe 110° Düz Tabanlı', VarsayilanBirim: 'Adet', Aciklama: '3D ayarlı yumuşak kapanan frenli menteşe' },
+  { Id: 15, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Frenli Menteşe', Marka: 'Hettich', Model: 'Sensys 8645i 110° Entegre Sessiz Frenli', VarsayilanBirim: 'Adet', Aciklama: 'Alman menşeili premium dolap menteşesi' },
+  { Id: 16, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Gizli Ray / Frenli Çekmece Rayı', Marka: 'Blum', Model: 'Movento 500mm 40kg Tip-On Blumotion Gizli Ray', VarsayilanBirim: 'Takım', Aciklama: 'Kulpsuz bas-aç ve frenli yumuşak kapanma tam açılım' },
+  { Id: 17, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Gizli Ray / Frenli Çekmece Rayı', Marka: 'Blum', Model: 'Tandem 500mm Frenli Blumotion Kısmi Açılım', VarsayilanBirim: 'Takım', Aciklama: 'Ahşap çekmeceler için alttan gizli frenli ray' },
+  { Id: 18, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Gizli Ray / Frenli Çekmece Rayı', Marka: 'Samet', Model: 'Slidea Frenli Gizli Ray 500mm', VarsayilanBirim: 'Takım', Aciklama: 'Kendinden yavaşlatıcılı ahşap çekmece rayı' },
+  { Id: 19, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Gizli Ray / Frenli Çekmece Rayı', Marka: 'Hettich', Model: 'Quadro V6 500mm Silent System Tam Açılım', VarsayilanBirim: 'Takım', Aciklama: 'Çelik bilyalı hassas ve sessiz gizli ray takımı' },
+  { Id: 20, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'İnce Yanaklı Çekmece Sistemi', Marka: 'Blum', Model: 'Legrabox Pure 500mm Mat Antrasit / Siyah', VarsayilanBirim: 'Takım', Aciklama: '12.8mm düz ince çelik yanaklı lüks çekmece' },
+  { Id: 21, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'İnce Yanaklı Çekmece Sistemi', Marka: 'Blum', Model: 'Tandembox Antaro 500mm İpek Beyaz / Gri', VarsayilanBirim: 'Takım', Aciklama: 'Bordürlü veya cam panelli çift cidarlı çekmece' },
+  { Id: 22, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'İnce Yanaklı Çekmece Sistemi', Marka: 'Samet', Model: 'FlowBox Slim Çekmece Sistemi 500mm Antrasit', VarsayilanBirim: 'Takım', Aciklama: 'İnce metal yanaklı modern çekmece takımı' },
+  { Id: 23, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'İnce Yanaklı Çekmece Sistemi', Marka: 'Hettich', Model: 'AvanTech YOU İnce Yanak Çekmece 500mm Gümüş', VarsayilanBirim: 'Takım', Aciklama: '13mm düz hatlı tasarım çekmece kiti' },
+  { Id: 24, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Kalkar Kapak Mekanizması', Marka: 'Blum', Model: 'Aventos HF İki Kapaklı Katlanır Kalkar Set', VarsayilanBirim: 'Takım', Aciklama: 'Üst mutfak dolapları için çift kanatlı kalkar' },
+  { Id: 25, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Kalkar Kapak Mekanizması', Marka: 'Blum', Model: 'Aventos HK-S Tek Kapaklı Kompakt Kalkar Mekanizma', VarsayilanBirim: 'Takım', Aciklama: 'Küçük ve orta boy kalkar kapaklar için frenli' },
+  { Id: 26, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Kalkar Kapak Mekanizması', Marka: 'Samet', Model: 'D-Lite Lift Frenli Kalkar Kapak Mekanizması', VarsayilanBirim: 'Takım', Aciklama: 'İnce gövdeli menteşesiz kalkar kapak seti' },
+  { Id: 27, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Kalkar Kapak Mekanizması', Marka: 'Hafele', Model: 'Free flap 1.7 Frenli Kalkar Kapak Donanımı', VarsayilanBirim: 'Takım', Aciklama: 'Kompakt tasarım çok kademeli durdurma' },
+  { Id: 28, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Sürgü Kapak Sistemi', Marka: 'Hafele', Model: 'Slido Classic 50VF Frenli Gardırop Sürgü Mekanizması', VarsayilanBirim: 'Takım', Aciklama: 'Çift yöne frenli alttan/üstten taşımalı sürgü' },
+  { Id: 29, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Sürgü Kapak Sistemi', Marka: 'Hettich', Model: 'TopLine XL 80kg Üstten Asma Frenli Sürgü Sistemi', VarsayilanBirim: 'Takım', Aciklama: 'Geniş ve ağır gardırop kapakları için sessiz sürgü' },
+  { Id: 30, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Gardırop İçi Aksesuar & Kiler', Marka: 'Vauth-Sagel', Model: 'CornerStone Döner Köşe Kiler Sepeti 900mm', VarsayilanBirim: 'Takım', Aciklama: 'Kör köşe modülü dışarı çıkan çift tepsi kiler' },
+  { Id: 31, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Gardırop İçi Aksesuar & Kiler', Marka: 'Hafele', Model: 'Hidrolik Gardırop Asansörü 830-1150mm Krom/Siyah', VarsayilanBirim: 'Adet', Aciklama: 'Yüksek dolap askılığı indirme mekanizması' },
+  { Id: 32, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Kulp & Profil Kulp', Marka: 'Çebi', Model: 'Gola Alüminyum Profil Kulp L/C Tip Mat Siyah 4mt', VarsayilanBirim: 'Boy (6mt)', Aciklama: 'Kulpsuz mutfak dolabı entegre gola profili' },
+  { Id: 33, Kategori: 'Mobilya Aksesuarı & Hırdavat', MalzemeAdi: 'Kulp & Profil Kulp', Marka: 'Hafele', Model: 'Mat Siyah D Kulp 160mm Eksen Çinko Alaşım', VarsayilanBirim: 'Adet', Aciklama: 'Modern masif ve lake dolap kulpu' },
+
+  // 3. MDF & Ahşap Panel
+  { Id: 34, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'MDFLam 18mm', Marka: 'Kastamonu Entegre', Model: 'Vision D153 Antrasit Gri 2100x2800x18mm', VarsayilanBirim: 'Plaka', Aciklama: '1. sınıf çift yüz melamin kaplı MDF' },
+  { Id: 35, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'MDFLam 18mm', Marka: 'Kastamonu Entegre', Model: 'Evogloss D112 High Gloss Parlak Beyaz 18mm', VarsayilanBirim: 'Plaka', Aciklama: 'Yüksek parlaklıklı PVC/PET kaplı panel' },
+  { Id: 36, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'MDFLam 18mm', Marka: 'Starwood', Model: 'Starpan 18mm Beyaz Gövdelik MDFLam 2100x2800', VarsayilanBirim: 'Plaka', Aciklama: 'Dolap iç gövdeleri için standart beyaz MDFLam' },
+  { Id: 37, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'MDFLam 18mm', Marka: 'Starwood', Model: 'Supramat Mat Siyah 18mm İpeksi Dokunuş', VarsayilanBirim: 'Plaka', Aciklama: 'Parmak izi tutmayan süper mat yüzey' },
+  { Id: 38, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'MDFLam 18mm', Marka: 'AGT', Model: 'Supramat 734 Soft Touch Macaron Yeşil 18mm', VarsayilanBirim: 'Plaka', Aciklama: 'Yumuşak dokulu çizilmez lüks mat panel' },
+  { Id: 39, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'MDFLam 18mm', Marka: 'AGT', Model: 'MDFLam Milano Ceviz 18mm Doğal Doku', VarsayilanBirim: 'Plaka', Aciklama: 'Ahşap senkronize damarlı ceviz melamin' },
+  { Id: 40, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'MDFLam 18mm', Marka: 'Kronospan', Model: 'K365 Koyu Meşe Melamin MDFLam 18mm', VarsayilanBirim: 'Plaka', Aciklama: 'Derin gözenekli rustik meşe dekor' },
+  { Id: 41, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'MDFLam 18mm', Marka: 'Egger', Model: 'PerfectSense Matt U999 Siyah 18mm Anti-Fingerprint', VarsayilanBirim: 'Plaka', Aciklama: 'Kadifemsi mat parmak izi bırakmayan lüks panel' },
+  { Id: 42, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'MDFLam 18mm', Marka: 'Egger', Model: 'H3303 Doğal Hamilton Meşe 18mm', VarsayilanBirim: 'Plaka', Aciklama: 'Senkron gözenekli doğal meşe kaplama hissi' },
+  { Id: 43, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'Ham MDF', Marka: 'Kastamonu Entegre', Model: 'Medpan Ham MDF 18mm 2100x2800', VarsayilanBirim: 'Plaka', Aciklama: 'Lake boya ve kaplama için pürüzsüz ham levha' },
+  { Id: 44, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'Ham MDF', Marka: 'Çamsan', Model: 'Ham MDF 8mm / 18mm / 25mm CNC Kalite', VarsayilanBirim: 'Plaka', Aciklama: 'Yüksek yoğunluklu CNC oymaya uygun MDF' },
+  { Id: 45, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'Suya Dayanıklı Yeşil MDF', Marka: 'Kronospan', Model: 'Neme Dayanıklı MR Yeşil MDF 18mm Hydrofuge', VarsayilanBirim: 'Plaka', Aciklama: 'Banyo ve mutfak bazaları için neme dirençli' },
+  { Id: 46, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'Yangına Dayanıklı MDF', Marka: 'Kronospan', Model: 'FR Yangın Geciktirici Kırmızı MDF 18mm', VarsayilanBirim: 'Plaka', Aciklama: 'Otel ve kamu projeleri için B-s1,d0 sertifikalı' },
+  { Id: 47, Kategori: 'MDF & Ahşap Panel', MalzemeAdi: 'Kompakt Laminat', Marka: 'Pelikan', Model: 'İç Mekan Siyah Göbekli Kompakt Laminat 12mm', VarsayilanBirim: 'Plaka', Aciklama: 'Suya ve darbeye tam dayanıklı tezgah ve masa' },
+
+  // 4. Mobilya İskeleti & Metal Karkas
+  { Id: 48, Kategori: 'Mobilya İskeleti & Metal Karkas', MalzemeAdi: 'Kutu Profil (DKP)', Marka: 'Özel Fabrika İmalatı', Model: '20x20x1.5mm DKP Kutu Profil (Siyah Elektrostatik Fırın Boya)', VarsayilanBirim: 'Boy (6mt)', Aciklama: 'Kitaplık ve masa karkası için hassas çekme profil' },
+  { Id: 49, Kategori: 'Mobilya İskeleti & Metal Karkas', MalzemeAdi: 'Kutu Profil (DKP)', Marka: 'Özel Fabrika İmalatı', Model: '40x20x2.0mm DKP Dikdörtgen Kutu Profil', VarsayilanBirim: 'Boy (6mt)', Aciklama: 'Masa ayağı ve konsol taşıyıcı çelik profil' },
+  { Id: 50, Kategori: 'Mobilya İskeleti & Metal Karkas', MalzemeAdi: 'Paslanmaz Profil & Sac', Marka: 'Özel Fabrika İmalatı', Model: '304 Kalite Mat Fırçalı Satine Paslanmaz 30x30x2mm', VarsayilanBirim: 'Boy (6mt)', Aciklama: 'Korozyona dayanıklı lüks satine paslanmaz çelik' },
+  { Id: 51, Kategori: 'Mobilya İskeleti & Metal Karkas', MalzemeAdi: 'Pirinç / PVD Kaplama Ayak', Marka: 'Özel Fabrika İmalatı', Model: 'Titanyum Gold Fırçalı PVD Kaplama Koltuk Ayağı & Baza', VarsayilanBirim: 'Takım', Aciklama: 'Kararmaz titanyum pirinç kaplamalı metal karkas' },
+  { Id: 52, Kategori: 'Mobilya İskeleti & Metal Karkas', MalzemeAdi: 'Alüminyum Çerçeve Profili', Marka: 'Hafele', Model: 'İnce Cam Kapak Profili Mat Siyah 20x20 Menteşe Yuvalı', VarsayilanBirim: 'Boy (6mt)', Aciklama: 'Camlı vitrin ve giyinme odası dolap kapağı' },
+  { Id: 53, Kategori: 'Mobilya İskeleti & Metal Karkas', MalzemeAdi: 'Konik Metal Ayak', Marka: 'Çebi / Samet', Model: 'Konik Mat Siyah Sehpa/Koltuk Ayağı H:150mm Vidalı', VarsayilanBirim: 'Adet', Aciklama: 'Tabanı silikon keçeli açılı metal ayak' },
+  { Id: 54, Kategori: 'Mobilya İskeleti & Metal Karkas', MalzemeAdi: 'Konik Metal Ayak', Marka: 'Çebi / Samet', Model: 'Gold Pirinç Yüksüklü Konik Siyah Metal Ayak H:200mm', VarsayilanBirim: 'Adet', Aciklama: 'Ucu pirinç detaylı modern mobilya ayağı' },
+
+  // 5. Masif Kereste & Kaplama
+  { Id: 55, Kategori: 'Masif Kereste & Kaplama', MalzemeAdi: 'Doğal Ahşap Kaplama', Marka: 'Ege Ahşap / Tuna', Model: '0.6mm Doğal Freze Amerikan Meşe Kaplama', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Düz çizgili freze desenli doğal meşe levha' },
+  { Id: 56, Kategori: 'Masif Kereste & Kaplama', MalzemeAdi: 'Doğal Ahşap Kaplama', Marka: 'İthal Kaplama', Model: '0.6mm Doğal Amerikan Siyah Ceviz Kaplama', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Zengin hareli koyu ton ceviz kaplama' },
+  { Id: 57, Kategori: 'Masif Kereste & Kaplama', MalzemeAdi: 'Masif Kereste', Marka: 'Orman İşletme / İthal', Model: '1. Sınıf Fırınlanmış Amerikan Meşe Kalas 50mm (KD 8-10%)', VarsayilanBirim: 'Metreküp (m³)', Aciklama: 'Nem oranı %8-10 fırınlanmış masa tablası kerestesi' },
+  { Id: 58, Kategori: 'Masif Kereste & Kaplama', MalzemeAdi: 'Masif Kereste', Marka: 'İthal Kereste', Model: '1. Sınıf Fırınlanmış Amerikan Siyah Ceviz 50mm', VarsayilanBirim: 'Metreküp (m³)', Aciklama: 'Budaksız homojen renkli fırınlı ceviz kereste' },
+  { Id: 59, Kategori: 'Masif Kereste & Kaplama', MalzemeAdi: 'Masif Kereste', Marka: 'İthal Kereste', Model: 'Fırınlanmış Masif İroko Kereste (Dış Mekan)', VarsayilanBirim: 'Metreküp (m³)', Aciklama: 'Bahçe ve ıslak mekan mobilyaları için suya dayanıklı' },
+  { Id: 60, Kategori: 'Masif Kereste & Kaplama', MalzemeAdi: 'Marin Kontraplak (Plywood)', Marka: 'İthal Plywood', Model: '18mm Huş (Birch) Marin Kontraplak WBP Tutkallı', VarsayilanBirim: 'Plaka', Aciklama: 'Yüksek mukavemetli katmanlı marin huş kontraplak' },
+
+  // 6. Cila, Lake & Boya Kimyasalları
+  { Id: 61, Kategori: 'Cila, Lake & Boya Kimyasalları', MalzemeAdi: 'İpek Mat Lake Boya', Marka: 'Genç Boya', Model: 'VP500 İpek Mat Lake Sonkat RAL 9003 Saf Beyaz', VarsayilanBirim: 'Kg', Aciklama: 'Sararmaya dirençli pürüzsüz ipek mat lake sonkat' },
+  { Id: 62, Kategori: 'Cila, Lake & Boya Kimyasalları', MalzemeAdi: 'İpek Mat Lake Boya', Marka: 'Genç Boya', Model: 'VP500 İpek Mat Lake Sonkat (Özel Müşteri RAL/NCS Kodu)', VarsayilanBirim: 'Kg', Aciklama: 'Müşteri onaylı özel ton lake boya imalatı' },
+  { Id: 63, Kategori: 'Cila, Lake & Boya Kimyasalları', MalzemeAdi: 'İpek Mat Lake Boya', Marka: 'Sayerlack', Model: 'TZ99 İpek Mat Poliüretan Lake Sonkat (Gloss 15-20)', VarsayilanBirim: 'Kg', Aciklama: 'İtalyan lüks mobilya lake sonkat boyası' },
+  { Id: 64, Kategori: 'Cila, Lake & Boya Kimyasalları', MalzemeAdi: 'Poliüretan Lake Astar', Marka: 'Genç Boya', Model: 'TP545 Poliüretan Beyaz Dolgu Astarı Yüksek Örtücülü', VarsayilanBirim: 'Kg', Aciklama: 'MDF kenar ve yüzey kapatıcı kolay zımparalanan astar' },
+  { Id: 65, Kategori: 'Cila, Lake & Boya Kimyasalları', MalzemeAdi: 'Poliüretan Lake Astar', Marka: 'Sayerlack', Model: 'TU0020 Beyaz PU Dolgu Astarı Hızlı Kuruyan', VarsayilanBirim: 'Kg', Aciklama: 'Yüksek mikron kalınlığı veren lüks astar' },
+  { Id: 66, Kategori: 'Cila, Lake & Boya Kimyasalları', MalzemeAdi: 'Akrilik Şeffaf Vernik', Marka: 'Genç Boya', Model: 'AC600 Sararmaz Şeffaf Akrilik Mat Vernik (Gloss 10)', VarsayilanBirim: 'Kg', Aciklama: 'Doğal ahşap kaplamanın rengini bozmayan sararmaz vernik' },
+  { Id: 67, Kategori: 'Cila, Lake & Boya Kimyasalları', MalzemeAdi: 'Akrilik Şeffaf Vernik', Marka: 'Sayerlack', Model: 'TZ6200 Şeffaf Akrilik Mat Vernik (Doğal Ahşap Dokusu)', VarsayilanBirim: 'Kg', Aciklama: 'Dokunulduğunda ham ahşap hissi veren mat vernik' },
+  { Id: 68, Kategori: 'Cila, Lake & Boya Kimyasalları', MalzemeAdi: 'Ahşap Renklendirici Boya', Marka: 'Sayerlack', Model: 'SU Serisi Su Bazlı Ahşap Renklendirici (Ceviz/Meşe)', VarsayilanBirim: 'Litre', Aciklama: 'Damarları patlatan konsantre ahşap boyası' },
+  { Id: 69, Kategori: 'Cila, Lake & Boya Kimyasalları', MalzemeAdi: 'Tiner & Sertleştirici', Marka: 'Genç Boya', Model: 'TP100 Poliüretan Tiner & HP500 Sertleştirici Set', VarsayilanBirim: 'Takım', Aciklama: 'Boya ve vernik katalizör karışım seti' },
+
+  // 7. Sünger, Kumaş & Deri Döşeme
+  { Id: 70, Kategori: 'Sünger, Kumaş & Deri Döşeme', MalzemeAdi: '35 DNS HR Rahat Koltuk Süngeri', Marka: 'İşbir Sünger', Model: '35 DNS HR Yüksek Esneklik Blok Sünger 12cm', VarsayilanBirim: 'Metreküp (m³)', Aciklama: 'Çökmeye karşı 10 yıl garantili konforlu oturum süngeri' },
+  { Id: 71, Kategori: 'Sünger, Kumaş & Deri Döşeme', MalzemeAdi: '32 DNS Gri Sert Sünger', Marka: 'Form Sünger', Model: '32 DNS Sert Oturum & Sandalye Süngeri 8cm/10cm', VarsayilanBirim: 'Metreküp (m³)', Aciklama: 'Restoran ve otel sandalyeleri için formunu koruyan sünger' },
+  { Id: 72, Kategori: 'Sünger, Kumaş & Deri Döşeme', MalzemeAdi: '28 DNS Yumuşak Sırt Süngeri', Marka: 'İşbir Sünger', Model: '28 DNS Soft Sırt & Kırlent Süngeri 6cm', VarsayilanBirim: 'Metreküp (m³)', Aciklama: 'Yumuşak sırt yaslanma süngeri' },
+  { Id: 73, Kategori: 'Sünger, Kumaş & Deri Döşeme', MalzemeAdi: 'Silikonize Elyaf', Marka: 'Form Sünger', Model: '300gr/m² Laminasyonlu Silikonize Rulo Elyaf', VarsayilanBirim: 'Metre (mt)', Aciklama: 'Sünger üstü yumuşatıcı ve kumaş kaydırmaz elyaf' },
+  { Id: 74, Kategori: 'Sünger, Kumaş & Deri Döşeme', MalzemeAdi: 'Bukle / Boucle Döşemelik Kumaş', Marka: 'Kadifeteks / Sertex', Model: 'Teddy Bukle Krem / Ekru Dokulu Döşemelik Kumaş', VarsayilanBirim: 'Metre (mt)', Aciklama: 'Modern berjer ve puf için kalın dokuma bukle kumaş' },
+  { Id: 75, Kategori: 'Sünger, Kumaş & Deri Döşeme', MalzemeAdi: 'Nubuk & Süet Kumaş', Marka: 'Sertex', Model: 'Antrasit Su İtici Leke Tutmaz Premium Nubuk', VarsayilanBirim: 'Metre (mt)', Aciklama: 'Kolay temizlenen kadifemsi silinebilir nubuk' },
+  { Id: 76, Kategori: 'Sünger, Kumaş & Deri Döşeme', MalzemeAdi: 'Hakiki Dana Derisi', Marka: 'Yerli Tabakhane', Model: '1.2-1.4mm Hakiki Mobilyalık Dana Derisi (Taba / Siyah)', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Lüks makam koltuğu ve berjer için tam damarlı hakiki deri' },
+
+  // 8. Mermer, Granit & Porselen Tezgah
+  { Id: 77, Kategori: 'Mermer, Granit & Porselen Tezgah', MalzemeAdi: 'Geniş Ebat Porselen Plaka', Marka: 'Laminam', Model: 'Pietra di Savoia Grigia 1620x3240x12mm Porselen Masa Tablası', VarsayilanBirim: 'Plaka', Aciklama: 'Çizilmez, leke tutmaz, yanmaz dev porselen levha' },
+  { Id: 78, Kategori: 'Mermer, Granit & Porselen Tezgah', MalzemeAdi: 'Geniş Ebat Porselen Plaka', Marka: 'Neolith', Model: 'Calacatta Gold Silk 1600x3200x12mm Porselen Ada Tezgahı', VarsayilanBirim: 'Plaka', Aciklama: 'Altın damarlı ipeksi mat mutfak ve banyo porseleni' },
+  { Id: 79, Kategori: 'Mermer, Granit & Porselen Tezgah', MalzemeAdi: 'Kuvars Kompoze Taş', Marka: 'Belenco', Model: 'Metropol Gri 20mm Parlak Mutfak Tablası', VarsayilanBirim: 'Plaka', Aciklama: 'Gözeneksiz antibakteriyel kuvars taş levha' },
+  { Id: 80, Kategori: 'Mermer, Granit & Porselen Tezgah', MalzemeAdi: 'Kuvars Kompoze Taş', Marka: 'Çimstone', Model: 'Arcadia 20mm Parlak Beyaz Kuvars Taş', VarsayilanBirim: 'Plaka', Aciklama: 'Kuvars kompoze çizilmeye dayanıklı plaka' },
+  { Id: 81, Kategori: 'Mermer, Granit & Porselen Tezgah', MalzemeAdi: 'Doğal Mermer Tablası', Marka: 'Doğal Mermer Ocağı', Model: 'Toros Siyahı Doğal Mermer 20mm Pahlı & Cilalı', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'Beyaz kılcal damarlı siyah doğal mermer plaka' },
+  { Id: 82, Kategori: 'Mermer, Granit & Porselen Tezgah', MalzemeAdi: 'Doğal Mermer Tablası', Marka: 'Doğal Mermer Ocağı', Model: 'Calacatta İtalyan Doğal Mermer 20mm Honlu', VarsayilanBirim: 'Metrekare (m²)', Aciklama: 'İtalyan menşeili lüks doğal mermer tabla' },
+
+  // 9. Aydınlatma & LED Profilleri
+  { Id: 83, Kategori: 'Aydınlatma & LED Profilleri', MalzemeAdi: 'Noktasız COB Şerit LED', Marka: 'Hafele Loox', Model: 'Loox5 24V COB LED 3000K Günışığı 8mm (Noktasız Kesintisiz Işık)', VarsayilanBirim: 'Metre (mt)', Aciklama: 'Göz almayan homojen difüze ışık şeridi' },
+  { Id: 84, Kategori: 'Aydınlatma & LED Profilleri', MalzemeAdi: 'Noktasız COB Şerit LED', Marka: 'Samsung LED', Model: '24V COB LED 4000K Doğal Beyaz 10W/m IP20', VarsayilanBirim: 'Metre (mt)', Aciklama: 'Yüksek lümenli dolap içi aydınlatma LED şeridi' },
+  { Id: 85, Kategori: 'Aydınlatma & LED Profilleri', MalzemeAdi: 'LED Alüminyum Kanal Profil', Marka: 'Hafele', Model: 'Gömme Siyah Alüminyum Buzlu Kapaklı LED Kanalı 2mt', VarsayilanBirim: 'Boy (6mt)', Aciklama: 'Dolap rafı ve baza altına sıfır gömme alüminyum kanal' },
+  { Id: 86, Kategori: 'Aydınlatma & LED Profilleri', MalzemeAdi: 'Slim LED Güç Kaynağı (Trafo)', Marka: 'Mean Well', Model: 'LRS-100-24 (24V 4.5A 100W Slim Metal Kasa Trafo)', VarsayilanBirim: 'Adet', Aciklama: 'Mobilya arkasına sığabilen ultra ince LED trafosu' },
+  { Id: 87, Kategori: 'Aydınlatma & LED Profilleri', MalzemeAdi: 'Slim LED Güç Kaynağı (Trafo)', Marka: 'Mean Well', Model: 'LRS-200-24 (24V 8.8A 200W Slim Metal Kasa Trafo)', VarsayilanBirim: 'Adet', Aciklama: 'Büyük giyinme odaları ve ada mutfak LED besleme trafosu' },
+  { Id: 88, Kategori: 'Aydınlatma & LED Profilleri', MalzemeAdi: 'Mobilya İçi Sensör / Anahtar', Marka: 'Hafele Loox', Model: 'Loox5 Kızılötesi Çift Kapak Sensörü 24V', VarsayilanBirim: 'Adet', Aciklama: 'Kapak açıldığında otomatik yanan dolap içi sensör' },
+  { Id: 89, Kategori: 'Aydınlatma & LED Profilleri', MalzemeAdi: 'Gömme Masa Üstü Priz & Şarj', Marka: 'Hafele', Model: 'Pop-Up 3lü Priz + USB-A/Type-C Hızlı Şarj Kulesi Mat Siyah', VarsayilanBirim: 'Adet', Aciklama: 'Toplantı ve çalışma masası tablasına bas-aç gömme kule' },
+
+  // 10. Paketleme & Sevkiyat Malzemesi
+  { Id: 90, Kategori: 'Paketleme & Sevkiyat Malzemesi', MalzemeAdi: 'Baloncuklu Naylon (Patpat)', Marka: 'Standart Ambalaj', Model: '100cm Çift Kat Kalın Patpat Rulo 50m (Mobilya Koruma)', VarsayilanBirim: 'Top', Aciklama: 'Lake ve cam parçaları darbelerden koruyucu patpat rulo' },
+  { Id: 91, Kategori: 'Paketleme & Sevkiyat Malzemesi', MalzemeAdi: 'Streç Film', Marka: '3M / Standart', Model: '50cm 23 Mikron Süper Dayanıklı Sanayi Tipi El Streç Filmi 300m', VarsayilanBirim: 'Top', Aciklama: 'Paket sarma ve tozdan koruma elastik streç film' },
+  { Id: 92, Kategori: 'Paketleme & Sevkiyat Malzemesi', MalzemeAdi: 'Karton Köşebent', Marka: 'Standart Ambalaj', Model: '10x10cm L Tipi Kalın Mukavva Köşebent 2mt', VarsayilanBirim: 'Boy (6mt)', Aciklama: 'Mobilya köşelerinin ezilmesini önleyen sert köşe kartonu' },
+  { Id: 93, Kategori: 'Paketleme & Sevkiyat Malzemesi', MalzemeAdi: 'Strafor Köşe Takozu', Marka: 'Standart Ambalaj', Model: '40 DNS EPS 3 Boyutlu Köşe Koruma Takozu', VarsayilanBirim: 'Adet', Aciklama: 'Modül ve masa köşelerine takılan darbe emici takoz' },
+  { Id: 94, Kategori: 'Paketleme & Sevkiyat Malzemesi', MalzemeAdi: 'Koli Bandı', Marka: 'Ve-Ge', Model: '45mm x 100m Şeffaf Akrilik Güçlü Koli Bandı', VarsayilanBirim: 'Adet', Aciklama: 'Koli ve ambalaj sabitleme yapışkan bandı' }
+];
+
+let memMalzemeKatalog: any[] = [...VARSAYILAN_MALZEME_KATALOG];
+
+function saveMemMalzemeKatalog() {
+  try {
+    ensureDataDir();
+    fs.writeFileSync(MALZEME_KATALOG_FILE, JSON.stringify(memMalzemeKatalog, null, 2), 'utf-8');
+  } catch (e: any) {
+    console.error('[SAVE MALZEME KATALOG FILE ERROR]', e.message);
   }
+}
+
+function loadMemMalzemeKatalog(): any[] | null {
+  try {
+    if (fs.existsSync(MALZEME_KATALOG_FILE)) {
+      const raw = fs.readFileSync(MALZEME_KATALOG_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e: any) {
+    console.error('[LOAD MALZEME KATALOG FILE ERROR]', e.message);
+  }
+  return null;
+}
+
+const loadedMalzemeKatalog = loadMemMalzemeKatalog();
+if (loadedMalzemeKatalog && loadedMalzemeKatalog.length > 0) {
+  memMalzemeKatalog = loadedMalzemeKatalog;
 } else {
-  saveMemHatirlaticilar();
+  saveMemMalzemeKatalog();
 }
 
 let memDepartmanlar: any[] = [
@@ -7384,6 +7568,8 @@ app.get('/api/siparisler', async (req, res) => {
             ProjeAdi: String(getProp(r, 'ProjeAdi', 'projeadi') || ''),
             Kategori: String(getProp(r, 'Kategori', 'kategori') || ''),
             MalzemeAdi: String(getProp(r, 'MalzemeAdi', 'malzemeadi') || ''),
+            Marka: String(getProp(r, 'Marka', 'marka') || ''),
+            Model: String(getProp(r, 'Model', 'model') || ''),
             Miktar: Number(getProp(r, 'Miktar', 'miktar') || 1),
             Birim: String(getProp(r, 'Birim', 'birim') || 'Adet'),
             Olculer: String(getProp(r, 'Olculer', 'olculer') || ''),
@@ -7402,6 +7588,7 @@ app.get('/api/siparisler', async (req, res) => {
             TahminiTutar: getProp(r, 'TahminiTutar', 'tahminitutar') ? Number(getProp(r, 'TahminiTutar', 'tahminitutar')) : null,
             FaturaIrsaliyeNo: String(getProp(r, 'FaturaIrsaliyeNo', 'faturairsaliyeno') || ''),
             SatinalmaNotu: String(getProp(r, 'SatinalmaNotu', 'satinalmanotu') || ''),
+            Kalemler: [],
             Belgeler: [],
             FotoSayisi: 0,
             OkunduMu: Boolean(getProp(r, 'OkunduMu', 'okundumu')),
@@ -7438,6 +7625,28 @@ app.get('/api/siparisler', async (req, res) => {
       }
     }
 
+    // Her siparişin Kalemler listesini hazırla
+    list = list.map(item => {
+      let kalemler = Array.isArray(item.Kalemler) && item.Kalemler.length > 0 ? item.Kalemler : [];
+      if (kalemler.length === 0 && (item.MalzemeAdi || item.Kategori)) {
+        kalemler = [{
+          Id: 1,
+          Kategori: item.Kategori || 'Diğer Mobilya Malzemesi',
+          MalzemeAdi: item.MalzemeAdi || '',
+          Marka: item.Marka || '',
+          Model: item.Model || '',
+          Miktar: Number(item.Miktar) || 1,
+          Birim: item.Birim || 'Adet',
+          Olculer: item.Olculer || '',
+          Aciklama: item.Aciklama || ''
+        }];
+      }
+      return {
+        ...item,
+        Kalemler: kalemler
+      };
+    });
+
     // Filtreleme işlemleri
     if (durum && durum !== 'Tumu') {
       list = list.filter(s => s.Durum === durum);
@@ -7446,7 +7655,7 @@ app.get('/api/siparisler', async (req, res) => {
       list = list.filter(s => s.Aciliyet === aciliyet);
     }
     if (kategori && kategori !== 'Tumu') {
-      list = list.filter(s => s.Kategori === kategori);
+      list = list.filter(s => s.Kategori === kategori || s.Kalemler?.some((k: any) => k.Kategori === kategori));
     }
     if (talepEden && talepEden !== 'Tumu') {
       list = list.filter(s => s.TalepEden === talepEden);
@@ -7465,7 +7674,14 @@ app.get('/api/siparisler', async (req, res) => {
         (s.Aciklama && s.Aciklama.toLowerCase().includes(query)) ||
         (s.Olculer && s.Olculer.toLowerCase().includes(query)) ||
         (s.TedarikciFirma && s.TedarikciFirma.toLowerCase().includes(query)) ||
-        (s.TalepEden && s.TalepEden.toLowerCase().includes(query))
+        (s.TalepEden && s.TalepEden.toLowerCase().includes(query)) ||
+        (s.Kalemler && s.Kalemler.some((k: any) => 
+          (k.MalzemeAdi && k.MalzemeAdi.toLowerCase().includes(query)) ||
+          (k.Marka && k.Marka.toLowerCase().includes(query)) ||
+          (k.Model && k.Model.toLowerCase().includes(query)) ||
+          (k.Kategori && k.Kategori.toLowerCase().includes(query)) ||
+          (k.Olculer && k.Olculer.toLowerCase().includes(query))
+        ))
       );
     }
 
@@ -7511,13 +7727,51 @@ app.get('/api/siparisler/ozet', async (req, res) => {
   }
 });
 
-// Yeni Sipariş Ekle (Ustabaşı veya Admin)
+// Yeni Sipariş Ekle (Ustabaşı veya Admin) - Çoklu Kalem Desteği
 app.post('/api/siparisler', async (req, res) => {
   try {
     const body = req.body || {};
-    if (!body.MalzemeAdi || !body.ProjeAdi) {
-      return res.status(400).json({ error: 'Proje adı ve malzeme adı zorunludur.' });
+    if (!body.ProjeAdi) {
+      return res.status(400).json({ error: 'Proje adı zorunludur.' });
     }
+
+    // Çoklu malzeme kalemlerini hazırla
+    let kalemler: any[] = [];
+    if (Array.isArray(body.Kalemler) && body.Kalemler.length > 0) {
+      kalemler = body.Kalemler.map((k: any, idx: number) => ({
+        Id: k.Id || (Date.now() + idx),
+        Kategori: String(k.Kategori || body.Kategori || 'Diğer Mobilya Malzemesi').trim(),
+        MalzemeAdi: String(k.MalzemeAdi || '').trim(),
+        Marka: String(k.Marka || '').trim(),
+        Model: String(k.Model || '').trim(),
+        Miktar: Number(k.Miktar) || 1,
+        Birim: String(k.Birim || 'Adet').trim(),
+        Olculer: String(k.Olculer || '').trim(),
+        Aciklama: String(k.Aciklama || '').trim()
+      })).filter((k: any) => k.MalzemeAdi);
+    }
+
+    if (kalemler.length === 0) {
+      if (!body.MalzemeAdi) {
+        return res.status(400).json({ error: 'Lütfen sipariş için en az bir malzeme kalemi ekleyiniz.' });
+      }
+      kalemler = [{
+        Id: Date.now(),
+        Kategori: String(body.Kategori || 'Diğer Mobilya Malzemesi').trim(),
+        MalzemeAdi: String(body.MalzemeAdi || '').trim(),
+        Marka: String(body.Marka || '').trim(),
+        Model: String(body.Model || '').trim(),
+        Miktar: Number(body.Miktar) || 1,
+        Birim: String(body.Birim || 'Adet').trim(),
+        Olculer: String(body.Olculer || '').trim(),
+        Aciklama: String(body.Aciklama || '').trim()
+      }];
+    }
+
+    const firstK = kalemler[0];
+    const topMalzemeAdi = kalemler.length > 1 
+      ? `${firstK.MalzemeAdi} (+${kalemler.length - 1} diğer kalem)` 
+      : firstK.MalzemeAdi;
 
     const nextId = memMalzemeSiparisleri.length > 0 ? Math.max(...memMalzemeSiparisleri.map(s => s.Id || 0)) + 1 : 1;
     const year = new Date().getFullYear();
@@ -7537,12 +7791,15 @@ app.post('/api/siparisler', async (req, res) => {
       Id: nextId,
       SiparisNo: siparisNo,
       ProjeAdi: String(body.ProjeAdi || '').trim(),
-      Kategori: String(body.Kategori || 'Diğer Mobilya Malzemesi').trim(),
-      MalzemeAdi: String(body.MalzemeAdi || '').trim(),
-      Miktar: Number(body.Miktar) || 1,
-      Birim: String(body.Birim || 'Adet').trim(),
-      Olculer: String(body.Olculer || '').trim(),
-      Aciklama: String(body.Aciklama || '').trim(),
+      Kategori: firstK.Kategori,
+      MalzemeAdi: topMalzemeAdi,
+      Marka: firstK.Marka,
+      Model: firstK.Model,
+      Miktar: kalemler.reduce((acc, k) => acc + (Number(k.Miktar) || 0), 0),
+      Birim: firstK.Birim,
+      Olculer: firstK.Olculer,
+      Aciklama: String(body.Aciklama || firstK.Aciklama || '').trim(),
+      Kalemler: kalemler,
       Aciliyet: body.Aciliyet || 'Normal',
       TerminTarihi: body.TerminTarihi || '',
       Tarih: body.Tarih || today,
@@ -7572,16 +7829,17 @@ app.post('/api/siparisler', async (req, res) => {
       try {
         await pool.query(`
           INSERT INTO ${detectedTables.malzemeSiparisleri} (
-            "Id", "SiparisNo", "ProjeAdi", "Kategori", "MalzemeAdi", "Miktar", "Birim",
+            "Id", "SiparisNo", "ProjeAdi", "Kategori", "MalzemeAdi", "Marka", "Model", "Miktar", "Birim",
             "Olculer", "Aciklama", "Aciliyet", "TerminTarihi", "Tarih", "TalepEden",
             "Durum", "KilitliMi", "KilitleyenKisi", "KilitTarihi", "KilitNotu",
             "TedarikciFirma", "SiparisTarihi", "TahminiTutar", "FaturaIrsaliyeNo",
             "SatinalmaNotu", "OkunduMu", "OlusturanRol", "GuncellemeTarihi"
           ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28
           )
         `, [
           newSiparis.Id, newSiparis.SiparisNo, newSiparis.ProjeAdi, newSiparis.Kategori, newSiparis.MalzemeAdi,
+          newSiparis.Marka, newSiparis.Model,
           newSiparis.Miktar, newSiparis.Birim, newSiparis.Olculer, newSiparis.Aciklama, newSiparis.Aciliyet,
           newSiparis.TerminTarihi, newSiparis.Tarih, newSiparis.TalepEden, newSiparis.Durum, newSiparis.KilitliMi,
           newSiparis.KilitleyenKisi, newSiparis.KilitTarihi, newSiparis.KilitNotu, newSiparis.TedarikciFirma,
@@ -7605,7 +7863,7 @@ app.post('/api/siparisler', async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: `${newSiparis.SiparisNo} numaralı malzeme siparişi kaydedildi.`,
+      message: `${newSiparis.SiparisNo} numaralı malzeme siparişi (${kalemler.length} kalem) kaydedildi.`,
       siparis: newSiparis
     });
   } catch (err: any) {
@@ -7630,7 +7888,6 @@ app.put('/api/siparisler/:id', async (req, res) => {
     const currentSiparis = memMalzemeSiparisleri[index];
 
     // GÜVENLİK VE KİLİT KONTROLÜ:
-    // Eğer sipariş kilitliyse ve düzenleyen kişi Ustabaşı ise işlemi engelle ve net uyarı ver!
     if (currentSiparis.KilitliMi && (requesterRole === 'ustabasi' || body.isUstabasi === true)) {
       return res.status(403).json({
         success: false,
@@ -7642,15 +7899,39 @@ app.put('/api/siparisler/:id', async (req, res) => {
     const today = new Date().toISOString().slice(0, 10);
     const belgeler: any[] = Array.isArray(body.Belgeler) ? body.Belgeler : currentSiparis.Belgeler || [];
 
+    // Kalemleri güncelle
+    let kalemler: any[] = currentSiparis.Kalemler || [];
+    if (Array.isArray(body.Kalemler) && body.Kalemler.length > 0) {
+      kalemler = body.Kalemler.map((k: any, idx: number) => ({
+        Id: k.Id || (Date.now() + idx),
+        Kategori: String(k.Kategori || 'Diğer Mobilya Malzemesi').trim(),
+        MalzemeAdi: String(k.MalzemeAdi || '').trim(),
+        Marka: String(k.Marka || '').trim(),
+        Model: String(k.Model || '').trim(),
+        Miktar: Number(k.Miktar) || 1,
+        Birim: String(k.Birim || 'Adet').trim(),
+        Olculer: String(k.Olculer || '').trim(),
+        Aciklama: String(k.Aciklama || '').trim()
+      })).filter((k: any) => k.MalzemeAdi);
+    }
+
+    const firstK = kalemler.length > 0 ? kalemler[0] : null;
+    const topMalzemeAdi = kalemler.length > 1 
+      ? `${firstK.MalzemeAdi} (+${kalemler.length - 1} diğer kalem)` 
+      : (firstK ? firstK.MalzemeAdi : (body.MalzemeAdi !== undefined ? String(body.MalzemeAdi).trim() : currentSiparis.MalzemeAdi));
+
     const updatedSiparis = {
       ...currentSiparis,
       ProjeAdi: body.ProjeAdi !== undefined ? String(body.ProjeAdi).trim() : currentSiparis.ProjeAdi,
-      Kategori: body.Kategori !== undefined ? String(body.Kategori).trim() : currentSiparis.Kategori,
-      MalzemeAdi: body.MalzemeAdi !== undefined ? String(body.MalzemeAdi).trim() : currentSiparis.MalzemeAdi,
-      Miktar: body.Miktar !== undefined ? Number(body.Miktar) : currentSiparis.Miktar,
-      Birim: body.Birim !== undefined ? String(body.Birim).trim() : currentSiparis.Birim,
-      Olculer: body.Olculer !== undefined ? String(body.Olculer).trim() : currentSiparis.Olculer,
+      Kategori: firstK ? firstK.Kategori : (body.Kategori !== undefined ? String(body.Kategori).trim() : currentSiparis.Kategori),
+      MalzemeAdi: topMalzemeAdi,
+      Marka: firstK ? firstK.Marka : (body.Marka !== undefined ? String(body.Marka).trim() : currentSiparis.Marka),
+      Model: firstK ? firstK.Model : (body.Model !== undefined ? String(body.Model).trim() : currentSiparis.Model),
+      Miktar: kalemler.length > 0 ? kalemler.reduce((acc, k) => acc + (Number(k.Miktar) || 0), 0) : (body.Miktar !== undefined ? Number(body.Miktar) : currentSiparis.Miktar),
+      Birim: firstK ? firstK.Birim : (body.Birim !== undefined ? String(body.Birim).trim() : currentSiparis.Birim),
+      Olculer: firstK ? firstK.Olculer : (body.Olculer !== undefined ? String(body.Olculer).trim() : currentSiparis.Olculer),
       Aciklama: body.Aciklama !== undefined ? String(body.Aciklama).trim() : currentSiparis.Aciklama,
+      Kalemler: kalemler,
       Aciliyet: body.Aciliyet !== undefined ? body.Aciliyet : currentSiparis.Aciliyet,
       TerminTarihi: body.TerminTarihi !== undefined ? body.TerminTarihi : currentSiparis.TerminTarihi,
       TalepEden: body.TalepEden !== undefined ? String(body.TalepEden).trim() : currentSiparis.TalepEden,
@@ -7687,18 +7968,19 @@ app.put('/api/siparisler/:id', async (req, res) => {
       try {
         await pool.query(`
           UPDATE ${detectedTables.malzemeSiparisleri} SET
-            "ProjeAdi" = $1, "Kategori" = $2, "MalzemeAdi" = $3, "Miktar" = $4, "Birim" = $5,
-            "Olculer" = $6, "Aciklama" = $7, "Aciliyet" = $8, "TerminTarihi" = $9, "TalepEden" = $10,
-            "Durum" = $11, "KilitliMi" = $12, "KilitleyenKisi" = $13, "KilitTarihi" = $14, "KilitNotu" = $15,
-            "TedarikciFirma" = $16, "SiparisTarihi" = $17, "TahminiTutar" = $18, "FaturaIrsaliyeNo" = $19,
-            "SatinalmaNotu" = $20, "GuncellemeTarihi" = $21
-          WHERE "Id" = $22 OR "Id"::text = $23::text
+            "ProjeAdi" = $1, "Kategori" = $2, "MalzemeAdi" = $3, "Marka" = $4, "Model" = $5, "Miktar" = $6, "Birim" = $7,
+            "Olculer" = $8, "Aciklama" = $9, "Aciliyet" = $10, "TerminTarihi" = $11, "TalepEden" = $12,
+            "Durum" = $13, "KilitliMi" = $14, "KilitleyenKisi" = $15, "KilitTarihi" = $16, "KilitNotu" = $17,
+            "TedarikciFirma" = $18, "SiparisTarihi" = $19, "TahminiTutar" = $20, "FaturaIrsaliyeNo" = $21,
+            "SatinalmaNotu" = $22, "GuncellemeTarihi" = $23
+          WHERE "Id" = $24 OR "Id"::text = $25::text
         `, [
-          updatedSiparis.ProjeAdi, updatedSiparis.Kategori, updatedSiparis.MalzemeAdi, updatedSiparis.Miktar, updatedSiparis.Birim,
-          updatedSiparis.Olculer, updatedSiparis.Aciklama, updatedSiparis.Aciliyet, updatedSiparis.TerminTarihi, updatedSiparis.TalepEden,
-          updatedSiparis.Durum, updatedSiparis.KilitliMi, updatedSiparis.KilitleyenKisi, updatedSiparis.KilitTarihi, updatedSiparis.KilitNotu,
-          updatedSiparis.TedarikciFirma, updatedSiparis.SiparisTarihi, updatedSiparis.TahminiTutar, updatedSiparis.FaturaIrsaliyeNo,
-          updatedSiparis.SatinalmaNotu, updatedSiparis.GuncellemeTarihi, isNaN(numId) ? -1 : numId, String(rawId)
+          updatedSiparis.ProjeAdi, updatedSiparis.Kategori, updatedSiparis.MalzemeAdi, updatedSiparis.Marka, updatedSiparis.Model,
+          updatedSiparis.Miktar, updatedSiparis.Birim, updatedSiparis.Olculer, updatedSiparis.Aciklama, updatedSiparis.Aciliyet,
+          updatedSiparis.TerminTarihi, updatedSiparis.TalepEden, updatedSiparis.Durum, updatedSiparis.KilitliMi,
+          updatedSiparis.KilitleyenKisi, updatedSiparis.KilitTarihi, updatedSiparis.KilitNotu, updatedSiparis.TedarikciFirma,
+          updatedSiparis.SiparisTarihi, updatedSiparis.TahminiTutar, updatedSiparis.FaturaIrsaliyeNo, updatedSiparis.SatinalmaNotu,
+          updatedSiparis.GuncellemeTarihi, isNaN(numId) ? -1 : numId, String(rawId)
         ]);
       } catch (dbErr: any) {
         console.error('[DB SIPARIS UPDATE ERROR]', dbErr.message);
@@ -7844,6 +8126,179 @@ app.delete('/api/siparisler/:id', async (req, res) => {
     }
 
     return res.json({ success: true, message: 'Sipariş başarıyla silindi.' });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// =========================================================================
+// DİNAMİK MALZEME KATALOĞU (KATEGORİ, ÜRÜN ADI, MARKA, MODEL) YÖNETİMİ APİSİ
+// (Ustabaşı ve Yönetici dinamik ekleyebilir, silebilir, listeleyebilir)
+// =========================================================================
+
+// Katalog Listesi
+app.get('/api/malzeme-katalog', async (req, res) => {
+  try {
+    const { kategori } = req.query;
+    let list = [...memMalzemeKatalog];
+
+    if (isDbConnected && detectedTables.malzemeKatalog) {
+      try {
+        const dbRes = await pool.query(`SELECT * FROM ${detectedTables.malzemeKatalog} ORDER BY "Id" ASC`);
+        if (dbRes.rows.length > 0) {
+          list = dbRes.rows.map(r => ({
+            Id: Number(getProp(r, 'Id', 'id')),
+            Kategori: String(getProp(r, 'Kategori', 'kategori') || ''),
+            MalzemeAdi: String(getProp(r, 'MalzemeAdi', 'malzemeadi') || ''),
+            Marka: String(getProp(r, 'Marka', 'marka') || ''),
+            Model: String(getProp(r, 'Model', 'model') || ''),
+            VarsayilanBirim: String(getProp(r, 'VarsayilanBirim', 'varsayilanbirim') || 'Adet'),
+            Aciklama: String(getProp(r, 'Aciklama', 'aciklama') || '')
+          }));
+        }
+      } catch (dbErr: any) {
+        console.error('[DB KATALOG READ ERROR]', dbErr.message);
+      }
+    }
+
+    if (kategori && typeof kategori === 'string' && kategori !== 'Tumu') {
+      list = list.filter(item => item.Kategori.toLowerCase() === kategori.toLowerCase());
+    }
+
+    return res.json(list);
+  } catch (err: any) {
+    console.error('Katalog çekme hatası:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Yeni Katalog Öğesi Ekle (Kategori, Malzeme Adı, Marka, Model)
+app.post('/api/malzeme-katalog', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const kategori = String(body.Kategori || '').trim();
+    const malzemeAdi = String(body.MalzemeAdi || '').trim();
+    const marka = String(body.Marka || '').trim();
+    const model = String(body.Model || '').trim();
+    const varsayilanBirim = String(body.VarsayilanBirim || 'Adet').trim();
+    const aciklama = String(body.Aciklama || '').trim();
+
+    if (!kategori || !malzemeAdi) {
+      return res.status(400).json({ error: 'Kategori ve Malzeme Adı zorunludur.' });
+    }
+
+    const nextId = memMalzemeKatalog.length > 0 ? Math.max(...memMalzemeKatalog.map(k => k.Id || 0)) + 1 : 1;
+
+    const newItem = {
+      Id: nextId,
+      Kategori: kategori,
+      MalzemeAdi: malzemeAdi,
+      Marka: marka,
+      Model: model,
+      VarsayilanBirim: varsayilanBirim,
+      Aciklama: aciklama
+    };
+
+    memMalzemeKatalog.push(newItem);
+    saveMemMalzemeKatalog();
+
+    if (isDbConnected && detectedTables.malzemeKatalog) {
+      try {
+        await pool.query(`
+          INSERT INTO ${detectedTables.malzemeKatalog} (
+            "Id", "Kategori", "MalzemeAdi", "Marka", "Model", "VarsayilanBirim", "Aciklama"
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `, [
+          newItem.Id, newItem.Kategori, newItem.MalzemeAdi, newItem.Marka, newItem.Model, newItem.VarsayilanBirim, newItem.Aciklama
+        ]);
+      } catch (dbErr: any) {
+        console.error('[DB KATALOG INSERT ERROR]', dbErr.message);
+      }
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: `"${malzemeAdi}" kataloğa eklendi.`,
+      data: newItem
+    });
+  } catch (err: any) {
+    console.error('Katalog ekleme hatası:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Katalog Öğesi Sil
+app.delete('/api/malzeme-katalog/:id', async (req, res) => {
+  try {
+    const rawId = req.params.id;
+    const numId = Number(rawId);
+
+    memMalzemeKatalog = memMalzemeKatalog.filter(k => String(k.Id) !== String(rawId));
+    saveMemMalzemeKatalog();
+
+    if (isDbConnected && detectedTables.malzemeKatalog) {
+      try {
+        await pool.query(`DELETE FROM ${detectedTables.malzemeKatalog} WHERE "Id" = $1 OR "Id"::text = $2::text`, [
+          isNaN(numId) ? -1 : numId, String(rawId)
+        ]);
+      } catch (dbErr: any) {
+        console.error('[DB KATALOG DELETE ERROR]', dbErr.message);
+      }
+    }
+
+    return res.json({ success: true, message: 'Katalog öğesi başarıyla silindi.' });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Tüm Kategoriyi ve Altındaki Öğeleri Sil
+app.delete('/api/malzeme-katalog/kategori/:kategoriAdi', async (req, res) => {
+  try {
+    const kategoriAdi = decodeURIComponent(req.params.kategoriAdi || '').trim();
+    if (!kategoriAdi) {
+      return res.status(400).json({ error: 'Kategori adı gereklidir.' });
+    }
+
+    memMalzemeKatalog = memMalzemeKatalog.filter(k => k.Kategori.toLowerCase() !== kategoriAdi.toLowerCase());
+    saveMemMalzemeKatalog();
+
+    if (isDbConnected && detectedTables.malzemeKatalog) {
+      try {
+        await pool.query(`DELETE FROM ${detectedTables.malzemeKatalog} WHERE LOWER("Kategori") = LOWER($1)`, [kategoriAdi]);
+      } catch (dbErr: any) {
+        console.error('[DB KATALOG CATEGORY DELETE ERROR]', dbErr.message);
+      }
+    }
+
+    return res.json({ success: true, message: `"${kategoriAdi}" kategorisi ve tüm alt ürünleri silindi.` });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Kataloğu Varsayılan Mobilya Şablonuna Sıfırla / Güncelle
+app.post('/api/malzeme-katalog/reset-varsayilan', async (req, res) => {
+  try {
+    memMalzemeKatalog = [...VARSAYILAN_MALZEME_KATALOG];
+    saveMemMalzemeKatalog();
+
+    if (isDbConnected && detectedTables.malzemeKatalog) {
+      try {
+        await pool.query(`DELETE FROM ${detectedTables.malzemeKatalog}`);
+        for (const item of VARSAYILAN_MALZEME_KATALOG) {
+          await pool.query(`
+            INSERT INTO ${detectedTables.malzemeKatalog} (
+              "Id", "Kategori", "MalzemeAdi", "Marka", "Model", "VarsayilanBirim", "Aciklama"
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+          `, [item.Id, item.Kategori, item.MalzemeAdi, item.Marka, item.Model, item.VarsayilanBirim, item.Aciklama]);
+        }
+      } catch (dbErr: any) {
+        console.error('[DB KATALOG RESET ERROR]', dbErr.message);
+      }
+    }
+
+    return res.json({ success: true, message: 'Malzeme kataloğu varsayılan fabrika ayarlarına yüklendi.', count: VARSAYILAN_MALZEME_KATALOG.length });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }

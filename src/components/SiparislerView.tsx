@@ -3,11 +3,12 @@ import {
   PackagePlus, ShoppingCart, Lock, Unlock, Search, Filter, Printer, Trash2, Edit3,
   CheckCircle2, Clock, AlertTriangle, AlertCircle, Eye, Upload, Image, X, FileText,
   Plus, Check, ChevronDown, Sparkles, Building2, User, Phone, Tag, Calendar, DollarSign,
-  ShieldAlert, RefreshCw, Layers, ArrowUpDown, Info
+  ShieldAlert, RefreshCw, Layers, ArrowUpDown, Info, BookOpen
 } from 'lucide-react';
-import { MalzemeSiparisi, MalzemeSiparisBelgesi } from '../types';
+import { MalzemeSiparisi, MalzemeSiparisBelgesi, MalzemeKatalogItem } from '../types';
 import { SiparisYazdirModal } from './SiparisYazdirModal';
 import { UstabasiUyariModal } from './UstabasiUyariModal';
+import { MalzemeKatalogModal } from './MalzemeKatalogModal';
 
 interface SiparislerViewProps {
   userRole?: 'admin' | 'ustabasi';
@@ -39,6 +40,7 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
   onOrderAdded
 }) => {
   const [siparisler, setSiparisler] = useState<MalzemeSiparisi[]>([]);
+  const [katalog, setKatalog] = useState<MalzemeKatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterDurum, setFilterDurum] = useState<string>('Tumu');
   const [filterKategori, setFilterKategori] = useState<string>('Tumu');
@@ -47,6 +49,7 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
   
   // Modallar ve Seçili Kayıt
   const [showFormModal, setShowFormModal] = useState(false);
+  const [showKatalogModal, setShowKatalogModal] = useState(false);
   const [editingSiparis, setEditingSiparis] = useState<MalzemeSiparisi | null>(null);
   const [printSiparis, setPrintSiparis] = useState<MalzemeSiparisi | null>(null);
   const [lockedWarningSiparis, setLockedWarningSiparis] = useState<MalzemeSiparisi | null>(null);
@@ -54,11 +57,17 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
   
   // Form Alanları (Yeni veya Düzenleme)
   const [formProjeAdi, setFormProjeAdi] = useState('');
-  const [formKategori, setFormKategori] = useState(MOBILYA_KATEGORILERI[0]);
-  const [formMalzemeAdi, setFormMalzemeAdi] = useState('');
-  const [formMiktar, setFormMiktar] = useState<number | ''>(1);
-  const [formBirim, setFormBirim] = useState('Adet');
-  const [formOlculer, setFormOlculer] = useState('');
+  const [formKalemler, setFormKalemler] = useState<Array<{
+    Id: string | number;
+    Kategori: string;
+    MalzemeAdi: string;
+    Marka: string;
+    Model: string;
+    Miktar: number | '';
+    Birim: string;
+    Olculer: string;
+    Aciklama: string;
+  }>>([]);
   const [formAciklama, setFormAciklama] = useState('');
   const [formAciliyet, setFormAciliyet] = useState<'Normal' | 'Acil' | 'CokAcil'>('Normal');
   const [formTerminTarihi, setFormTerminTarihi] = useState('');
@@ -67,6 +76,7 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
+  const [kaydetKataloga, setKaydetKataloga] = useState(false);
 
   // Satınalma Detay Düzenleme Formu Alanları (Admin)
   const [satinalmaDurum, setSatinalmaDurum] = useState<string>('Bekliyor');
@@ -95,24 +105,120 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
     }
   };
 
+  // Malzeme Kataloğunu API'den Çek
+  const fetchKatalog = async () => {
+    try {
+      const res = await fetch('/api/malzeme-katalog');
+      if (res.ok) {
+        const data = await res.json();
+        setKatalog(data);
+      }
+    } catch (err) {
+      console.error('Katalog çekilemedi:', err);
+    }
+  };
+
   useEffect(() => {
     fetchSiparisler();
+    fetchKatalog();
   }, []);
+
+  // Dinamik ve Statik Tüm Kategoriler (Tekilleştirilmiş)
+  const tumKategoriler = Array.from(
+    new Set([...MOBILYA_KATEGORILERI, ...katalog.map(k => k.Kategori).filter(Boolean)])
+  );
+
+  // Kalem Yönetim Fonksiyonları
+  const handleAddKalem = () => {
+    const defaultCat = tumKategoriler[0] || MOBILYA_KATEGORILERI[0];
+    const catItems = katalog.filter(k => k.Kategori.toLowerCase() === defaultCat.toLowerCase());
+    const first = catItems[0];
+    setFormKalemler(prev => [
+      ...prev,
+      {
+        Id: Date.now() + Math.random(),
+        Kategori: defaultCat,
+        MalzemeAdi: first ? first.MalzemeAdi : '',
+        Marka: first?.Marka || '',
+        Model: first?.Model || '',
+        Miktar: 1,
+        Birim: first?.VarsayilanBirim || 'Adet',
+        Olculer: '',
+        Aciklama: ''
+      }
+    ]);
+  };
+
+  const handleRemoveKalem = (index: number) => {
+    if (formKalemler.length <= 1) return;
+    setFormKalemler(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleUpdateKalem = (index: number, field: string, value: any) => {
+    setFormKalemler(prev => {
+      const updated = [...prev];
+      const item = { ...updated[index], [field]: value };
+
+      if (field === 'Kategori') {
+        const catItems = katalog.filter(k => k.Kategori.toLowerCase() === String(value).toLowerCase());
+        if (catItems.length > 0) {
+          const first = catItems[0];
+          item.MalzemeAdi = first.MalzemeAdi;
+          if (first.VarsayilanBirim) item.Birim = first.VarsayilanBirim;
+          if (first.Marka) item.Marka = first.Marka;
+          if (first.Model) item.Model = first.Model;
+        } else {
+          item.MalzemeAdi = '';
+          item.Marka = '';
+          item.Model = '';
+        }
+      }
+
+      if (field === 'MalzemeAdi') {
+        const matched = katalog.find(
+          k => k.Kategori.toLowerCase() === item.Kategori.toLowerCase() &&
+               k.MalzemeAdi.toLowerCase() === String(value).toLowerCase()
+        );
+        if (matched) {
+          if (matched.VarsayilanBirim) item.Birim = matched.VarsayilanBirim;
+          if (matched.Marka) item.Marka = matched.Marka;
+          if (matched.Model) item.Model = matched.Model;
+        }
+      }
+
+      updated[index] = item;
+      return updated;
+    });
+  };
 
   // Form Sıfırla & Aç
   const handleOpenNewForm = () => {
     setEditingSiparis(null);
     setFormProjeAdi('');
-    setFormKategori(MOBILYA_KATEGORILERI[0]);
-    setFormMalzemeAdi('');
-    setFormMiktar(1);
-    setFormBirim('Adet');
-    setFormOlculer('');
+    const defaultCat = tumKategoriler[0] || MOBILYA_KATEGORILERI[0];
+    const catItems = katalog.filter(k => k.Kategori.toLowerCase() === defaultCat.toLowerCase());
+    const first = catItems[0];
+
+    setFormKalemler([
+      {
+        Id: Date.now(),
+        Kategori: defaultCat,
+        MalzemeAdi: first ? first.MalzemeAdi : '',
+        Marka: first?.Marka || '',
+        Model: first?.Model || '',
+        Miktar: 1,
+        Birim: first?.VarsayilanBirim || 'Adet',
+        Olculer: '',
+        Aciklama: ''
+      }
+    ]);
+
     setFormAciklama('');
     setFormAciliyet('Normal');
     setFormTerminTarihi('');
     setFormTalepEden(userRole === 'ustabasi' ? 'İmalat Ustabaşı' : 'Atölye Sorumlusu');
     setFormBelgeler([]);
+    setKaydetKataloga(false);
     setFormError(null);
     setFormSuccess(null);
     setShowFormModal(true);
@@ -127,16 +233,41 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
 
     setEditingSiparis(siparis);
     setFormProjeAdi(siparis.ProjeAdi || '');
-    setFormKategori(siparis.Kategori || MOBILYA_KATEGORILERI[0]);
-    setFormMalzemeAdi(siparis.MalzemeAdi || '');
-    setFormMiktar(siparis.Miktar || 1);
-    setFormBirim(siparis.Birim || 'Adet');
-    setFormOlculer(siparis.Olculer || '');
+    
+    if (siparis.Kalemler && siparis.Kalemler.length > 0) {
+      setFormKalemler(siparis.Kalemler.map((k, idx) => ({
+        Id: k.Id || (Date.now() + idx),
+        Kategori: k.Kategori || siparis.Kategori || MOBILYA_KATEGORILERI[0],
+        MalzemeAdi: k.MalzemeAdi || '',
+        Marka: k.Marka || '',
+        Model: k.Model || '',
+        Miktar: k.Miktar || 1,
+        Birim: k.Birim || 'Adet',
+        Olculer: k.Olculer || '',
+        Aciklama: k.Aciklama || ''
+      })));
+    } else {
+      setFormKalemler([
+        {
+          Id: Date.now(),
+          Kategori: siparis.Kategori || MOBILYA_KATEGORILERI[0],
+          MalzemeAdi: siparis.MalzemeAdi || '',
+          Marka: siparis.Marka || '',
+          Model: siparis.Model || '',
+          Miktar: siparis.Miktar || 1,
+          Birim: siparis.Birim || 'Adet',
+          Olculer: siparis.Olculer || '',
+          Aciklama: siparis.Aciklama || ''
+        }
+      ]);
+    }
+
     setFormAciklama(siparis.Aciklama || '');
     setFormAciliyet(siparis.Aciliyet || 'Normal');
     setFormTerminTarihi(siparis.TerminTarihi || '');
     setFormTalepEden(siparis.TalepEden || '');
     setFormBelgeler(siparis.Belgeler || []);
+    setKaydetKataloga(false);
     setFormError(null);
     setFormSuccess(null);
     setShowFormModal(true);
@@ -198,26 +329,32 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
       setFormError('Lütfen mobilyanın ait olduğu proje veya müşteri adını giriniz.');
       return;
     }
-    if (!formMalzemeAdi.trim()) {
-      setFormError('Lütfen talep edilen malzeme veya ürünün adını giriniz.');
-      return;
-    }
-    if (!formMiktar || Number(formMiktar) <= 0) {
-      setFormError('Lütfen geçerli bir sipariş miktarı giriniz.');
+
+    const gecerliKalemler = formKalemler.filter(k => k.MalzemeAdi.trim() && Number(k.Miktar) > 0);
+    if (gecerliKalemler.length === 0) {
+      setFormError('Lütfen en az bir malzeme kalemi ve geçerli miktar giriniz.');
       return;
     }
 
     setFormLoading(true);
 
     try {
+      const firstK = gecerliKalemler[0];
+      const topMalzemeAdi = gecerliKalemler.length > 1
+        ? `${firstK.MalzemeAdi} (+${gecerliKalemler.length - 1} malzeme kalemi)`
+        : firstK.MalzemeAdi;
+
       const payload = {
         ProjeAdi: formProjeAdi.trim(),
-        Kategori: formKategori,
-        MalzemeAdi: formMalzemeAdi.trim(),
-        Miktar: Number(formMiktar),
-        Birim: formBirim,
-        Olculer: formOlculer.trim(),
-        Aciklama: formAciklama.trim(),
+        Kategori: firstK.Kategori,
+        MalzemeAdi: topMalzemeAdi,
+        Marka: firstK.Marka,
+        Model: firstK.Model,
+        Miktar: gecerliKalemler.reduce((acc, k) => acc + (Number(k.Miktar) || 0), 0),
+        Birim: firstK.Birim,
+        Olculer: firstK.Olculer,
+        Aciklama: formAciklama.trim() || firstK.Aciklama,
+        Kalemler: gecerliKalemler,
         Aciliyet: formAciliyet,
         TerminTarihi: formTerminTarihi,
         TalepEden: formTalepEden.trim() || 'Ustabaşı',
@@ -225,6 +362,27 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
         userRole,
         isUstabasi: userRole === 'ustabasi'
       };
+
+      // Eğer kullanıcı bu yeni ürünleri kataloğa da kaydetmeyi seçtiyse ekle
+      if (kaydetKataloga) {
+        for (const kItem of gecerliKalemler) {
+          try {
+            await fetch('/api/malzeme-katalog', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                Kategori: kItem.Kategori.trim(),
+                MalzemeAdi: kItem.MalzemeAdi.trim(),
+                Marka: kItem.Marka.trim(),
+                Model: kItem.Model.trim(),
+                VarsayilanBirim: kItem.Birim,
+                Aciklama: kItem.Aciklama.trim()
+              })
+            });
+          } catch (kErr) {}
+        }
+        fetchKatalog();
+      }
 
       let res;
       if (editingSiparis) {
@@ -449,10 +607,22 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-start sm:self-auto">
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+            <button
+              onClick={() => setShowKatalogModal(true)}
+              className="px-3.5 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-xs sm:text-sm shadow-xs flex items-center gap-2 transition-all cursor-pointer bg-white"
+              title="Dinamik malzeme kategorilerini, ürünlerini, markalarını ve modellerini yönet"
+            >
+              <BookOpen className="w-4 h-4 text-blue-600" />
+              <span>Malzeme &amp; Marka Kataloğu</span>
+              <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-1.5 py-0.5 rounded-full">
+                {katalog.length}
+              </span>
+            </button>
+
             <button
               onClick={fetchSiparisler}
-              className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer bg-white"
               title="Yenile"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-blue-600' : ''}`} />
@@ -512,7 +682,7 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Proje, malzeme, ölçü veya sipariş no ara..."
+              placeholder="Proje, malzeme, marka, model veya ölçü ara..."
               className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -543,7 +713,7 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
               className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="Tumu">Tüm Malzeme Kategorileri</option>
-              {MOBILYA_KATEGORILERI.map(cat => (
+              {tumKategoriler.map(cat => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
             </select>
@@ -631,27 +801,89 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
 
               {/* Kart Gövde */}
               <div className="p-5 grid grid-cols-1 lg:grid-cols-3 gap-5">
-                {/* Sol 2 Kolon: Malzeme, Miktar, Ölçüler & Açıklama */}
+                {/* Sol 2 Kolon: Malzeme, Miktar, Marka, Model, Ölçüler & Açıklama */}
                 <div className="lg:col-span-2 space-y-3.5">
-                  <div className="flex items-baseline gap-2">
-                    <h2 className="text-base font-bold text-slate-950">
-                      {siparis.MalzemeAdi}
-                    </h2>
-                    <span className="text-sm font-extrabold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                      {siparis.Miktar} {siparis.Birim}
-                    </span>
-                  </div>
-
-                  {/* Ölçüler & Ebatlar Kutusu */}
-                  {siparis.Olculer && (
-                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                      <span className="block text-[11px] font-bold text-slate-600 mb-1 flex items-center gap-1">
-                        📐 Kesim / Teknik Ölçüler:
-                      </span>
-                      <p className="text-xs font-mono text-slate-800 whitespace-pre-wrap leading-relaxed">
-                        {siparis.Olculer}
-                      </p>
+                  {/* Malzeme Kalemleri Listesi */}
+                  {siparis.Kalemler && siparis.Kalemler.length > 0 ? (
+                    <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+                      <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200 flex items-center justify-between text-[11px] font-bold text-slate-700">
+                        <span className="flex items-center gap-1">
+                          <Layers className="w-3.5 h-3.5 text-blue-600" />
+                          Sipariş Kalemleri ({siparis.Kalemler.length} Kalem)
+                        </span>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs border-collapse">
+                          <thead className="bg-slate-50 text-slate-500 font-bold text-[10px] uppercase border-b border-slate-200">
+                            <tr>
+                              <th className="py-2 px-3">#</th>
+                              <th className="py-2 px-3">Kategori</th>
+                              <th className="py-2 px-3">Malzeme / Ürün Adı</th>
+                              <th className="py-2 px-3">Marka / Model</th>
+                              <th className="py-2 px-3">Miktar</th>
+                              <th className="py-2 px-3">Ölçü / Not</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 text-slate-800 font-medium">
+                            {siparis.Kalemler.map((kalem, kIdx) => (
+                              <tr key={kIdx} className="hover:bg-slate-50/80 transition-colors">
+                                <td className="py-2 px-3 font-extrabold text-slate-400">{kIdx + 1}</td>
+                                <td className="py-2 px-3 text-[11px] font-bold text-slate-600">{kalem.Kategori}</td>
+                                <td className="py-2 px-3 font-extrabold text-slate-900">{kalem.MalzemeAdi}</td>
+                                <td className="py-2 px-3 text-slate-700">
+                                  {kalem.Marka && <span className="font-bold text-indigo-700 mr-1">{kalem.Marka}</span>}
+                                  {kalem.Model && <span className="text-slate-500 font-mono text-[11px]">{kalem.Model}</span>}
+                                  {!kalem.Marka && !kalem.Model && <span className="text-slate-300">-</span>}
+                                </td>
+                                <td className="py-2 px-3 font-black text-blue-800 whitespace-nowrap">
+                                  {kalem.Miktar} {kalem.Birim}
+                                </td>
+                                <td className="py-2 px-3 text-[11px] text-slate-600 font-mono">
+                                  {kalem.Olculer || kalem.Aciklama || '-'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
+                  ) : (
+                    <>
+                      {/* Tekli Kalem Görünümü */}
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <h2 className="text-base font-bold text-slate-950">
+                          {siparis.MalzemeAdi}
+                        </h2>
+                        <span className="text-sm font-extrabold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                          {siparis.Miktar} {siparis.Birim}
+                        </span>
+
+                        {siparis.Marka && (
+                          <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-lg border border-indigo-200 flex items-center gap-1 shadow-2xs">
+                            <Tag className="w-3 h-3 text-indigo-500" />
+                            <span>{siparis.Marka}</span>
+                          </span>
+                        )}
+
+                        {siparis.Model && (
+                          <span className="text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200 font-mono">
+                            {siparis.Model}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Ölçüler & Ebatlar Kutusu */}
+                      {siparis.Olculer && (
+                        <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                          <span className="block text-[11px] font-bold text-slate-600 mb-1 flex items-center gap-1">
+                            📐 Kesim / Teknik Ölçüler:
+                          </span>
+                          <p className="text-xs font-mono text-slate-800 whitespace-pre-wrap leading-relaxed">
+                            {siparis.Olculer}
+                          </p>
+                        </div>
+                      )}
+                    </>
                   )}
 
                   {/* Not & Açıklama */}
@@ -859,110 +1091,268 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
                 </div>
               )}
 
-              {/* 1. Proje & Kategori */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1">
-                    Mobilya Projesi / Müşteri Adı <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formProjeAdi}
-                    onChange={(e) => setFormProjeAdi(e.target.value)}
-                    placeholder="Örn: Kaya Belek Otel Lobi Mobilyaları"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1">
-                    Malzeme Kategorisi <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={formKategori}
-                    onChange={(e) => setFormKategori(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {MOBILYA_KATEGORILERI.map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* 2. Malzeme Adı, Miktar & Birim */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-800 mb-1">
-                    Talep Edilen Malzeme / Ürün Adı <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formMalzemeAdi}
-                    onChange={(e) => setFormMalzemeAdi(e.target.value)}
-                    placeholder="Örn: 6mm Füme Temperli Rodajlı Cam veya Blum Ray"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-800 mb-1">
-                      Miktar <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      step="any"
-                      min="0.01"
-                      required
-                      value={formMiktar}
-                      onChange={(e) => setFormMiktar(e.target.value === '' ? '' : Number(e.target.value))}
-                      placeholder="1"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-800 mb-1">
-                      Birim <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={formBirim}
-                      onChange={(e) => setFormBirim(e.target.value)}
-                      className="w-full px-2 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      {BIRIMLER.map(b => (
-                        <option key={b} value={b}>{b}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* 3. İmalat Ölçüleri & Ebatları (Büyük Alan) */}
+              {/* 1. Proje Adı */}
               <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
-                  <span>📐 Kesim, Ebat &amp; Teknik Ölçü Detayları</span>
-                  <span className="text-[10px] text-slate-400 font-normal">Boy x En x Kalınlık / Rodaj / CNC Kodu</span>
+                <label className="block text-xs font-bold text-slate-800 mb-1">
+                  Mobilya Projesi / Müşteri Adı <span className="text-red-500">*</span>
                 </label>
-                <textarea
-                  rows={3}
-                  value={formOlculer}
-                  onChange={(e) => setFormOlculer(e.target.value)}
-                  placeholder="Örnek:&#10;• 1450 x 820 x 6 mm (Düz Rodajlı, 4 Köşe 5mm Kırma)&#10;• 2 Adet Sol Kapak, 2 Adet Sağ Kapak"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                <input
+                  type="text"
+                  required
+                  value={formProjeAdi}
+                  onChange={(e) => setFormProjeAdi(e.target.value)}
+                  placeholder="Örn: Kaya Belek Otel Lobi Mobilyaları"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
-              {/* 4. İmalat Açıklaması & Notlar (Büyük Not Alanı) */}
+              {/* 2. Malzeme Kalemleri Listesi */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between pb-1 border-b border-slate-200">
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-blue-600" />
+                    <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
+                      Malzeme Kalemleri Listesi ({formKalemler.length} Kalem)
+                    </h4>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowKatalogModal(true)}
+                    className="text-[11px] text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 hover:underline cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Katalog Yönet</span>
+                  </button>
+                </div>
+
+                {formKalemler.map((kalem, index) => {
+                  const catItems = katalog.filter(k => k.Kategori.toLowerCase() === (kalem.Kategori || '').toLowerCase());
+                  const mevcutMarkalar = Array.from(new Set(catItems.map(k => k.Marka).filter((m): m is string => Boolean(m && m.trim()))));
+                  const mevcutModeller = Array.from(new Set(catItems.filter(k => !kalem.Marka || (k.Marka && k.Marka.toLowerCase() === kalem.Marka.toLowerCase())).map(k => k.Model).filter((m): m is string => Boolean(m && m.trim()))));
+
+                  return (
+                    <div key={kalem.Id || index} className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3 relative transition-all hover:border-slate-300">
+                      {/* Kalem Başlığı ve Sil Butonu */}
+                      <div className="flex items-center justify-between">
+                        <span className="px-2.5 py-1 bg-slate-200 text-slate-700 font-extrabold text-[11px] rounded-lg flex items-center gap-1.5">
+                          <span>Kalem #{index + 1}</span>
+                        </span>
+                        {formKalemler.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveKalem(index)}
+                            className="text-xs text-red-600 hover:text-red-800 font-bold flex items-center gap-1 p-1 hover:bg-red-50 rounded-lg cursor-pointer transition-colors"
+                            title="Bu kalemi kaldır"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Kalemi Sil</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Kategori ve Malzeme Adı */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                            Kategori <span className="text-red-500">*</span>
+                          </label>
+                          <select
+                            value={kalem.Kategori}
+                            onChange={(e) => handleUpdateKalem(index, 'Kategori', e.target.value)}
+                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            {tumKategoriler.map(cat => (
+                              <option key={cat} value={cat}>{cat}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                            Malzeme / Ürün Adı <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            list={`katalog-urun-listesi-${index}`}
+                            value={kalem.MalzemeAdi}
+                            onChange={(e) => handleUpdateKalem(index, 'MalzemeAdi', e.target.value)}
+                            placeholder="Örn: Teleskopik Ray, 6mm Temperli Cam..."
+                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          <datalist id={`katalog-urun-listesi-${index}`}>
+                            {catItems.map((item) => (
+                              <option key={item.Id || item.MalzemeAdi} value={item.MalzemeAdi}>
+                                {item.Marka ? `${item.Marka} - ${item.Model || ''}` : ''}
+                              </option>
+                            ))}
+                          </datalist>
+                        </div>
+                      </div>
+
+                      {/* Hızlı Seçim Hapları */}
+                      {catItems.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mr-1">Hızlı Seç:</span>
+                          {catItems.slice(0, 5).map((item) => (
+                            <button
+                              key={item.Id || item.MalzemeAdi}
+                              type="button"
+                              onClick={() => handleUpdateKalem(index, 'MalzemeAdi', item.MalzemeAdi)}
+                              className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold border transition-all cursor-pointer ${
+                                kalem.MalzemeAdi.toLowerCase() === item.MalzemeAdi.toLowerCase()
+                                  ? 'bg-blue-600 text-white border-blue-600'
+                                  : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                              }`}
+                            >
+                              {item.MalzemeAdi}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Marka & Model */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-2.5 bg-indigo-50/50 border border-indigo-100 rounded-xl">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-800 mb-1 flex items-center justify-between">
+                            <span className="flex items-center gap-1">
+                              <Tag className="w-3 h-3 text-indigo-600" />
+                              Marka
+                            </span>
+                          </label>
+                          <input
+                            type="text"
+                            list={`marka-listesi-${index}`}
+                            value={kalem.Marka}
+                            onChange={(e) => handleUpdateKalem(index, 'Marka', e.target.value)}
+                            placeholder="Örn: Blum, Hafele, Samet..."
+                            className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                          <datalist id={`marka-listesi-${index}`}>
+                            {mevcutMarkalar.map(m => (
+                              <option key={m} value={m} />
+                            ))}
+                          </datalist>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-800 mb-1">
+                            Model / Seri / Kod
+                          </label>
+                          <input
+                            type="text"
+                            list={`model-listesi-${index}`}
+                            value={kalem.Model}
+                            onChange={(e) => handleUpdateKalem(index, 'Model', e.target.value)}
+                            placeholder="Örn: Movento 50cm Soft-Close..."
+                            className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                          <datalist id={`model-listesi-${index}`}>
+                            {mevcutModeller.map(m => (
+                              <option key={m} value={m} />
+                            ))}
+                          </datalist>
+                        </div>
+                      </div>
+
+                      {/* Miktar & Birim */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                            Miktar <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0.01"
+                            required
+                            value={kalem.Miktar}
+                            onChange={(e) => handleUpdateKalem(index, 'Miktar', e.target.value === '' ? '' : Number(e.target.value))}
+                            placeholder="1"
+                            className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                            Birim <span className="text-red-500">*</span>
+                          </label>
+                          <select
+                            value={kalem.Birim}
+                            onChange={(e) => handleUpdateKalem(index, 'Birim', e.target.value)}
+                            className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            {BIRIMLER.map(b => (
+                              <option key={b} value={b}>{b}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Ölçü & Kalem Notu */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-600 mb-1">
+                            📐 Ebat / Kesim Ölçüleri (Varsa)
+                          </label>
+                          <input
+                            type="text"
+                            value={kalem.Olculer}
+                            onChange={(e) => handleUpdateKalem(index, 'Olculer', e.target.value)}
+                            placeholder="Örn: 1450 x 820 x 6 mm"
+                            className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-600 mb-1">
+                            📝 Kalem Notu / Özel İstek
+                          </label>
+                          <input
+                            type="text"
+                            value={kalem.Aciklama}
+                            onChange={(e) => handleUpdateKalem(index, 'Aciklama', e.target.value)}
+                            placeholder="Örn: Sağ kapak için, şeffaf ambalaj"
+                            className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Yeni Kalem Ekle Butonu */}
+                <button
+                  type="button"
+                  onClick={handleAddKalem}
+                  className="w-full py-2.5 px-4 bg-amber-50 hover:bg-amber-100 border-2 border-dashed border-amber-300 hover:border-amber-400 rounded-2xl text-amber-900 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
+                >
+                  <Plus className="w-4 h-4 text-amber-700" />
+                  <span>+ Yeni Malzeme Kalemi Ekle</span>
+                </button>
+              </div>
+
+                <div className="pt-1">
+                  <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-slate-100 p-2 rounded-xl border border-slate-200 select-none">
+                    <input
+                      type="checkbox"
+                      checked={kaydetKataloga}
+                      onChange={(e) => setKaydetKataloga(e.target.checked)}
+                      className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                    />
+                    <span className="text-[11px] font-bold text-slate-700">
+                      💾 Bu Kalemleri Kataloğa da Kaydet
+                    </span>
+                  </label>
+                </div>
+
+              {/* General Order Notes */}
               <div>
                 <label className="block text-xs font-bold text-slate-800 mb-1">
-                  📝 Ustabaşı Açıklaması &amp; Tedarikçi Notu
+                  📝 Genel Sipariş Notu & Ustabaşı Açıklaması
                 </label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={formAciklama}
                   onChange={(e) => setFormAciklama(e.target.value)}
                   placeholder="Montaj yeri, marka/model tercihi, yüzey kaplama tipi veya tedarikçiye iletilecek özel uyarılar..."
@@ -1265,6 +1655,16 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
         isOpen={Boolean(lockedWarningSiparis)}
         onClose={() => setLockedWarningSiparis(null)}
         siparis={lockedWarningSiparis}
+      />
+
+      {/* DİNAMİK MALZEME, MARKA VE MODEL KATALOĞU MODALI */}
+      <MalzemeKatalogModal
+        isOpen={showKatalogModal}
+        onClose={() => setShowKatalogModal(false)}
+        userRole={userRole}
+        onCatalogUpdated={() => {
+          fetchKatalog();
+        }}
       />
     </div>
   );
