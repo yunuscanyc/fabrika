@@ -69,7 +69,7 @@ export const SiparisYazdirModal: React.FC<SiparisYazdirModalProps> = ({
   return (
     <div 
       onClick={(e) => e.stopPropagation()}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto siparis-print-overlay"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/80 backdrop-blur-sm p-2 sm:p-4 pt-4 sm:pt-6 overflow-y-auto siparis-print-overlay"
     >
       {/* A4 Baskı Düzeni ve Sayfa Kenarlık / Başlık Temizleme CSS */}
       <style dangerouslySetInnerHTML={{ __html: `
@@ -88,43 +88,40 @@ export const SiparisYazdirModal: React.FC<SiparisYazdirModalProps> = ({
             min-height: 0 !important;
             overflow: visible !important;
           }
-          /* Arka plandaki tüm uygulama ekranlarını yazdırmada gizle (Çift sayfa veya arka plan basımını önler) */
-          body > *:not(.siparis-print-overlay) {
-            display: none !important;
+          /* Arka plandaki diğer DOM elemanlarını gizle */
+          body * {
+            visibility: hidden !important;
           }
-          .siparis-print-overlay {
-            position: static !important;
-            display: block !important;
-            width: 100% !important;
-            height: auto !important;
-            background: white !important;
-            padding: 8mm 12mm !important;
-            margin: 0 !important;
-            border: none !important;
-            box-shadow: none !important;
-            overflow: visible !important;
+          /* Sadece sipariş formu modal içeriğini ve alt elemanlarını görünür yap */
+          .siparis-print-content,
+          .siparis-print-content * {
+            visibility: visible !important;
           }
+          /* Yazdırılacak belgeyi kağıdın en üst sol köşesine tam yasla */
           .siparis-print-content {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 8mm 12mm !important;
             border: none !important;
             box-shadow: none !important;
             background: white !important;
-            width: 100% !important;
-            max-width: none !important;
             max-height: none !important;
-            margin: 0 !important;
-            padding: 0 !important;
             overflow: visible !important;
             page-break-after: avoid !important;
             break-after: avoid !important;
           }
           .no-print, .no-print * {
             display: none !important;
+            visibility: hidden !important;
           }
         }
       `}} />
 
       {/* Yazdırma Önizleme Konteyneri */}
-      <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl border border-slate-300 overflow-hidden flex flex-col max-h-[92vh] siparis-print-content">
+      <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl border border-slate-300 overflow-hidden flex flex-col max-h-[92vh] my-2 sm:my-4 siparis-print-content">
         {/* Kontrol Çubuğu (Yazdırmada Gizlenir) */}
         <div className="no-print px-5 py-3 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-2.5">

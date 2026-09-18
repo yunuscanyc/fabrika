@@ -61,39 +61,31 @@ export const IzinYazdirModal: React.FC<IzinYazdirModalProps> = ({
             min-height: 0 !important;
             overflow: visible !important;
           }
-          /* Hide all application views under body except our printable overlay */
-          body > *:not(.print-modal-overlay) {
-            display: none !important;
+          /* Hide all elements by default in print */
+          body * {
+            visibility: hidden !important;
           }
-          /* Position printable overlay as standard document flow */
-          .print-modal-overlay {
-            position: static !important;
-            display: block !important;
-            left: auto !important;
-            top: auto !important;
-            width: 100% !important;
-            height: auto !important;
-            background: white !important;
-            padding: 10mm 15mm !important; /* Perfect printable margins */
-            margin: 0 !important;
-            z-index: auto !important;
-            overflow: visible !important;
-            box-shadow: none !important;
-            border: none !important;
+          /* Show only printable modal content */
+          .print-modal-content,
+          .print-modal-content * {
+            visibility: visible !important;
           }
           .print-modal-content {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
             border: none !important;
             box-shadow: none !important;
             background: white !important;
-            width: 100% !important;
-            max-width: none !important;
             margin: 0 !important;
-            padding: 0 !important;
+            padding: 8mm 12mm !important;
             page-break-after: avoid !important;
             break-after: avoid !important;
           }
-          .print\\:hidden {
+          .print\\:hidden, .print\\:hidden * {
             display: none !important;
+            visibility: hidden !important;
           }
         }
       `}} />
