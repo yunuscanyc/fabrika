@@ -169,8 +169,8 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
 
   const bugunStr = new Date().toISOString().split('T')[0];
 
-  // Görsel Sıkıştırma Fonksiyonu (Mobil kamera fotoğraflarını optimize eder, hızlı yükler)
-  const compressImageFile = (file: File, maxDim = 1200, quality = 0.8): Promise<string> => {
+  // Görsel Sıkıştırma Fonksiyonu (Nginx 413 Request Entity Too Large hatasını önlemek için optimize boyutlama)
+  const compressImageFile = (file: File, maxDim = 800, quality = 0.68): Promise<string> => {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -198,29 +198,55 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
         const img = new Image();
         img.onload = () => {
           try {
-            let width = img.width;
-            let height = img.height;
-            if (width > height) {
-              if (width > maxDim) {
-                height = Math.round((height * maxDim) / width);
-                width = maxDim;
+            const scaleDims = (targetMax: number) => {
+              let w = img.width;
+              let h = img.height;
+              if (w > h) {
+                if (w > targetMax) {
+                  h = Math.round((h * targetMax) / w);
+                  w = targetMax;
+                }
+              } else {
+                if (h > targetMax) {
+                  w = Math.round((w * targetMax) / h);
+                  h = targetMax;
+                }
               }
-            } else {
-              if (height > maxDim) {
-                width = Math.round((width * maxDim) / height);
-                height = maxDim;
-              }
-            }
+              return { w, h };
+            };
+
+            let { w, h } = scaleDims(maxDim);
             const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
+            canvas.width = w;
+            canvas.height = h;
             const ctx = canvas.getContext('2d');
             if (!ctx) {
               resolve(dataUrl);
               return;
             }
-            ctx.drawImage(img, 0, 0, width, height);
-            const compressed = canvas.toDataURL('image/jpeg', quality);
+            ctx.drawImage(img, 0, 0, w, h);
+            let compressed = canvas.toDataURL('image/jpeg', quality);
+
+            // Nginx 1MB sınırına takılmamak için (her görsel azami ~150-200KB base64 olmalı)
+            // Eğer çıktı 220KB'dan büyükse kademeli olarak yeniden küçült
+            if (compressed.length > 220000) {
+              const rescaled = scaleDims(650);
+              canvas.width = rescaled.w;
+              canvas.height = rescaled.h;
+              ctx.clearRect(0, 0, rescaled.w, rescaled.h);
+              ctx.drawImage(img, 0, 0, rescaled.w, rescaled.h);
+              compressed = canvas.toDataURL('image/jpeg', 0.58);
+            }
+
+            if (compressed.length > 180000) {
+              const rescaled = scaleDims(500);
+              canvas.width = rescaled.w;
+              canvas.height = rescaled.h;
+              ctx.clearRect(0, 0, rescaled.w, rescaled.h);
+              ctx.drawImage(img, 0, 0, rescaled.w, rescaled.h);
+              compressed = canvas.toDataURL('image/jpeg', 0.52);
+            }
+
             resolve(compressed || dataUrl);
           } catch {
             resolve(dataUrl);
@@ -315,7 +341,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
       const yuklenenler: any[] = [];
 
       for (const file of fileList) {
-        const base64 = await compressImageFile(file, 1200, 0.8);
+        const base64 = await compressImageFile(file, 800, 0.68);
         if (!base64) continue;
 
         // Gerçek taban boyutu hesaplama
