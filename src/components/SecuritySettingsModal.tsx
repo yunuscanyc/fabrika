@@ -17,6 +17,10 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  // Mevcut Ayarlar Bilgisi
+  const [currentSavedAdminPin, setCurrentSavedAdminPin] = useState<string>('');
+  const [currentSavedUstabasiPin, setCurrentSavedUstabasiPin] = useState<string>('');
+
   // Form Alanları
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -47,6 +51,8 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
           if (data) {
             setAutoLockMinutes(data.autoLockMinutes ?? 15);
             setIsProtectionEnabled(data.isProtectionEnabled ?? true);
+            if (data.quickPin) setCurrentSavedAdminPin(data.quickPin);
+            if (data.ustabasiPin) setCurrentSavedUstabasiPin(data.ustabasiPin);
           }
         })
         .catch(() => {})
@@ -62,7 +68,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
     setSuccessMsg(null);
 
     if (isProtectionEnabled && !currentPassword.trim()) {
-      setError('Güvenlik doğrulaması için lütfen mevcut yönetici parolanızı giriniz.');
+      setError('Güvenlik doğrulaması için lütfen mevcut yönetici parolanızı veya yönetici PIN kodunuzu giriniz.');
       return;
     }
 
@@ -121,6 +127,8 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
         if (onSettingsUpdated) {
           onSettingsUpdated(autoLockMinutes);
         }
+        if (data.settings?.quickPin) setCurrentSavedAdminPin(data.settings.quickPin);
+        if (data.settings?.ustabasiPin) setCurrentSavedUstabasiPin(data.settings.ustabasiPin);
         setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
@@ -132,7 +140,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
           onClose();
         }, 1200);
       } else {
-        setError(data.error || 'Ayarlar kaydedilemedi. Parolanızı kontrol ediniz.');
+        setError(data.error || 'Ayarlar kaydedilemedi. Parolanızı veya PIN kodunuzu kontrol ediniz.');
       }
     } catch (err: any) {
       setError('Sunucu bağlantı hatası oluştu.');
@@ -223,14 +231,21 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
 
               {/* 2. Yönetici Hızlı PIN Tanımlama (Tamamen Maskeli / Güvenli) */}
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
-                <div>
-                  <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                    <Hash className="w-4 h-4 text-blue-600" />
-                    Yönetici / Tam Yetkili Hızlı PIN (4-8 Hane)
-                  </label>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Tüm fabrikaya, şantiyelere, araçlara ve sipariş kilitleme işlemlerine tam erişim sağlar.
-                  </p>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <Hash className="w-4 h-4 text-blue-600" />
+                      Yönetici / Tam Yetkili Hızlı PIN (4-8 Hane)
+                    </label>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Tüm fabrikaya, şantiyelere, araçlara ve sipariş kilitleme işlemlerine tam erişim sağlar.
+                    </p>
+                  </div>
+                  {currentSavedAdminPin && (
+                    <span className="text-[10px] font-mono font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md border border-blue-200 shrink-0">
+                      Aktif: {currentSavedAdminPin}
+                    </span>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -245,7 +260,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                       autoComplete="new-password"
                       value={newPin}
                       onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
-                      placeholder="Yönetici PIN girin (••••)"
+                      placeholder={currentSavedAdminPin ? `Mevcut: ${currentSavedAdminPin}` : 'Yönetici PIN girin (••••)'}
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono tracking-widest text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -270,14 +285,21 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
 
               {/* 3. Ustabaşı Özel PIN Kodu (Sadece Sipariş Girişi) */}
               <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200 space-y-2.5">
-                <div>
-                  <label className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
-                    <Lock className="w-4 h-4 text-amber-700" />
-                    Ustabaşı Özel PIN Kodu (Sadece Sipariş Girişi)
-                  </label>
-                  <p className="text-[11px] text-amber-800/80 mt-0.5">
-                    Ustabaşı bu PIN ile giriş yaptığında <strong>yalnızca Sipariş Giriş ve Takip ekranını</strong> görür. Fabrika genel yönetimine ve diğer modüllere erişemez.
-                  </p>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <label className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                      <Lock className="w-4 h-4 text-amber-700" />
+                      Ustabaşı Özel PIN Kodu (Sadece Sipariş Girişi)
+                    </label>
+                    <p className="text-[11px] text-amber-800/80 mt-0.5">
+                      Ustabaşı bu PIN ile giriş yaptığında <strong>yalnızca Sipariş Giriş ve Takip ekranını</strong> görür. Fabrika genel yönetimine ve diğer modüllere erişemez.
+                    </p>
+                  </div>
+                  {currentSavedUstabasiPin && (
+                    <span className="text-[10px] font-mono font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded-md border border-amber-300 shrink-0">
+                      Aktif: {currentSavedUstabasiPin}
+                    </span>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -292,7 +314,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                       autoComplete="new-password"
                       value={newUstabasiPin}
                       onChange={(e) => setNewUstabasiPin(e.target.value.replace(/\D/g, ''))}
-                      placeholder="Ustabaşı PIN girin (••••)"
+                      placeholder={currentSavedUstabasiPin ? `Mevcut: ${currentSavedUstabasiPin}` : 'Ustabaşı PIN girin (••••)'}
                       className="w-full px-3 py-2 bg-white border border-amber-300 rounded-lg text-xs font-mono tracking-widest text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
                     />
                   </div>
@@ -353,20 +375,20 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                 </div>
               </div>
 
-              {/* 4. Onay İçin Mevcut Parola (Tamamen Maskeli) */}
+              {/* 4. Onay İçin Mevcut Parola veya Yönetici PIN */}
               <div className="p-3.5 rounded-xl bg-amber-50/60 border border-amber-200/80">
                 <label className="block text-xs font-bold text-slate-800 mb-1">
-                  Mevcut Yönetici Parolası Doğrulaması <span className="text-red-500">*</span>
+                  Mevcut Yönetici Parolası veya Yönetici PIN Doğrulaması <span className="text-red-500">*</span>
                 </label>
                 <p className="text-[11px] text-slate-500 mb-2">
-                  Değişiklikleri kaydetmek için lütfen mevcut yetkili parolanızı giriniz.
+                  Değişiklikleri kaydetmek için lütfen mevcut yönetici parolanızı veya geçerli yönetici PIN kodunuzu giriniz.
                 </p>
                 <input
                   type="password"
                   autoComplete="current-password"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="Mevcut yönetici parolanızı girin..."
+                  placeholder="Mevcut yönetici parolası veya PIN kodunuz..."
                   required
                   className="w-full px-3 py-2 bg-white border border-amber-300 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />

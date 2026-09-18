@@ -6854,6 +6854,7 @@ async function loadAuthSettings(): Promise<AuthData> {
       // Sütunun var olduğundan emin ol
       try {
         await pool.query(`ALTER TABLE ${detectedTables.sistemGuvenlik} ADD COLUMN IF NOT EXISTS "UstabasiPin" VARCHAR(50) DEFAULT '1923'`);
+        await pool.query(`UPDATE ${detectedTables.sistemGuvenlik} SET "UstabasiPin" = '1923' WHERE "UstabasiPin" IS NULL OR "UstabasiPin" = ''`);
       } catch (e) {}
 
       const res = await pool.query(`SELECT * FROM ${detectedTables.sistemGuvenlik} LIMIT 1`);
@@ -6861,7 +6862,12 @@ async function loadAuthSettings(): Promise<AuthData> {
         const row = res.rows[0];
         memAuthData.masterPassword = String(getProp(row, 'MasterPassword', 'masterpassword', 'parola') || memAuthData.masterPassword);
         memAuthData.quickPin = String(getProp(row, 'QuickPin', 'quickpin', 'pin') || memAuthData.quickPin);
-        memAuthData.ustabasiPin = String(getProp(row, 'UstabasiPin', 'ustabasipin', 'ustabasi_pin') || memAuthData.ustabasiPin);
+        const ustPin = getProp(row, 'UstabasiPin', 'ustabasipin', 'ustabasi_pin');
+        if (ustPin && String(ustPin).trim() !== '') {
+          memAuthData.ustabasiPin = String(ustPin).trim();
+        } else {
+          memAuthData.ustabasiPin = '1923';
+        }
         memAuthData.autoLockMinutes = Number(getProp(row, 'AutoLockMinutes', 'autolockminutes', 'dakika') || 15);
         memAuthData.isProtectionEnabled = Boolean(getProp(row, 'IsProtectionEnabled', 'isprotectionenabled') ?? true);
       } else {
@@ -6908,8 +6914,8 @@ app.get('/api/auth/status', async (req, res) => {
     autoLockMinutes: memAuthData.autoLockMinutes,
     hasPin: Boolean(memAuthData.quickPin && memAuthData.quickPin.length > 0),
     hasUstabasiPin: Boolean(memAuthData.ustabasiPin && memAuthData.ustabasiPin.length > 0),
-    ustabasiPin: memAuthData.ustabasiPin,
-    quickPin: memAuthData.quickPin,
+    ustabasiPin: memAuthData.ustabasiPin || '1923',
+    quickPin: memAuthData.quickPin || '1234',
     hasCustomPassword: memAuthData.masterPassword !== 'rende2026'
   });
 });
@@ -6992,8 +6998,13 @@ app.post('/api/auth/change-settings', async (req, res) => {
   await loadAuthSettings();
   const { currentPassword, newPassword, newPin, newUstabasiPin, autoLockMinutes, isProtectionEnabled } = req.body;
   
-  if (memAuthData.isProtectionEnabled && currentPassword !== memAuthData.masterPassword) {
-    return res.status(401).json({ success: false, error: 'Mevcut parolanız hatalı! Güvenlik nedeniyle değişiklik yapılamadı.' });
+  const cleanCurrent = String(currentPassword || '').trim();
+  const isAuthValid = !memAuthData.isProtectionEnabled || 
+                      cleanCurrent === memAuthData.masterPassword || 
+                      (memAuthData.quickPin && cleanCurrent === memAuthData.quickPin);
+
+  if (!isAuthValid) {
+    return res.status(401).json({ success: false, error: 'Mevcut parolanız veya Yönetici PIN hatalı! Güvenlik nedeniyle değişiklik yapılamadı.' });
   }
   
   const updateData: Partial<AuthData> = {};
@@ -7018,12 +7029,12 @@ app.post('/api/auth/change-settings', async (req, res) => {
     success: true,
     message: 'Güvenlik ve parola ayarları başarıyla güncellendi.',
     settings: {
-      autoLockMinutes: memAuthData.autoLockMinutes,
-      isProtectionEnabled: memAuthData.isProtectionEnabled,
-      hasPin: Boolean(memAuthData.quickPin && memAuthData.quickPin.length > 0),
-      hasUstabasiPin: Boolean(memAuthData.ustabasiPin && memAuthData.ustabasiPin.length > 0),
+      hasPin: Boolean(memAuthData.quickPin),
+      hasUstabasiPin: Boolean(memAuthData.ustabasiPin),
+      quickPin: memAuthData.quickPin,
       ustabasiPin: memAuthData.ustabasiPin,
-      quickPin: memAuthData.quickPin
+      autoLockMinutes: memAuthData.autoLockMinutes,
+      isProtectionEnabled: memAuthData.isProtectionEnabled
     }
   });
 });
