@@ -17,15 +17,18 @@ export interface Personel {
   AdSoyad: string;
   Telefon: string;
   Eposta?: string;
+  Email?: string;
   KanGrubu?: string;
   AcilDurumKisisi?: string;
   AcilDurumTelefonu?: string;
   Departman?: string;
   Gorev?: string;
+  GorevVeyaUnvan?: string;
   IseGirisTarihi: string;
   IstenCikisTarihi?: string | null;
   DogumTarihi?: string;
   DurumAktifMi: boolean;
+  AktifMi?: boolean;
   AktifIzinBilgisi?: string;
   DevredenIzinGunu?: number; // Eski masaüstü programından bir kerelik devir izni
   IzinUcretiOdemeleri?: IzinUcretiOdeme[]; // Ücrete çevrilen izinler
@@ -147,9 +150,11 @@ export interface PersonelSaglikRaporu {
 export interface IsgEgitimi {
   EgitimId: number;
   PersonelId?: number;
+  PersonelAdSoyad?: string;
   EgitimKonusu: string;
   EgiticiAdSoyad: string;
   EgitimTarihi: string;
+  GelecekEgitimTarihi?: string;
   SureSaat: number;
   GecerlilikYil: number;
   Aciklama?: string;

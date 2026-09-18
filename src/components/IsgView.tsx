@@ -885,7 +885,9 @@ export const IsgView: React.FC<IsgViewProps> = ({
                           SaglikKurulusu: 'Yetkili OSGB Sağlık Birimi',
                           Sonuc: 'Çalışmaya Uygundur',
                           RaporNo: '',
-                          Aciklama: ''
+                          Aciklama: '',
+                          BelgeUrl: '',
+                          BelgeAdi: ''
                         });
                         setSaglikModalAcik(true);
                       }}
@@ -906,7 +908,9 @@ export const IsgView: React.FC<IsgViewProps> = ({
                           EgitimTarihi: new Date().toISOString().split('T')[0],
                           SureSaat: 12,
                           GecerlilikYil: 2,
-                          Aciklama: ''
+                          Aciklama: '',
+                          BelgeUrl: '',
+                          BelgeAdi: ''
                         });
                         setEgitimModalAcik(true);
                       }}

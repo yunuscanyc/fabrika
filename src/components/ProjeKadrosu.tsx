@@ -19,9 +19,9 @@ interface ProjeKadrosuProps {
   aktifPersoneller: any[];
   atananYevmiyeciler: any[];
   ekipAnaSekme: string;
-  setEkipAnaSekme: (val: string) => void;
+  setEkipAnaSekme: (val: any) => void;
   personelGorunumSekmesi: string;
-  setPersonelGorunumSekmesi: (val: string) => void;
+  setPersonelGorunumSekmesi: (val: any) => void;
   arsivPersoneller: any[];
   seciliProjePersoneller: any[];
   setSeciliAtaPersonelId: (val: string) => void;
@@ -32,7 +32,7 @@ interface ProjeKadrosuProps {
   handlePersonelProjedenCikar: (pp: any) => void;
   handlePersonelTekrarGorevlendir: (pp: any) => void;
   ustaGorunumSekmesi: string;
-  setUstaGorunumSekmesi: (val: string) => void;
+  setUstaGorunumSekmesi: (val: any) => void;
   arsivdekiKayitlar: any[];
   projeUstaGecmisi: any[];
   setYevmiyeciAtaModalAcik: (val: boolean) => void;

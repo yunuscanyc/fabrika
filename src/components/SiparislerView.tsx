@@ -1658,14 +1658,15 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
       />
 
       {/* DİNAMİK MALZEME, MARKA VE MODEL KATALOĞU MODALI */}
-      <MalzemeKatalogModal
-        isOpen={showKatalogModal}
-        onClose={() => setShowKatalogModal(false)}
-        userRole={userRole}
-        onCatalogUpdated={() => {
-          fetchKatalog();
-        }}
-      />
+      {showKatalogModal && (
+        <MalzemeKatalogModal
+          katalog={katalog}
+          kategoriler={tumKategoriler}
+          onClose={() => setShowKatalogModal(false)}
+          onKatalogChanged={fetchKatalog}
+          userRole={userRole}
+        />
+      )}
     </div>
   );
 };
