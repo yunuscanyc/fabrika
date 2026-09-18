@@ -93,7 +93,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
       <div className="relative w-full max-w-md bg-slate-900/90 backdrop-blur-xl border border-slate-800/90 rounded-2xl shadow-2xl p-6 sm:p-8 text-white">
         <div className="absolute top-4 right-4">
-          <PWAInstallPrompt />
+          <PWAInstallPrompt variant="login" />
         </div>
 
         {/* Üst Logo ve Başlık */}

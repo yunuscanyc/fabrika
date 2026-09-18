@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { OzetIstatistikler, OzetGorevItem } from '../types';
 import { DbStatusData } from './DatabaseStatusModal';
 import { formatTarihTR } from '../utils/dateUtils';
+import { PWAInstallPrompt } from './PWAInstallPrompt';
 import { 
   FolderGit2, 
   Truck, 
@@ -136,6 +137,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </button>
         </div>
       )}
+
+      {/* PWA Uygulama Kurulum Kartı */}
+      <PWAInstallPrompt variant="card" />
 
       {/* Ana Metrik Kartları (6 Odaklı Modül) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">

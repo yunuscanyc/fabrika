@@ -6908,6 +6908,25 @@ app.delete('/api/montaj-gruplari/:id', async (req, res) => {
 // VITE MIDDLEWARE & STATIC SERVING
 // =========================================================================
 async function startServer() {
+  // PWA Service Worker & Manifest Endpoints
+  app.get('/sw.js', (req, res) => {
+    res.setHeader('Content-Type', 'application/javascript; charset=UTF-8');
+    const swPath = path.join(process.cwd(), 'public', 'sw.js');
+    if (fs.existsSync(swPath)) {
+      return res.sendFile(swPath);
+    }
+    return res.status(200).send('// Service worker ready');
+  });
+
+  app.get('/manifest.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/manifest+json; charset=UTF-8');
+    const manifestPath = path.join(process.cwd(), 'public', 'manifest.json');
+    if (fs.existsSync(manifestPath)) {
+      return res.sendFile(manifestPath);
+    }
+    return res.status(404).json({ error: 'Manifest not found' });
+  });
+
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
