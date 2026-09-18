@@ -107,12 +107,23 @@ function getProp(obj: any, ...keys: string[]): any {
   return undefined;
 }
 
-// Veritabanından gelen ikili (bytea) veya base64 dosya içeriğini güvenle okuyup data-uri formatına çevirme
+// Veritabanından gelen ikili (bytea), hex veya base64 dosya içeriğini güvenle okuyup data-uri formatına çevirme
 function parseDatabaseFileContent(raw: any): string {
   if (!raw) return '';
   if (Buffer.isBuffer(raw)) {
-    // Sihirli baytlara göre mime type belirle, varsayılan image/png
-    let mime = 'image/png';
+    // Buffer aslında UTF-8 formatında bir data-uri veya URL olabilir (ör. bytea kolonuna doğrudan data string kaydedilmişse)
+    try {
+      const asUtf8 = raw.toString('utf-8');
+      if (asUtf8.startsWith('data:') || asUtf8.startsWith('http://') || asUtf8.startsWith('https://') || asUtf8.startsWith('/')) {
+        return asUtf8;
+      }
+      if (asUtf8.startsWith('\\x') || asUtf8.startsWith('0x')) {
+        return parseDatabaseFileContent(asUtf8);
+      }
+    } catch (e) {}
+
+    // Sihirli baytlara göre mime type belirle
+    let mime = 'image/jpeg';
     if (raw.length > 4) {
       if (raw[0] === 0x89 && raw[1] === 0x50 && raw[2] === 0x4e && raw[3] === 0x47) {
         mime = 'image/png';
@@ -120,6 +131,8 @@ function parseDatabaseFileContent(raw: any): string {
         mime = 'image/jpeg';
       } else if (raw[0] === 0x47 && raw[1] === 0x49 && raw[2] === 0x46) {
         mime = 'image/gif';
+      } else if (raw[0] === 0x52 && raw[1] === 0x49 && raw[2] === 0x46 && raw[3] === 0x46) {
+        mime = 'image/webp';
       } else if (raw[0] === 0x25 && raw[1] === 0x50 && raw[2] === 0x44 && raw[3] === 0x46) {
         mime = 'application/pdf';
       }
@@ -127,14 +140,30 @@ function parseDatabaseFileContent(raw: any): string {
     return `data:${mime};base64,${raw.toString('base64')}`;
   }
   
-  const str = String(raw);
+  const str = String(raw).trim();
   if (str.startsWith('data:')) return str;
-  if (str.startsWith('http://') || str.startsWith('https://')) return str;
+  if (str.startsWith('http://') || str.startsWith('https://') || str.startsWith('/')) return str;
+
+  // PostgreSQL bytea hex string formatı: \x...
+  if (str.startsWith('\\x') || str.startsWith('0x')) {
+    try {
+      const hex = str.startsWith('\\x') ? str.slice(2) : str.slice(2);
+      const buf = Buffer.from(hex, 'hex');
+      return parseDatabaseFileContent(buf);
+    } catch (e) {}
+  }
   
-  // Eğer temiz bir base64 dizisiyse data-uri yap
+  // Temiz base64 dizisi ise dosya tipine göre data-uri yap
   const cleanStr = str.replace(/\s/g, '');
-  if (cleanStr.length > 10 && /^[A-Za-z0-9+/=]+$/.test(cleanStr)) {
-    return `data:image/png;base64,${cleanStr}`;
+  if (cleanStr.length > 10) {
+    if (cleanStr.startsWith('/9j/')) return `data:image/jpeg;base64,${cleanStr}`;
+    if (cleanStr.startsWith('iVBOR')) return `data:image/png;base64,${cleanStr}`;
+    if (cleanStr.startsWith('R0lGOD')) return `data:image/gif;base64,${cleanStr}`;
+    if (cleanStr.startsWith('UklGR')) return `data:image/webp;base64,${cleanStr}`;
+    if (cleanStr.startsWith('JVBER')) return `data:application/pdf;base64,${cleanStr}`;
+    if (/^[A-Za-z0-9+/=]+$/.test(cleanStr)) {
+      return `data:image/jpeg;base64,${cleanStr}`;
+    }
   }
   return str;
 }
@@ -667,6 +696,8 @@ function normalizeHatirlatici(row: any) {
     TamamlandiMi: row.TamamlandiMi !== undefined ? Boolean(row.TamamlandiMi) : (String(getProp(row, 'Durum', 'durum')) === 'Tamamlandı' || Boolean(getProp(row, 'TamamlandiMi', 'tamamlandimi'))),
     OnemDerecesi: String(getProp(row, 'OnemDerecesi', 'onemderecesi', 'Oncelik', 'oncelik') || 'Normal'),
     SorumluPersonelId: getProp(row, 'SorumluPersonelId', 'sorumlupersonelid') ? Number(getProp(row, 'SorumluPersonelId', 'sorumlupersonelid')) : null,
+    Belgeler: Array.isArray(row.Belgeler) ? row.Belgeler : [],
+    FotoSayisi: Array.isArray(row.Belgeler) ? row.Belgeler.length : Number(row.FotoSayisi || 0),
     _directPhoto: directPhotoContent,
     _directPhotoName: directName,
     _directPhotoSize: directSize
@@ -753,7 +784,11 @@ function extractFileContentFromRow(row: any): string {
     'Gorsel', 'gorsel',
     'Blob', 'blob',
     'Dosya', 'dosya',
-    'Belge', 'belge'
+    'Belge', 'belge',
+    'DosyaYolu', 'dosyayolu', 'dosya_yolu',
+    'FilePath', 'filepath', 'file_path',
+    'Url', 'url',
+    'Path', 'path'
   );
   return parseDatabaseFileContent(val);
 }
@@ -2834,14 +2869,19 @@ async function getMakinelerList(sadeceAktif = false): Promise<any[]> {
                 const docBId = Number(getProp(doc, 'BakimId', 'bakimid', 'bakim_id', 'id'));
                 return docBId === bakim.BakimId;
               })
-              .map((doc: any) => ({
-                BelgeId: Number(getProp(doc, 'BelgeId', 'belgeid', 'id')),
-                BakimId: Number(getProp(doc, 'BakimId', 'bakimid', 'bakim_id')),
-                DosyaAdi: String(getProp(doc, 'DosyaAdi', 'dosyaadi', 'ad', 'filename', 'dosya_adi', 'DosyaAd', 'dosya_ad') || 'belge.png'),
-                DosyaBoyutu: String(getProp(doc, 'DosyaBoyutu', 'dosyaboyutu', 'boyut', 'filesize', 'dosya_boyutu') || '0 KB'),
-                YuklemeTarihi: String(getProp(doc, 'YuklemeTarihi', 'yuklemetarihi', 'tarih', 'created_at', 'yukleme_tarihi') || ''),
-                DosyaIcerigi: parseDatabaseFileContent(getProp(doc, 'DosyaIcerigi', 'dosyaicerigi', 'base64', 'content', 'dosya_icerigi', 'DosyaIcerik', 'resim', 'Resim', 'foto', 'Foto', 'gorsel', 'Gorsel', 'veri', 'Veri', 'data', 'Data'))
-              }));
+              .map((doc: any) => {
+                const icerik = extractFileContentFromRow(doc);
+                return {
+                  BelgeId: Number(getProp(doc, 'BelgeId', 'belgeid', 'id')),
+                  BakimId: Number(getProp(doc, 'BakimId', 'bakimid', 'bakim_id')),
+                  DosyaAdi: String(getProp(doc, 'DosyaAdi', 'dosyaadi', 'ad', 'filename', 'dosya_adi', 'DosyaAd', 'dosya_ad') || 'belge.png'),
+                  DosyaBoyutu: String(getProp(doc, 'DosyaBoyutu', 'dosyaboyutu', 'boyut', 'filesize', 'dosya_boyutu') || '0 KB'),
+                  YuklemeTarihi: String(getProp(doc, 'YuklemeTarihi', 'yuklemetarihi', 'tarih', 'created_at', 'yukleme_tarihi') || ''),
+                  DosyaIcerigi: icerik,
+                  base64: icerik,
+                  DosyaVerisi: icerik
+                };
+              });
 
             if (bBelgeler.length === 0 && bakim._directPhoto) {
               bBelgeler.push({
@@ -2850,7 +2890,9 @@ async function getMakinelerList(sadeceAktif = false): Promise<any[]> {
                 DosyaAdi: bakim._directPhotoName || 'foto.png',
                 DosyaBoyutu: bakim._directPhotoSize || '0 KB',
                 YuklemeTarihi: bakim.BakimTarihi || '',
-                DosyaIcerigi: bakim._directPhoto
+                DosyaIcerigi: bakim._directPhoto,
+                base64: bakim._directPhoto,
+                DosyaVerisi: bakim._directPhoto
               });
             }
 
@@ -3039,14 +3081,19 @@ async function getAraclarList(aktifSadece = false): Promise<any[]> {
                 const docBId = Number(getProp(doc, 'BakimId', 'bakimid', 'bakim_id', 'id'));
                 return docBId === bakim.BakimId;
               })
-              .map((doc: any) => ({
-                BelgeId: Number(getProp(doc, 'BelgeId', 'belgeid', 'id')),
-                BakimId: Number(getProp(doc, 'BakimId', 'bakimid', 'bakim_id')),
-                DosyaAdi: String(getProp(doc, 'DosyaAdi', 'dosyaadi', 'ad', 'filename', 'dosya_adi', 'DosyaAd', 'dosya_ad') || 'belge.png'),
-                DosyaBoyutu: String(getProp(doc, 'DosyaBoyutu', 'dosyaboyutu', 'boyut', 'filesize', 'dosya_boyutu') || '0 KB'),
-                YuklemeTarihi: String(getProp(doc, 'YuklemeTarihi', 'yuklemetarihi', 'tarih', 'created_at', 'yukleme_tarihi') || ''),
-                DosyaIcerigi: parseDatabaseFileContent(getProp(doc, 'DosyaIcerigi', 'dosyaicerigi', 'base64', 'content', 'dosya_icerigi', 'DosyaIcerik', 'resim', 'Resim', 'foto', 'Foto', 'gorsel', 'Gorsel', 'veri', 'Veri', 'data', 'Data'))
-              }));
+              .map((doc: any) => {
+                const icerik = extractFileContentFromRow(doc);
+                return {
+                  BelgeId: Number(getProp(doc, 'BelgeId', 'belgeid', 'id')),
+                  BakimId: Number(getProp(doc, 'BakimId', 'bakimid', 'bakim_id')),
+                  DosyaAdi: String(getProp(doc, 'DosyaAdi', 'dosyaadi', 'ad', 'filename', 'dosya_adi', 'DosyaAd', 'dosya_ad') || 'belge.png'),
+                  DosyaBoyutu: String(getProp(doc, 'DosyaBoyutu', 'dosyaboyutu', 'boyut', 'filesize', 'dosya_boyutu') || '0 KB'),
+                  YuklemeTarihi: String(getProp(doc, 'YuklemeTarihi', 'yuklemetarihi', 'tarih', 'created_at', 'yukleme_tarihi') || ''),
+                  DosyaIcerigi: icerik,
+                  base64: icerik,
+                  DosyaVerisi: icerik
+                };
+              });
 
             if (bBelgeler.length === 0 && bakim._directPhoto) {
               bBelgeler.push({
@@ -3055,7 +3102,9 @@ async function getAraclarList(aktifSadece = false): Promise<any[]> {
                 DosyaAdi: bakim._directPhotoName || 'foto.png',
                 DosyaBoyutu: bakim._directPhotoSize || '0 KB',
                 YuklemeTarihi: bakim.BakimTarihi || '',
-                DosyaIcerigi: bakim._directPhoto
+                DosyaIcerigi: bakim._directPhoto,
+                base64: bakim._directPhoto,
+                DosyaVerisi: bakim._directPhoto
               });
             }
 
@@ -3096,14 +3145,19 @@ async function getHatirlaticilarList(): Promise<any[]> {
                 const bHId = Number(getProp(b, 'HatirlaticiId', 'hatirlaticiid', 'gorevid', 'GorevId', 'gorev_id', 'hatirlatici_id'));
                 return bHId === h.Id;
               })
-              .map((b: any) => ({
-                BelgeId: Number(getProp(b, 'BelgeId', 'belgeid', 'id')),
-                HatirlaticiId: Number(getProp(b, 'HatirlaticiId', 'hatirlaticiid', 'gorevid', 'GorevId', 'gorev_id', 'hatirlatici_id')),
-                DosyaAdi: String(getProp(b, 'DosyaAdi', 'dosyaadi', 'ad', 'filename', 'dosya_adi', 'DosyaAd', 'dosya_ad', 'dosya_adi') || 'foto.png'),
-                DosyaBoyutu: String(getProp(b, 'DosyaBoyutu', 'dosyaboyutu', 'boyut', 'filesize', 'dosya_boyutu', 'DosyaBoyut', 'dosya_boyut', 'dosya_boyutu') || '0 KB'),
-                YuklemeTarihi: String(getProp(b, 'YuklemeTarihi', 'yuklemetarihi', 'tarih', 'created_at', 'yukleme_tarihi', 'YuklemeTarih', 'yukleme_tarih', 'yukleme_tarihi') || ''),
-                DosyaIcerigi: parseDatabaseFileContent(getProp(b, 'DosyaIcerigi', 'dosyaicerigi', 'base64', 'content', 'dosya_icerigi', 'DosyaIcerik', 'dosyaicerik', 'resim', 'Resim', 'dosya_icerigi', 'dosya', 'Dosya', 'foto', 'Foto', 'gorsel', 'Gorsel', 'veri', 'Veri', 'data', 'Data'))
-              }));
+              .map((b: any) => {
+                const icerik = extractFileContentFromRow(b);
+                return {
+                  BelgeId: Number(getProp(b, 'BelgeId', 'belgeid', 'id')),
+                  HatirlaticiId: Number(getProp(b, 'HatirlaticiId', 'hatirlaticiid', 'gorevid', 'GorevId', 'gorev_id', 'hatirlatici_id')),
+                  DosyaAdi: String(getProp(b, 'DosyaAdi', 'dosyaadi', 'ad', 'filename', 'dosya_adi', 'DosyaAd', 'dosya_ad', 'dosya_adi') || 'foto.png'),
+                  DosyaBoyutu: String(getProp(b, 'DosyaBoyutu', 'dosyaboyutu', 'boyut', 'filesize', 'dosya_boyutu', 'DosyaBoyut', 'dosya_boyut', 'dosya_boyutu') || '0 KB'),
+                  YuklemeTarihi: String(getProp(b, 'YuklemeTarihi', 'yuklemetarihi', 'tarih', 'created_at', 'yukleme_tarihi', 'YuklemeTarih', 'yukleme_tarih', 'yukleme_tarihi') || ''),
+                  DosyaIcerigi: icerik,
+                  base64: icerik,
+                  DosyaVerisi: icerik
+                };
+              });
 
             // Eğer ilişkili tabloda belge yoksa fakat ana tabloda doğrudan bir görsel alanı bulunmuşsa
             if (hBelgeler.length === 0 && h._directPhoto) {
@@ -3113,7 +3167,9 @@ async function getHatirlaticilarList(): Promise<any[]> {
                 DosyaAdi: h._directPhotoName || 'foto.png',
                 DosyaBoyutu: h._directPhotoSize || '0 KB',
                 YuklemeTarihi: h.Tarih || '',
-                DosyaIcerigi: h._directPhoto
+                DosyaIcerigi: h._directPhoto,
+                base64: h._directPhoto,
+                DosyaVerisi: h._directPhoto
               });
             }
 
@@ -3136,7 +3192,9 @@ async function getHatirlaticilarList(): Promise<any[]> {
               DosyaAdi: h._directPhotoName || 'foto.png',
               DosyaBoyutu: h._directPhotoSize || '0 KB',
               YuklemeTarihi: h.Tarih || '',
-              DosyaIcerigi: h._directPhoto
+              DosyaIcerigi: h._directPhoto,
+              base64: h._directPhoto,
+              DosyaVerisi: h._directPhoto
             });
           }
           return {

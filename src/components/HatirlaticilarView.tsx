@@ -24,11 +24,66 @@ import {
 
 interface HatirlaticilarViewProps {
   hatirlaticilar: Hatirlatici[];
+  personeller?: any[];
   onAddHatirlatici: (h: Partial<Hatirlatici>) => Promise<any> | void;
   onToggleTamamlandi: (id: number, tamamlandi: boolean) => void;
   onUpdateHatirlatici?: (id: number, fields: Partial<Hatirlatici>) => Promise<any> | void;
   onDeleteHatirlatici: (id: number) => Promise<any> | void;
 }
+
+// Dosya/Görsel içeriğini (base64, data-uri, hex, url) her türlü formattan render edilebilir data-uri formatına çevirir
+export const getBelgeDosyaIcerigi = (file: any): string => {
+  if (!file) return '';
+  const raw = 
+    file.DosyaIcerigi || 
+    file.DosyaVerisi || 
+    file.base64 || 
+    file.Base64 || 
+    file.content || 
+    file.Content || 
+    file.fileData || 
+    file.fileContent || 
+    file.preview || 
+    file.url || 
+    file.Url || 
+    file.DosyaYolu || 
+    '';
+  if (!raw) return '';
+  if (typeof raw !== 'string') return '';
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('data:') || trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('/')) {
+    return trimmed;
+  }
+  // PostgreSQL bytea hex string formatı: \x...
+  if (trimmed.startsWith('\\x')) {
+    try {
+      const hex = trimmed.slice(2);
+      const binary = hex.match(/.{1,2}/g)?.map(byte => String.fromCharCode(parseInt(byte, 16))).join('') || '';
+      const b64 = btoa(binary);
+      if (hex.startsWith('89504e47')) return `data:image/png;base64,${b64}`;
+      if (hex.startsWith('ffd8ff')) return `data:image/jpeg;base64,${b64}`;
+      if (hex.startsWith('474946')) return `data:image/gif;base64,${b64}`;
+      if (hex.startsWith('52494646')) return `data:image/webp;base64,${b64}`;
+      if (hex.startsWith('25504446')) return `data:application/pdf;base64,${b64}`;
+      return `data:image/jpeg;base64,${b64}`;
+    } catch {
+      return '';
+    }
+  }
+  // Ön eki eksik base64 dizesi
+  const clean = trimmed.replace(/\s/g, '');
+  if (clean.length > 10) {
+    if (clean.startsWith('/9j/')) return `data:image/jpeg;base64,${clean}`;
+    if (clean.startsWith('iVBOR')) return `data:image/png;base64,${clean}`;
+    if (clean.startsWith('R0lGOD')) return `data:image/gif;base64,${clean}`;
+    if (clean.startsWith('UklGR')) return `data:image/webp;base64,${clean}`;
+    if (clean.startsWith('JVBER')) return `data:application/pdf;base64,${clean}`;
+    if (/^[A-Za-z0-9+/=]+$/.test(clean)) {
+      return `data:image/jpeg;base64,${clean}`;
+    }
+  }
+  return '';
+};
 
 export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
   hatirlaticilar,
@@ -117,48 +172,64 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
   // Görsel Sıkıştırma Fonksiyonu (Mobil kamera fotoğraflarını optimize eder, hızlı yükler)
   const compressImageFile = (file: File, maxDim = 1200, quality = 0.8): Promise<string> => {
     return new Promise((resolve) => {
-      if (!file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = () => resolve((reader.result as string) || '');
-        reader.onerror = () => resolve('');
-        reader.readAsDataURL(file);
-        return;
-      }
-
       const reader = new FileReader();
       reader.onload = (e) => {
+        let dataUrl = (e.target?.result as string) || '';
+        if (!dataUrl) {
+          resolve('');
+          return;
+        }
+
+        // Windows/tarayıcı MIME tipi boş veya application/octet-stream ise dosya uzantısına göre data-uri düzelt
+        if (dataUrl.startsWith('data:application/octet-stream') || dataUrl.startsWith('data:;')) {
+          const ext = file.name.split('.').pop()?.toLowerCase() || '';
+          if (['jpg', 'jpeg'].includes(ext)) dataUrl = dataUrl.replace(/^data:[^;]*/, 'data:image/jpeg');
+          else if (['png'].includes(ext)) dataUrl = dataUrl.replace(/^data:[^;]*/, 'data:image/png');
+          else if (['webp'].includes(ext)) dataUrl = dataUrl.replace(/^data:[^;]*/, 'data:image/webp');
+          else if (['gif'].includes(ext)) dataUrl = dataUrl.replace(/^data:[^;]*/, 'data:image/gif');
+        }
+
+        const isImage = file.type.startsWith('image/') || /\.(jpe?g|png|webp|bmp|gif)$/i.test(file.name);
+        if (!isImage) {
+          resolve(dataUrl);
+          return;
+        }
+
         const img = new Image();
         img.onload = () => {
-          let width = img.width;
-          let height = img.height;
-          if (width > height) {
-            if (width > maxDim) {
-              height = Math.round((height * maxDim) / width);
-              width = maxDim;
-            }
-          } else {
-            if (height > maxDim) {
-              width = Math.round((width * maxDim) / height);
-              height = maxDim;
-            }
-          }
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            resolve((e.target?.result as string) || '');
-            return;
-          }
-          ctx.drawImage(img, 0, 0, width, height);
           try {
-            resolve(canvas.toDataURL('image/jpeg', quality));
+            let width = img.width;
+            let height = img.height;
+            if (width > height) {
+              if (width > maxDim) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              }
+            } else {
+              if (height > maxDim) {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              resolve(dataUrl);
+              return;
+            }
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressed = canvas.toDataURL('image/jpeg', quality);
+            resolve(compressed || dataUrl);
           } catch {
-            resolve((e.target?.result as string) || '');
+            resolve(dataUrl);
           }
         };
-        img.onerror = () => resolve((e.target?.result as string) || '');
-        img.src = (e.target?.result as string) || '';
+        img.onerror = () => {
+          resolve(dataUrl);
+        };
+        img.src = dataUrl;
       };
       reader.onerror = () => resolve('');
       reader.readAsDataURL(file);
@@ -241,6 +312,8 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
 
     try {
       const fileList = Array.from(files) as File[];
+      const yuklenenler: any[] = [];
+
       for (const file of fileList) {
         const base64 = await compressImageFile(file, 1200, 0.8);
         if (!base64) continue;
@@ -255,13 +328,18 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
           DosyaAdi: file.name,
           DosyaBoyutu: boyutStr,
           YuklemeTarihi: new Date().toISOString().split('T')[0],
-          DosyaIcerigi: base64
+          DosyaIcerigi: base64,
+          base64: base64,
+          DosyaVerisi: base64
         };
+        yuklenenler.push(yeniBelge);
+      }
 
+      if (yuklenenler.length > 0) {
         if (isEditMode) {
-          setEditBelgeler(prev => [...prev, yeniBelge]);
+          setEditBelgeler(prev => [...prev, ...yuklenenler]);
         } else {
-          setYeniBelgeler(prev => [...prev, yeniBelge]);
+          setYeniBelgeler(prev => [...prev, ...yuklenenler]);
         }
       }
     } catch (err: any) {
@@ -442,9 +520,9 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                             className="relative group/thumb w-12 h-12 rounded-lg border border-slate-200 overflow-hidden bg-slate-100 flex items-center justify-center cursor-zoom-in hover:ring-2 hover:ring-blue-500 transition-all shadow-xs"
                             title={belge.DosyaAdi || 'Belgeyi Büyüt'}
                           >
-                            {belge.DosyaIcerigi || belge.base64 ? (
+                            {getBelgeDosyaIcerigi(belge) ? (
                               <img
-                                src={belge.DosyaIcerigi || belge.base64}
+                                src={getBelgeDosyaIcerigi(belge)}
                                 alt={belge.DosyaAdi}
                                 referrerPolicy="no-referrer"
                                 className="w-full h-full object-cover group-hover/thumb:scale-110 transition-transform"
@@ -611,10 +689,10 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                     {editBelgeler.map((file, idx) => (
                       <div key={idx} className="relative group rounded-xl border border-slate-200 overflow-hidden bg-slate-50 h-28 flex flex-col justify-between">
                         {/* Resim Önizleme */}
-                        {file.DosyaIcerigi || file.base64 ? (
+                        {getBelgeDosyaIcerigi(file) ? (
                           <div className="w-full h-20 overflow-hidden relative cursor-zoom-in" onClick={() => setLightboxDosya(file)}>
                             <img
-                              src={file.DosyaIcerigi || file.base64}
+                              src={getBelgeDosyaIcerigi(file)}
                               alt={file.DosyaAdi}
                               referrerPolicy="no-referrer"
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform"
@@ -624,8 +702,9 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                             </div>
                           </div>
                         ) : (
-                          <div className="w-full h-20 flex items-center justify-center text-slate-400 bg-slate-100">
-                            <FileText className="w-6 h-6" />
+                          <div className="w-full h-20 flex flex-col items-center justify-center text-slate-400 bg-slate-100 p-2">
+                            <FileText className="w-6 h-6 text-slate-400 mb-1" />
+                            <span className="text-[9px] text-slate-500 font-medium">Belge / Dosya</span>
                           </div>
                         )}
 
@@ -874,12 +953,18 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                           onClick={() => setLightboxDosya(file)}
                           title="Önizlemeyi Büyüt"
                         >
-                          <img
-                            src={file.DosyaIcerigi}
-                            alt={file.DosyaAdi}
-                            referrerPolicy="no-referrer"
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                          />
+                          {getBelgeDosyaIcerigi(file) ? (
+                            <img
+                              src={getBelgeDosyaIcerigi(file)}
+                              alt={file.DosyaAdi}
+                              referrerPolicy="no-referrer"
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-400">
+                              <FileText className="w-4 h-4" />
+                            </div>
+                          )}
                           <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                             <Eye className="w-3.5 h-3.5 text-white" />
                           </div>
@@ -936,7 +1021,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
 
       {/* SİLME ONAY MODALI (AJANDA & HATIRLATICI) */}
       {silinecekHatirlatici && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 flex flex-col space-y-4">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0">
@@ -1025,8 +1110,8 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
               </span>
               <div className="flex items-center gap-2">
                 <a
-                  href={lightboxDosya.DosyaIcerigi || lightboxDosya.base64}
-                  download={lightboxDosya.DosyaAdi}
+                  href={getBelgeDosyaIcerigi(lightboxDosya)}
+                  download={lightboxDosya.DosyaAdi || 'gorsel.png'}
                   className="p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-xl transition-all flex items-center gap-1 text-xs font-semibold"
                   title="Görseli İndir"
                 >
@@ -1044,12 +1129,19 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
 
             {/* Görsel Sahnesi */}
             <div className="flex-1 flex items-center justify-center p-6 bg-slate-950 h-[60vh]">
-              <img
-                src={lightboxDosya.DosyaIcerigi || lightboxDosya.base64}
-                alt={lightboxDosya.DosyaAdi}
-                referrerPolicy="no-referrer"
-                className="max-w-full max-h-full object-contain rounded-lg shadow-xl"
-              />
+              {getBelgeDosyaIcerigi(lightboxDosya) ? (
+                <img
+                  src={getBelgeDosyaIcerigi(lightboxDosya)}
+                  alt={lightboxDosya.DosyaAdi}
+                  referrerPolicy="no-referrer"
+                  className="max-w-full max-h-full object-contain rounded-lg shadow-xl"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center text-slate-400 gap-2">
+                  <FileText className="w-12 h-12 text-slate-500" />
+                  <span className="text-xs">Görsel önizleme yüklenemedi</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
