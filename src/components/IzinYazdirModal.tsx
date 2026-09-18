@@ -61,20 +61,28 @@ export const IzinYazdirModal: React.FC<IzinYazdirModalProps> = ({
             min-height: 0 !important;
             overflow: visible !important;
           }
-          /* Hide all elements by default in print */
-          body * {
-            visibility: hidden !important;
+          /* Hide React root element during print */
+          #root {
+            display: none !important;
           }
-          /* Show only printable modal content */
-          .print-modal-content,
-          .print-modal-content * {
-            visibility: visible !important;
+          .print-modal-overlay {
+            position: static !important;
+            display: block !important;
+            width: 100% !important;
+            height: auto !important;
+            min-height: 0 !important;
+            background: white !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
+            overflow: visible !important;
           }
           .print-modal-content {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
+            position: static !important;
+            display: block !important;
             width: 100% !important;
+            max-width: 100% !important;
             border: none !important;
             box-shadow: none !important;
             background: white !important;
@@ -83,9 +91,8 @@ export const IzinYazdirModal: React.FC<IzinYazdirModalProps> = ({
             page-break-after: avoid !important;
             break-after: avoid !important;
           }
-          .print\\:hidden, .print\\:hidden * {
+          .print\:hidden, .print\:hidden * {
             display: none !important;
-            visibility: hidden !important;
           }
         }
       `}} />
@@ -119,7 +126,7 @@ export const IzinYazdirModal: React.FC<IzinYazdirModalProps> = ({
         </div>
 
         {/* A4 Baskı Kağıdı (WPF IzinYazdirForm Birebir Çıktısı) */}
-        <div className="p-8 bg-white text-black font-sans print:p-0 print:m-0 print:border-none print:shadow-none min-h-[850px]">
+        <div className="p-8 bg-white text-black font-sans print:p-0 print:m-0 print:border-none print:shadow-none min-h-[850px] print:min-h-0">
           {/* Antet */}
           <div className="flex justify-between items-center border-b-2 border-black pb-3 mb-6">
             <div>
@@ -233,7 +240,7 @@ export const IzinYazdirModal: React.FC<IzinYazdirModalProps> = ({
           </div>
 
           {/* Alt Dipnotlar */}
-          <div className="mt-16 pt-4 border-t border-slate-200 flex justify-between items-center text-[9px] text-slate-500">
+          <div className="mt-16 print:mt-8 pt-4 border-t border-slate-200 flex justify-between items-center text-[9px] text-slate-500">
             <div>
               <p>• Bu form personel izne ayrılmadan önce doldurulup onaylanacak ve İnsan Kaynakları departmanına teslim edilecektir.</p>
               <p>• 4857 Sayılı İş Kanunu ve şirket içi çalışma yönetmeliğine tabidir.</p>

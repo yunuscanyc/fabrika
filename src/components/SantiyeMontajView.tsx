@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Building2, Users, Calendar, CheckCircle2, XCircle, Plus, Search, 
   MapPin, Phone, ArrowRight, UserCheck, UserX, 
@@ -1629,7 +1630,7 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
       {/* ========================================================================= */}
       {/* MODAL: YAZDIR / RAPOR */}
       {/* ========================================================================= */}
-      {yazdirModalAcik && yazdirSantiye && (
+      {yazdirModalAcik && yazdirSantiye && createPortal(
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-start justify-center p-4 pt-6 santiye-print-overlay">
           <style dangerouslySetInnerHTML={{ __html: `
             @media print {
@@ -1646,18 +1647,27 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
                 height: auto !important;
                 overflow: visible !important;
               }
-              body * {
-                visibility: hidden !important;
+              #root {
+                display: none !important;
               }
-              .santiye-print-content,
-              .santiye-print-content * {
-                visibility: visible !important;
+              .santiye-print-overlay {
+                position: static !important;
+                display: block !important;
+                width: 100% !important;
+                height: auto !important;
+                min-height: 0 !important;
+                background: white !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                border: none !important;
+                box-shadow: none !important;
+                overflow: visible !important;
               }
               .santiye-print-content {
-                position: absolute !important;
-                left: 0 !important;
-                top: 0 !important;
+                position: static !important;
+                display: block !important;
                 width: 100% !important;
+                max-width: 100% !important;
                 background: white !important;
                 padding: 10mm !important;
                 margin: 0 !important;
@@ -1734,7 +1744,8 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -49,20 +49,28 @@ export const KkdZimmetTutanakModal: React.FC<KkdZimmetTutanakModalProps> = ({
             min-height: 0 !important;
             overflow: visible !important;
           }
-          /* Hide all elements by default in print */
-          body * {
-            visibility: hidden !important;
+          /* Hide React root element during print */
+          #root {
+            display: none !important;
           }
-          /* Show only printable modal content */
-          .print-modal-content,
-          .print-modal-content * {
-            visibility: visible !important;
+          .print-modal-overlay {
+            position: static !important;
+            display: block !important;
+            width: 100% !important;
+            height: auto !important;
+            min-height: 0 !important;
+            background: white !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
+            overflow: visible !important;
           }
           .print-modal-content {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
+            position: static !important;
+            display: block !important;
             width: 100% !important;
+            max-width: 100% !important;
             border: none !important;
             box-shadow: none !important;
             background: white !important;

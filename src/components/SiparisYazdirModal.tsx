@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Printer, ShieldCheck, FileText } from 'lucide-react';
 import { MalzemeSiparisi, MalzemeSiparisKalemi } from '../types';
 import { formatTarihTR, getBugunIso } from '../utils/dateUtils';
@@ -66,7 +67,7 @@ export const SiparisYazdirModal: React.FC<SiparisYazdirModalProps> = ({
         Aciklama: siparis.Aciklama
       }];
 
-  return (
+  const modalContent = (
     <div 
       onClick={(e) => e.stopPropagation()}
       className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/80 backdrop-blur-sm p-2 sm:p-4 pt-4 sm:pt-6 overflow-y-auto siparis-print-overlay"
@@ -88,21 +89,29 @@ export const SiparisYazdirModal: React.FC<SiparisYazdirModalProps> = ({
             min-height: 0 !important;
             overflow: visible !important;
           }
-          /* Arka plandaki diğer DOM elemanlarını gizle */
-          body * {
-            visibility: hidden !important;
+          /* Uygulama kök elemanını tamamen gizle */
+          #root {
+            display: none !important;
           }
-          /* Sadece sipariş formu modal içeriğini ve alt elemanlarını görünür yap */
-          .siparis-print-content,
-          .siparis-print-content * {
-            visibility: visible !important;
+          .siparis-print-overlay {
+            position: static !important;
+            display: block !important;
+            width: 100% !important;
+            height: auto !important;
+            min-height: 0 !important;
+            background: white !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
+            overflow: visible !important;
           }
           /* Yazdırılacak belgeyi kağıdın en üst sol köşesine tam yasla */
           .siparis-print-content {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
+            position: static !important;
+            display: block !important;
             width: 100% !important;
+            max-width: 100% !important;
             margin: 0 !important;
             padding: 8mm 12mm !important;
             border: none !important;
@@ -115,7 +124,6 @@ export const SiparisYazdirModal: React.FC<SiparisYazdirModalProps> = ({
           }
           .no-print, .no-print * {
             display: none !important;
-            visibility: hidden !important;
           }
         }
       `}} />
@@ -351,6 +359,8 @@ export const SiparisYazdirModal: React.FC<SiparisYazdirModalProps> = ({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 };
 
 
