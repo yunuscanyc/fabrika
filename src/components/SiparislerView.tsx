@@ -6,6 +6,7 @@ import {
   ShieldAlert, RefreshCw, Layers, ArrowUpDown, Info, BookOpen
 } from 'lucide-react';
 import { MalzemeSiparisi, MalzemeSiparisBelgesi, MalzemeKatalogItem } from '../types';
+import { formatTarihTR } from '../utils/dateUtils';
 import { SiparisYazdirModal } from './SiparisYazdirModal';
 import { UstabasiUyariModal } from './UstabasiUyariModal';
 import { MalzemeKatalogModal } from './MalzemeKatalogModal';
@@ -789,7 +790,7 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
 
                   {siparis.KilitliMi && (
                     <span
-                      title={`Satınalma tarafından kilitlendi: ${siparis.KilitTarihi || ''}`}
+                      title={`Satınalma tarafından kilitlendi: ${formatTarihTR(siparis.KilitTarihi)}`}
                       className="px-2 py-1 rounded-lg text-xs font-bold bg-amber-500 text-white flex items-center gap-1 shadow-xs"
                     >
                       <Lock className="w-3.5 h-3.5" />
@@ -938,11 +939,11 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
                   <div className="space-y-2.5 text-xs">
                     <div className="flex justify-between py-1 border-b border-slate-100">
                       <span className="text-slate-500">Talep Tarihi:</span>
-                      <span className="font-semibold text-slate-800">{siparis.Tarih || '-'}</span>
+                      <span className="font-semibold text-slate-800">{formatTarihTR(siparis.Tarih)}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-slate-100">
                       <span className="text-slate-500">İstenen Termin:</span>
-                      <span className="font-bold text-slate-900">{siparis.TerminTarihi || 'Belirtilmedi'}</span>
+                      <span className="font-bold text-slate-900">{siparis.TerminTarihi ? formatTarihTR(siparis.TerminTarihi) : 'Belirtilmedi'}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-slate-100">
                       <span className="text-slate-500">Talep Eden:</span>

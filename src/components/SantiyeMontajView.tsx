@@ -7,6 +7,7 @@ import {
   Save, CheckSquare, Layers, Clock
 } from 'lucide-react';
 import { SantiyeMontajGrubu, SantiyeEkipUyesi, Personel, Yevmiyeci, Proje, Departman, Gorev } from '../types';
+import { formatTarihTR } from '../utils/dateUtils';
 
 interface SantiyeMontajViewProps {
   personeller: Personel[];
@@ -1629,7 +1630,35 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
       {/* MODAL: YAZDIR / RAPOR */}
       {/* ========================================================================= */}
       {yazdirModalAcik && yazdirSantiye && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 santiye-print-overlay">
+          <style dangerouslySetInnerHTML={{ __html: `
+            @media print {
+              @page {
+                size: A4 portrait;
+                margin: 0;
+              }
+              html, body {
+                background-color: white !important;
+                color: black !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 100% !important;
+                height: auto !important;
+                overflow: visible !important;
+              }
+              body > *:not(.santiye-print-overlay) {
+                display: none !important;
+              }
+              .santiye-print-overlay {
+                position: static !important;
+                display: block !important;
+                width: 100% !important;
+                background: white !important;
+                padding: 10mm !important;
+                margin: 0 !important;
+              }
+            }
+          `}} />
           <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl p-6 shadow-2xl space-y-5">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-base font-black text-white flex items-center gap-2">
@@ -1648,7 +1677,7 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
                   <p className="text-slate-600">{yazdirSantiye.Lokasyon || 'Şantiye Lokasyonu Belirtilmemiş'}</p>
                 </div>
                 <div className="text-right">
-                  <span className="font-bold">Tarih:</span> {seciliTarih}
+                  <span className="font-bold">Tarih:</span> {formatTarihTR(seciliTarih)}
                 </div>
               </div>
 

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { X, Printer, ShieldCheck, FileText } from 'lucide-react';
 import { MalzemeSiparisi, MalzemeSiparisKalemi } from '../types';
+import { formatTarihTR, getBugunIso } from '../utils/dateUtils';
 
 interface SiparisYazdirModalProps {
   isOpen: boolean;
@@ -13,10 +14,21 @@ export const SiparisYazdirModal: React.FC<SiparisYazdirModalProps> = ({
   onClose,
   siparis
 }) => {
+  const [isPrinting, setIsPrinting] = useState(false);
+
   if (!isOpen || !siparis) return null;
 
-  const handlePrint = () => {
+  const handlePrint = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (isPrinting) return;
+    setIsPrinting(true);
     window.print();
+    setTimeout(() => {
+      setIsPrinting(false);
+    }, 1000);
   };
 
   const getAciliyetLabel = (aciliyet: string) => {
@@ -55,9 +67,64 @@ export const SiparisYazdirModal: React.FC<SiparisYazdirModalProps> = ({
       }];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto">
+    <div 
+      onClick={(e) => e.stopPropagation()}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto siparis-print-overlay"
+    >
+      {/* A4 Baskı Düzeni ve Sayfa Kenarlık / Başlık Temizleme CSS */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 0; /* Tarayıcının sayfa üst/altındaki IP adresi, URL, tarih ve sayfa no bilgilerini tamamen kaldırır */
+          }
+          html, body {
+            background-color: white !important;
+            color: black !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            height: auto !important;
+            min-height: 0 !important;
+            overflow: visible !important;
+          }
+          /* Arka plandaki tüm uygulama ekranlarını yazdırmada gizle (Çift sayfa veya arka plan basımını önler) */
+          body > *:not(.siparis-print-overlay) {
+            display: none !important;
+          }
+          .siparis-print-overlay {
+            position: static !important;
+            display: block !important;
+            width: 100% !important;
+            height: auto !important;
+            background: white !important;
+            padding: 8mm 12mm !important;
+            margin: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
+            overflow: visible !important;
+          }
+          .siparis-print-content {
+            border: none !important;
+            box-shadow: none !important;
+            background: white !important;
+            width: 100% !important;
+            max-width: none !important;
+            max-height: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+          }
+          .no-print, .no-print * {
+            display: none !important;
+          }
+        }
+      `}} />
+
       {/* Yazdırma Önizleme Konteyneri */}
-      <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl border border-slate-300 overflow-hidden flex flex-col max-h-[92vh]">
+      <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl border border-slate-300 overflow-hidden flex flex-col max-h-[92vh] siparis-print-content">
         {/* Kontrol Çubuğu (Yazdırmada Gizlenir) */}
         <div className="no-print px-5 py-3 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-2.5">
@@ -72,7 +139,8 @@ export const SiparisYazdirModal: React.FC<SiparisYazdirModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrint}
-              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow flex items-center gap-1.5 transition-all cursor-pointer"
+              disabled={isPrinting}
+              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
             >
               <Printer className="w-3.5 h-3.5" />
               <span>Yazdır / PDF Kaydet</span>
@@ -108,7 +176,7 @@ export const SiparisYazdirModal: React.FC<SiparisYazdirModalProps> = ({
                 {siparis.SiparisNo || 'SIP-2026-000'}
               </div>
               <div className="text-[10px] text-slate-500 font-medium">
-                Talep Tarihi: <strong className="text-slate-800">{siparis.Tarih || new Date().toISOString().slice(0, 10)}</strong>
+                Talep Tarihi: <strong className="text-slate-800">{formatTarihTR(siparis.Tarih || getBugunIso())}</strong>
               </div>
             </div>
           </div>
@@ -126,7 +194,7 @@ export const SiparisYazdirModal: React.FC<SiparisYazdirModalProps> = ({
             <div>
               <span className="block text-[9px] uppercase font-bold text-slate-500">Aciliyet / Termin</span>
               <span className={`text-xs font-bold ${siparis.Aciliyet === 'CokAcil' ? 'text-red-600' : siparis.Aciliyet === 'Acil' ? 'text-amber-600' : 'text-slate-800'}`}>
-                {getAciliyetLabel(siparis.Aciliyet)} {siparis.TerminTarihi ? `(${siparis.TerminTarihi})` : ''}
+                {getAciliyetLabel(siparis.Aciliyet)} {siparis.TerminTarihi ? `(${formatTarihTR(siparis.TerminTarihi)})` : ''}
               </span>
             </div>
             <div>
@@ -287,4 +355,5 @@ export const SiparisYazdirModal: React.FC<SiparisYazdirModalProps> = ({
     </div>
   );
 };
+
 
