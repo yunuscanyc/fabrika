@@ -1,5 +1,25 @@
 import React, { useState } from 'react';
-import { Download, Smartphone, Share2, PlusSquare, CheckCircle, X, ExternalLink, Copy, Check, Sparkles, Shield, Info } from 'lucide-react';
+import { 
+  Download, 
+  Smartphone, 
+  Share2, 
+  PlusSquare, 
+  CheckCircle, 
+  X, 
+  ExternalLink, 
+  Copy, 
+  Check, 
+  Sparkles, 
+  Shield, 
+  ShieldAlert, 
+  ShieldCheck, 
+  Info, 
+  Wifi, 
+  Lock, 
+  AlertTriangle,
+  ChevronRight,
+  Terminal
+} from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 
 interface PWAInstallPromptProps {
@@ -8,10 +28,24 @@ interface PWAInstallPromptProps {
 }
 
 export const PWAInstallPrompt: React.FC<PWAInstallPromptProps> = ({ variant = 'navbar', className = '' }) => {
-  const { isInstallable, isInstalled, isIOS, isAndroid, isInIframe, directAppUrl, install } = usePWAInstall();
+  const { 
+    isInstallable, 
+    isInstalled, 
+    isIOS, 
+    isAndroid, 
+    isInIframe, 
+    isSecure, 
+    isLocalNetwork, 
+    currentOrigin,
+    directAppUrl, 
+    install 
+  } = usePWAInstall();
+
   const [showModal, setShowModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<'kurulum' | 'ssl'>('kurulum');
   const [installing, setInstalling] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedFlag, setCopiedFlag] = useState(false);
   const [installMessage, setInstallMessage] = useState<string | null>(null);
 
   // If already running as an installed standalone app, hide prompt
@@ -20,8 +54,8 @@ export const PWAInstallPrompt: React.FC<PWAInstallPromptProps> = ({ variant = 'n
   }
 
   const handleInstallClick = async () => {
-    // 1. If native install prompt is directly available and not blocked by iframe
-    if (isInstallable && !isInIframe) {
+    // If native install prompt is directly available and not blocked by iframe
+    if (isInstallable && !isInIframe && isSecure) {
       setInstalling(true);
       const res = await install();
       setInstalling(false);
@@ -29,7 +63,12 @@ export const PWAInstallPrompt: React.FC<PWAInstallPromptProps> = ({ variant = 'n
         return;
       }
     }
-    // 2. Open the comprehensive install dialog with direct action buttons
+    // Open modal with instructions and actions
+    if (!isSecure) {
+      setActiveTab('ssl');
+    } else {
+      setActiveTab('kurulum');
+    }
     setShowModal(true);
   };
 
@@ -37,8 +76,18 @@ export const PWAInstallPrompt: React.FC<PWAInstallPromptProps> = ({ variant = 'n
     const targetUrl = directAppUrl || (typeof window !== 'undefined' ? window.location.href : '');
     if (navigator.clipboard) {
       navigator.clipboard.writeText(targetUrl).then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2500);
+        setCopiedLink(true);
+        setTimeout(() => setCopiedLink(false), 2500);
+      });
+    }
+  };
+
+  const handleCopyOrigin = () => {
+    const target = currentOrigin || (typeof window !== 'undefined' ? window.location.origin : '');
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(target).then(() => {
+        setCopiedFlag(true);
+        setTimeout(() => setCopiedFlag(false), 2500);
       });
     }
   };
@@ -58,14 +107,20 @@ export const PWAInstallPrompt: React.FC<PWAInstallPromptProps> = ({ variant = 'n
     if (isInIframe) {
       const targetUrl = directAppUrl || window.location.href;
       window.open(targetUrl, '_blank', 'noopener,noreferrer');
-      setInstallMessage('Uygulama tam ekranda açıldı. Açılan yeni sekmede tarayıcınızın "Yükle" butonuna dokunun.');
+      setInstallMessage('Uygulama tam ekranda yeni sekmede açıldı. Açılan sayfada sağ üstteki "Yükle" butonuna dokunabilirsiniz.');
+      return;
+    }
+
+    if (!isSecure) {
+      setActiveTab('ssl');
+      setInstallMessage('Bağlantınız HTTP olduğu için tarayıcınız otomatik açılır pencereyi engelliyor. Aşağıdaki adımlarla saniyeler içinde yükleyebilirsiniz.');
       return;
     }
 
     if (isIOS) {
       setInstallMessage('Safari altındaki "Paylaş" [⬆️] ve ardından "Ana Ekrana Ekle" [+] butonuna basınız.');
     } else {
-      setInstallMessage('Tarayıcınızın sağ üstündeki (⋮) menüsünden "Uygulamayı Yükle" veya "Ana Ekrana Ekle" butonuna basınız.');
+      setInstallMessage('Tarayıcınızın sağ üstündeki (⋮) menüsünden "Uygulamayı Yükle" veya "Ana Ekrana Ekle" seçiniz.');
     }
   };
 
@@ -85,6 +140,12 @@ export const PWAInstallPrompt: React.FC<PWAInstallPromptProps> = ({ variant = 'n
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
                     PWA
                   </span>
+                  {!isSecure && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30 flex items-center gap-1">
+                      <ShieldAlert className="w-3 h-3" />
+                      HTTP Modu
+                    </span>
+                  )}
                 </h4>
                 <p className="text-xs text-slate-300 mt-0.5">
                   Telefonunuza, tabletinize veya bilgisayarınıza bağımsız tam ekran uygulama olarak kurun.
@@ -144,13 +205,13 @@ export const PWAInstallPrompt: React.FC<PWAInstallPromptProps> = ({ variant = 'n
     </>
   );
 
-  // Install Action Modal
+  // Comprehensive Modal with SSL Diagnosis & Direct Solutions
   function renderModal() {
     const targetUrl = directAppUrl || (typeof window !== 'undefined' ? window.location.href : '');
 
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 overflow-y-auto animate-fadeIn select-none">
-        <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 text-white max-h-[92vh] overflow-y-auto">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-fadeIn select-none">
+        <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-5 sm:p-6 text-white max-h-[94vh] overflow-y-auto">
           {/* Kapat Butonu */}
           <button
             onClick={() => {
@@ -168,24 +229,79 @@ export const PWAInstallPrompt: React.FC<PWAInstallPromptProps> = ({ variant = 'n
             <img
               src="/pwa-192x192.png"
               alt="Rende Portal İkonu"
-              className="w-14 h-14 rounded-2xl shadow-lg shadow-blue-500/20 border border-slate-700/80 bg-slate-800 object-cover shrink-0"
+              className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl shadow-lg shadow-blue-500/20 border border-slate-700/80 bg-slate-800 object-cover shrink-0"
             />
             <div>
-              <h3 className="font-black text-lg text-white flex items-center gap-2">
+              <h3 className="font-black text-base sm:text-lg text-white flex items-center gap-2">
                 Rende Portal
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-bold border border-blue-500/30">
                   PWA KURULUM
                 </span>
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                Telefon, Tablet ve Masaüstü Yükleme Merkezi
+                Telefon, Tablet ve Masaüstü Yükleme Rehberi
               </p>
             </div>
           </div>
 
-          <p className="text-xs text-slate-300 leading-relaxed mb-4">
-            Rende Portal'ı telefonunuza veya bilgisayarınıza bağımsız bir uygulama gibi yükleyebilir, tek dokunuşla adres çubuğu olmadan tam ekran kullanabilirsiniz.
-          </p>
+          {/* Güvenlik & SSL Durumu Göstergesi */}
+          <div className={`p-2.5 sm:p-3 rounded-xl mb-4 border text-xs flex items-center justify-between ${
+            isSecure 
+              ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300' 
+              : 'bg-amber-950/40 border-amber-500/40 text-amber-200'
+          }`}>
+            <div className="flex items-center gap-2">
+              {isSecure ? (
+                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+              ) : (
+                <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+              )}
+              <span>
+                {isSecure ? (
+                  <strong>SSL / HTTPS:</strong>
+                ) : (
+                  <strong>SSL Durumu:</strong>
+                )} {isSecure ? 'Güvenli Bağlantı (HTTPS Aktif)' : 'HTTP Bağlantısı (SSL Yok veya Yerel IP)'}
+              </span>
+            </div>
+            {!isSecure && (
+              <button
+                onClick={() => setActiveTab('ssl')}
+                className="text-[11px] font-bold underline hover:text-white shrink-0 ml-2"
+              >
+                Çözümü Gör
+              </button>
+            )}
+          </div>
+
+          {/* Sekmeler (Tablar): Hızlı Kurulum & SSL Çözümleri */}
+          <div className="flex border-b border-slate-800 mb-4">
+            <button
+              onClick={() => setActiveTab('kurulum')}
+              className={`pb-2.5 px-3 text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'kurulum'
+                  ? 'border-blue-500 text-white'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              <span>Cihaza Yükleme</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('ssl')}
+              className={`pb-2.5 px-3 text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'ssl'
+                  ? 'border-amber-500 text-amber-300'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>SSL &amp; Yerel Ağ Rehberi</span>
+              {!isSecure && (
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+              )}
+            </button>
+          </div>
 
           {/* Bilgi / Geri Bildirim Mesajı */}
           {installMessage && (
@@ -195,105 +311,190 @@ export const PWAInstallPrompt: React.FC<PWAInstallPromptProps> = ({ variant = 'n
             </div>
           )}
 
-          {/* Öne Çıkan Birincil "Uygulamayı Yükle" Butonları */}
-          <div className="space-y-2.5 mb-5">
-            {/* 1. Birincil Yükle Butonu */}
-            <button
-              onClick={handleDirectInstallAction}
-              disabled={installing}
-              type="button"
-              className="w-full py-3.5 px-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-sm rounded-xl shadow-xl shadow-blue-600/30 flex items-center justify-center gap-2.5 transition-all cursor-pointer active:scale-98 disabled:opacity-50"
-            >
-              <Download className="w-5 h-5 text-white" />
-              <span>
-                {installing ? 'Yükleme Başlatılıyor...' : 'Uygulamayı Yükle'}
-              </span>
-            </button>
+          {/* TAB 1: KURULUM */}
+          {activeTab === 'kurulum' && (
+            <div className="space-y-4">
+              {/* Öne Çıkan Birincil "Uygulamayı Yükle" Butonları */}
+              <div className="space-y-2.5">
+                <button
+                  onClick={handleDirectInstallAction}
+                  disabled={installing}
+                  type="button"
+                  className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-sm rounded-xl shadow-xl shadow-blue-600/30 flex items-center justify-center gap-2.5 transition-all cursor-pointer active:scale-98 disabled:opacity-50"
+                >
+                  <Download className="w-5 h-5 text-white" />
+                  <span>
+                    {installing ? 'Yükleme Başlatılıyor...' : 'Uygulamayı Yükle'}
+                  </span>
+                </button>
 
-            {/* 2. Önizleme / iframe içinde çalışıyorsa doğrudan tam ekran açma butonu */}
-            {isInIframe && (
-              <a
-                href={targetUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs rounded-xl border border-slate-700 flex items-center justify-center gap-2 transition-all cursor-pointer text-center"
-              >
-                <ExternalLink className="w-4 h-4 text-blue-400" />
-                <span>Uygulamayı Tam Ekranda Aç (Doğrudan Yükleme İçin)</span>
-              </a>
-            )}
+                {isInIframe && (
+                  <a
+                    href={targetUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs rounded-xl border border-slate-700 flex items-center justify-center gap-2 transition-all cursor-pointer text-center"
+                  >
+                    <ExternalLink className="w-4 h-4 text-blue-400" />
+                    <span>Uygulamayı Tam Ekranda Aç (Doğrudan Yükleme İçin)</span>
+                  </a>
+                )}
 
-            {/* 3. Link Kopyalama Butonu */}
-            <button
-              onClick={handleCopyLink}
-              type="button"
-              className="w-full py-2 px-3 bg-slate-800/60 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-semibold rounded-xl border border-slate-700/60 flex items-center justify-center gap-2 transition-all cursor-pointer"
-            >
-              {copied ? (
-                <>
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="text-emerald-300 font-bold">Uygulama Bağlantısı Kopyalandı!</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Bağlantıyı Kopyala (Telefonda Açmak İçin)</span>
-                </>
-              )}
-            </button>
-          </div>
+                <button
+                  onClick={handleCopyLink}
+                  type="button"
+                  className="w-full py-2 px-3 bg-slate-800/60 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-semibold rounded-xl border border-slate-700/60 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  {copiedLink ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="text-emerald-300 font-bold">Uygulama Bağlantısı Kopyalandı!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Bağlantıyı Kopyala (Telefonda Açmak İçin)</span>
+                    </>
+                  )}
+                </button>
+              </div>
 
-          {/* Platform Bazlı Kolay Kurulum Talimatları */}
-          <div className="space-y-3 pt-2 border-t border-slate-800">
-            <h4 className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-              <Smartphone className="w-4 h-4 text-blue-400" />
-              Cihazınızda 3 Adımda Kolay Kurulum:
-            </h4>
+              {/* Platform Kurulum Talimatları */}
+              <div className="space-y-3 pt-2 border-t border-slate-800">
+                <h4 className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                  <Smartphone className="w-4 h-4 text-blue-400" />
+                  Cihazınızda 3 Adımda Kolay Kurulum:
+                </h4>
 
-            {isIOS ? (
-              /* iPhone & iPad Kılavuzu */
-              <div className="p-3.5 rounded-xl bg-blue-950/30 border border-blue-500/30 text-xs space-y-2.5">
-                <div className="font-bold text-blue-200">
-                  📱 iPhone / iPad (Safari):
+                {isIOS ? (
+                  <div className="p-3.5 rounded-xl bg-blue-950/30 border border-blue-500/30 text-xs space-y-2.5">
+                    <div className="font-bold text-blue-200">
+                      📱 iPhone / iPad (Safari) — SSL Gerektirmez:
+                    </div>
+                    <div className="space-y-2 text-slate-300 text-[11px]">
+                      <div className="flex items-start gap-2">
+                        <span className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">1</span>
+                        <span>Safari alt çubuğundaki <strong className="text-white">Paylaş (Share ⬆️)</strong> butonuna dokunun.</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">2</span>
+                        <span>Açılan menüyü kaydırıp <strong className="text-white">"Ana Ekrana Ekle" (+)</strong> seçeneğine dokunun.</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">3</span>
+                        <span>Sağ üstteki <strong className="text-white">"Ekle"</strong> butonuna basın. Rende Portal ana ekranınızda özel logosuyla açılacaktır.</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3.5 rounded-xl bg-slate-800/80 border border-slate-700 text-xs space-y-2.5">
+                    <div className="font-bold text-slate-200">
+                      🤖 Android (Chrome) &amp; Bilgisayar:
+                    </div>
+                    <div className="space-y-2 text-slate-300 text-[11px]">
+                      <div className="flex items-start gap-2">
+                        <span className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">1</span>
+                        <span>Yukarıdaki mavi <strong className="text-white">"Uygulamayı Yükle"</strong> butonuna dokunun.</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">2</span>
+                        <span>Otomatik açılmazsa Chrome sağ üstündeki <strong className="text-white">üç nokta (⋮)</strong> menüsünü açın.</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">3</span>
+                        <span><strong className="text-white">"Uygulamayı Yükle"</strong> veya <strong className="text-white">"Ana Ekrana Ekle"</strong> butonuna basın.</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: SSL & YEREL AĞ ÇÖZÜMLERİ */}
+          {activeTab === 'ssl' && (
+            <div className="space-y-3.5 text-xs">
+              <div className="p-3 rounded-xl bg-amber-950/30 border border-amber-500/30 text-amber-200 space-y-1.5">
+                <div className="font-bold flex items-center gap-1.5 text-amber-300">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>SSL Sertifikası (HTTPS) Neden Önemlidir?</span>
                 </div>
-                <div className="space-y-2 text-slate-300 text-[11px]">
-                  <div className="flex items-start gap-2">
-                    <span className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">1</span>
-                    <span>Safari alt çubuğundaki <strong className="text-white">Paylaş (Share ⬆️)</strong> butonuna dokunun.</span>
+                <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                  Google Chrome ve diğer modern tarayıcılar, dünya genelindeki güvenlik kuralları (W3C PWA Standardı) gereği, <strong>otomatik yükleme (WebAPK)</strong> özelliğini sadece <strong>HTTPS (SSL)</strong> olan adreslerde veya <strong>localhost</strong> üzerinde çalıştırır.
+                </p>
+                <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                  Yerel ağda (<code className="bg-amber-900/50 px-1 py-0.5 rounded font-mono">http://192.168.X.X:3000</code>) çalışırken tarayıcınız bu butonu kısıtlayabilir. Ancak <strong>aşağıdaki 3 yöntemle bunu saniyeler içinde aşabilirsiniz:</strong>
+                </p>
+              </div>
+
+              {/* Çözüm 1: Ana Ekrana Ekle (SSL Gerekmez) */}
+              <div className="p-3.5 rounded-xl bg-slate-800/90 border border-slate-700 space-y-2">
+                <div className="font-bold text-white flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">1</span>
+                  <span>En Kolay Yol: "Ana Ekrana Ekle" (SSL Gerekmez)</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30 ml-auto">
+                    Önerilen
+                  </span>
+                </div>
+                <p className="text-slate-300 text-[11px] leading-relaxed">
+                  Tarayıcınızın kendi menüsünden ekleme yaptığınızda SSL sertifikası gerekmez ve uygulama logosuyla masaüstünüze/telefonunuza tam ekran kurulur:
+                </p>
+                <ul className="space-y-1.5 text-[11px] text-slate-300 pl-2">
+                  <li>• <strong>Android (Chrome):</strong> Sağ üstteki <strong>üç nokta (⋮)</strong> menüsüne dokunun → <strong>"Ana Ekrana Ekle"</strong> veya <strong>"Kısayol Ekle"</strong> seçin.</li>
+                  <li>• <strong>iPhone (Safari):</strong> Alt çubuktaki <strong>Paylaş (⬆️)</strong> butonuna dokunun → <strong>"Ana Ekrana Ekle" (+)</strong> seçin.</li>
+                </ul>
+              </div>
+
+              {/* Çözüm 2: Chrome'da Yerel IP'yi Güvenli Tanımlama (30 Saniye) */}
+              <div className="p-3.5 rounded-xl bg-slate-800/90 border border-slate-700 space-y-2">
+                <div className="font-bold text-white flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px]">2</span>
+                  <span>Chrome'da Yerel IP'yi Güvenli Sayma (Tek Seferlik)</span>
+                </div>
+                <p className="text-slate-300 text-[11px] leading-relaxed">
+                  Android telefonunuzda veya PC'nizde Chrome kullanıyorsanız, yerel ağ IP'nizi Chrome'a güvenli olarak tanıtabilirsiniz:
+                </p>
+                <div className="space-y-2 text-[11px] text-slate-300">
+                  <p>1. Chrome adres çubuğuna şunu yazıp Enter'a basın:</p>
+                  <div className="p-2 rounded bg-slate-950 font-mono text-[10px] text-blue-300 select-all break-all border border-slate-800">
+                    chrome://flags/#unsafely-treat-insecure-origin-as-secure
                   </div>
-                  <div className="flex items-start gap-2">
-                    <span className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">2</span>
-                    <span>Açılan menüyü kaydırıp <strong className="text-white">"Ana Ekrana Ekle" (+)</strong> seçeneğine dokunun.</span>
+                  <p>2. Kutucuğa şu anki adresinizi yapıştırın:</p>
+                  <div className="flex items-center justify-between p-2 rounded bg-slate-950 font-mono text-[11px] text-emerald-400 border border-slate-800">
+                    <span>{currentOrigin || 'http://192.168.1.XXX:3000'}</span>
+                    <button
+                      onClick={handleCopyOrigin}
+                      className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white text-[10px] rounded flex items-center gap-1 cursor-pointer"
+                    >
+                      {copiedFlag ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedFlag ? 'Kopyalandı' : 'Kopyala'}</span>
+                    </button>
                   </div>
-                  <div className="flex items-start gap-2">
-                    <span className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">3</span>
-                    <span>Sağ üstteki <strong className="text-white">"Ekle"</strong> butonuna basın. Rende Portal ana ekranınızda özel logosuyla belirecektir.</span>
-                  </div>
+                  <p>3. Yanındaki seçeneği <strong>"Enabled"</strong> yapın ve <strong>"Relaunch"</strong> deyin. Artık doğrudan "Uygulamayı Yükle" butonu aktif olacaktır.</p>
                 </div>
               </div>
-            ) : (
-              /* Android & Masaüstü Kılavuzu */
-              <div className="p-3.5 rounded-xl bg-slate-800/80 border border-slate-700 text-xs space-y-2.5">
-                <div className="font-bold text-slate-200">
-                  🤖 Android (Chrome) &amp; Bilgisayar:
+
+              {/* Çözüm 3: Bulut Canlı Bağlantısı (Otomatik Google SSL) */}
+              <div className="p-3.5 rounded-xl bg-slate-800/90 border border-slate-700 space-y-2">
+                <div className="font-bold text-white flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px]">3</span>
+                  <span>Hazır Google SSL Sertifikalı Canlı Bağlantı</span>
                 </div>
-                <div className="space-y-2 text-slate-300 text-[11px]">
-                  <div className="flex items-start gap-2">
-                    <span className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">1</span>
-                    <span>Yukarıdaki mavi <strong className="text-white">"Uygulamayı Yükle"</strong> butonuna dokunun.</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">2</span>
-                    <span>Veya Chrome sağ üstündeki <strong className="text-white">üç nokta (⋮)</strong> menüsünü açın.</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">3</span>
-                    <span><strong className="text-white">"Uygulamayı Yükle"</strong> veya <strong className="text-white">"Ana Ekrana Ekle"</strong> butonuna basın.</span>
-                  </div>
+                <p className="text-slate-300 text-[11px] leading-relaxed">
+                  Uygulamanızın Google Cloud üzerindeki canlı adresi otomatik olarak <strong className="text-emerald-400">https://</strong> ve geçerli Google SSL sertifikasıyla çalışır. Bu linki telefonunuzda açtığınızda doğrudan "Yükle" butonu çalışır:
+                </p>
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    onClick={handleCopyLink}
+                    className="flex-1 py-2 px-3 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    {copiedLink ? <Check className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedLink ? 'HTTPS Bağlantısı Kopyalandı!' : 'Canlı HTTPS Bağlantısını Kopyala'}</span>
+                  </button>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Avantajlar */}
           <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-slate-800 text-[11px] text-slate-300">

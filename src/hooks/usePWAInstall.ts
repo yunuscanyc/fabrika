@@ -23,6 +23,9 @@ export function usePWAInstall() {
   const [isAndroid, setIsAndroid] = useState(false);
   const [isInIframe, setIsInIframe] = useState(false);
   const [directAppUrl, setDirectAppUrl] = useState('');
+  const [isSecure, setIsSecure] = useState(true);
+  const [isLocalNetwork, setIsLocalNetwork] = useState(false);
+  const [currentOrigin, setCurrentOrigin] = useState('');
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -39,6 +42,23 @@ export function usePWAInstall() {
 
     // Direct app URL for opening outside iframe or copying
     setDirectAppUrl(window.location.href);
+    setCurrentOrigin(window.location.origin);
+
+    // SSL / HTTPS & Security Context Detection
+    const isLocal =
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1';
+    
+    const isPrivateIP =
+      /^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(window.location.hostname);
+    
+    setIsLocalNetwork(isPrivateIP);
+
+    const secure =
+      window.isSecureContext ??
+      (window.location.protocol === 'https:' || isLocal);
+    
+    setIsSecure(Boolean(secure));
 
     // Detect iOS & Android
     const userAgent = window.navigator.userAgent.toLowerCase();
@@ -108,6 +128,9 @@ export function usePWAInstall() {
     isIOS,
     isAndroid,
     isInIframe,
+    isSecure,
+    isLocalNetwork,
+    currentOrigin,
     directAppUrl,
     install,
   };
