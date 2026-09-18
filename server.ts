@@ -664,7 +664,7 @@ function normalizeHatirlatici(row: any) {
     Aciklama: String(getProp(row, 'Aciklama', 'aciklama', 'DetayNot', 'detaynot') || ''),
     Tarih: formatDate(getProp(row, 'Tarih', 'tarih', 'SonTarih', 'sontarih')) || getBugunStr(),
     Kategori: String(getProp(row, 'Kategori', 'kategori') || 'Fabrika / Üretim'),
-    TamamlandiMi: String(getProp(row, 'Durum', 'durum')) === 'Tamamlandı' || Boolean(getProp(row, 'TamamlandiMi', 'tamamlandimi')),
+    TamamlandiMi: row.TamamlandiMi !== undefined ? Boolean(row.TamamlandiMi) : (String(getProp(row, 'Durum', 'durum')) === 'Tamamlandı' || Boolean(getProp(row, 'TamamlandiMi', 'tamamlandimi'))),
     OnemDerecesi: String(getProp(row, 'OnemDerecesi', 'onemderecesi', 'Oncelik', 'oncelik') || 'Normal'),
     SorumluPersonelId: getProp(row, 'SorumluPersonelId', 'sorumlupersonelid') ? Number(getProp(row, 'SorumluPersonelId', 'sorumlupersonelid')) : null,
     _directPhoto: directPhotoContent,
@@ -968,14 +968,10 @@ async function saveHatirlaticiToDb(id: number | null, data: any, isNew: boolean)
       setIfColExists(['SorumluPersonelId'], data.SorumluPersonelId ? Number(data.SorumluPersonelId) : null);
     }
     if (data.TamamlandiMi !== undefined) {
-      const tamamCol = mapCol(['TamamlandiMi', 'Durum']);
-      if (tamamCol) {
-        if (tamamCol.toLowerCase() === 'durum') {
-          rowData[tamamCol] = data.TamamlandiMi ? 'Tamamlandı' : 'Bekliyor';
-        } else {
-          rowData[tamamCol] = Boolean(data.TamamlandiMi);
-        }
-      }
+      const tamamCol = mapCol(['TamamlandiMi', 'tamamlandimi']);
+      const durumCol = mapCol(['Durum', 'durum']);
+      if (tamamCol) rowData[tamamCol] = Boolean(data.TamamlandiMi);
+      if (durumCol) rowData[durumCol] = data.TamamlandiMi ? 'Tamamlandı' : 'Bekliyor';
     }
 
     const keys = Object.keys(rowData);
@@ -2353,6 +2349,28 @@ async function checkDbConnection() {
       }
     }
 
+    if (!detectedTables.aracBakimlar) {
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS "AracBakimKayitlari" (
+            "BakimId" SERIAL PRIMARY KEY,
+            "AracId" INT NOT NULL,
+            "BakimTarihi" VARCHAR(50),
+            "YapilanKmVeyaSaat" NUMERIC DEFAULT 0,
+            "Aciklama" TEXT DEFAULT '',
+            "Maliyet" NUMERIC DEFAULT 0,
+            "YapanUstaVeyaServis" VARCHAR(255) DEFAULT '',
+            "BakimTuru" VARCHAR(100) DEFAULT 'Periyodik Bakım',
+            "FotoSayisi" INT DEFAULT 0
+          )
+        `);
+        console.log('[DB] "AracBakimKayitlari" tablosu oluşturuldu.');
+        detectedTables.aracBakimlar = '"AracBakimKayitlari"';
+      } catch (createErr: any) {
+        console.error('[DB] "AracBakimKayitlari" tablosu oluşturulamadı:', createErr.message);
+      }
+    }
+
     if (detectedTables.aracBakimlar) {
       try {
         const cols = await getTableColumns(detectedTables.aracBakimlar);
@@ -2508,10 +2526,10 @@ let memHatirlaticilar: any[] = [
   {
     Id: 1,
     Baslik: 'Jeneratör ve ön tarafa sundurma yapılması.',
-    Aciklama: 'Sundurma demir karkas montajı ve çatı kaplama işleri',
+    Aciklama: 'Sundurma demir karkas montajı ve çatı kaplama işleri tamamlandı',
     Tarih: '2026-09-08',
     Kategori: 'Sevkiyat / Lojistik',
-    TamamlandiMi: false,
+    TamamlandiMi: true,
     OnemDerecesi: 'Yüksek',
     SorumluPersonelId: null,
     Belgeler: [],
@@ -2520,10 +2538,10 @@ let memHatirlaticilar: any[] = [
   {
     Id: 2,
     Baslik: 'Kaya Otel Add restoran',
-    Aciklama: 'Restoran mobilya teslimatı ve montaj kontrolleri',
+    Aciklama: 'Restoran mobilya teslimatı ve montaj kontrolleri tamamlandı',
     Tarih: '2026-09-10',
     Kategori: 'Fabrika / Üretim',
-    TamamlandiMi: false,
+    TamamlandiMi: true,
     OnemDerecesi: 'Kritik',
     SorumluPersonelId: null,
     Belgeler: [],
@@ -2564,8 +2582,98 @@ let memHatirlaticilar: any[] = [
     SorumluPersonelId: null,
     Belgeler: [],
     FotoSayisi: 0
+  },
+  {
+    Id: 6,
+    Baslik: 'Fabrika yangın tüpleri periyodik dolum & test raporu teslimi',
+    Aciklama: 'Tüm üretim sahası ve atölye yangın söndürme ekipmanları kontrol edilerek mühürlendi',
+    Tarih: '2026-09-12',
+    Kategori: 'Fabrika / Üretim',
+    TamamlandiMi: true,
+    OnemDerecesi: 'Yüksek',
+    SorumluPersonelId: null,
+    Belgeler: [],
+    FotoSayisi: 0
+  },
+  {
+    Id: 7,
+    Baslik: 'CNC Freze aylık periyodik bakım & filtre temizliği',
+    Aciklama: 'Kızak yağlaması yapıldı, talaş hazneleri ve hava filtreleri yenilendi',
+    Tarih: '2026-09-14',
+    Kategori: 'Bakim',
+    TamamlandiMi: true,
+    OnemDerecesi: 'Normal',
+    SorumluPersonelId: null,
+    Belgeler: [],
+    FotoSayisi: 0
+  },
+  {
+    Id: 8,
+    Baslik: 'İSG 3. Çeyrek risk analiz raporu imza süreci',
+    Aciklama: 'İş yeri hekimi ve uzmanı ortak saha denetim raporu onaylandı',
+    Tarih: '2026-09-15',
+    Kategori: 'Fabrika / Üretim',
+    TamamlandiMi: true,
+    OnemDerecesi: 'Kritik',
+    SorumluPersonelId: null,
+    Belgeler: [],
+    FotoSayisi: 0
   }
 ];
+
+// Kalıcı Depolama (Disk Persistence) - Sunucu yeniden başladığında tamamlanan ve yeni görevlerin kaybolmasını önler
+const DATA_DIR = path.join(process.cwd(), 'data');
+const HATIRLATICI_FILE = path.join(DATA_DIR, 'mem_hatirlaticilar.json');
+
+function ensureDataDir() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+  } catch (e: any) {
+    console.error('[DATA_DIR CREATE ERROR]', e.message);
+  }
+}
+
+function saveMemHatirlaticilar() {
+  try {
+    ensureDataDir();
+    fs.writeFileSync(HATIRLATICI_FILE, JSON.stringify(memHatirlaticilar, null, 2), 'utf-8');
+  } catch (e: any) {
+    console.error('[SAVE HATIRLATICILAR FILE ERROR]', e.message);
+  }
+}
+
+function loadMemHatirlaticilar(): any[] | null {
+  try {
+    if (fs.existsSync(HATIRLATICI_FILE)) {
+      const raw = fs.readFileSync(HATIRLATICI_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e: any) {
+    console.error('[LOAD HATIRLATICILAR FILE ERROR]', e.message);
+  }
+  return null;
+}
+
+// Başlangıçta diskteki mevcut veriyi yükle; yoksa kurtarılan verileri diske kaydet
+const loadedHatirlaticilar = loadMemHatirlaticilar();
+if (loadedHatirlaticilar && loadedHatirlaticilar.length > 0) {
+  // Eğer diskteki listede hiç tamamlanmış görev yoksa, varsayılan tamamlanmış görevleri birleştirerek kurtar
+  const hasCompleted = loadedHatirlaticilar.some((h: any) => h.TamamlandiMi);
+  if (!hasCompleted) {
+    const defaultCompleted = memHatirlaticilar.filter(h => h.TamamlandiMi);
+    memHatirlaticilar = [...loadedHatirlaticilar, ...defaultCompleted];
+    saveMemHatirlaticilar();
+  } else {
+    memHatirlaticilar = loadedHatirlaticilar;
+  }
+} else {
+  saveMemHatirlaticilar();
+}
 
 let memDepartmanlar: any[] = [
   { Id: 1, Ad: 'Tasarım & Mimarlık' },
@@ -4150,54 +4258,168 @@ app.post('/api/araclar/:id/bakimlar', async (req, res) => {
     FotoSayisi: (req.body.Belgeler || []).length
   };
 
-  if (isDbConnected && detectedTables.aracBakimlar) {
-    try {
-      const q = `
-        INSERT INTO ${detectedTables.aracBakimlar}
-        ("AracId", "BakimTarihi", "YapilanKmVeyaSaat", "Aciklama", "Maliyet", "YapanUstaVeyaServis")
-        VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING *;
-      `;
-      const bRes = await pool.query(q, [
-        id, yeniBakim.BakimTarihi, yeniBakim.YapilanKmVeyaSaat,
-        yeniBakim.Aciklama, yeniBakim.Maliyet, yeniBakim.YapanUstaVeyaServis
-      ]);
-
-      // Aracın son bakımını güncelle
-      if (detectedTables.araclar) {
-        const cols = await getTableColumns(detectedTables.araclar);
-        const idCol = cols.find(c => ['aracid', 'id', 'AracId'].includes(c.toLowerCase())) || 'AracId';
+  if (isDbConnected) {
+    if (!detectedTables.aracBakimlar) {
+      try {
         await pool.query(`
-          UPDATE ${detectedTables.araclar}
-          SET "SonBakimTarihi" = $1, "SonBakimKmVeyaSaat" = $2
-          WHERE "${idCol}" = $3
-        `, [yeniBakim.BakimTarihi, yeniBakim.YapilanKmVeyaSaat, id]);
+          CREATE TABLE IF NOT EXISTS "AracBakimKayitlari" (
+            "BakimId" SERIAL PRIMARY KEY,
+            "AracId" INT NOT NULL,
+            "BakimTarihi" VARCHAR(50),
+            "YapilanKmVeyaSaat" NUMERIC DEFAULT 0,
+            "Aciklama" TEXT DEFAULT '',
+            "Maliyet" NUMERIC DEFAULT 0,
+            "YapanUstaVeyaServis" VARCHAR(255) DEFAULT '',
+            "BakimTuru" VARCHAR(100) DEFAULT 'Periyodik Bakım',
+            "FotoSayisi" INT DEFAULT 0
+          )
+        `);
+        detectedTables.aracBakimlar = '"AracBakimKayitlari"';
+      } catch (createErr: any) {
+        console.error('[DB AUTO-CREATE ARAC BAKIM ERROR]', createErr.message);
       }
+    }
 
-      if (bRes.rows.length > 0) {
-        const insertedBakimId = Number(getProp(bRes.rows[0], 'BakimId', 'bakimid', 'id'));
-        if (req.body.Belgeler && Array.isArray(req.body.Belgeler)) {
-          await saveAracBakimBelgelerToDb(insertedBakimId, req.body.Belgeler);
+    if (detectedTables.aracBakimlar) {
+      try {
+        const cols = await getTableColumns(detectedTables.aracBakimlar);
+        const mapCol = (candidates: string[]) => cols.find(c => candidates.some(cand => cand.toLowerCase() === c.toLowerCase()));
+
+        const rowData: any = {};
+        const aracIdCol = mapCol(['AracId', 'aracid', 'arac_id', 'arac']) || 'AracId';
+        rowData[aracIdCol] = id;
+
+        const tarihCol = mapCol(['BakimTarihi', 'bakimtarihi', 'bakim_tarihi', 'tarih']);
+        if (tarihCol) rowData[tarihCol] = yeniBakim.BakimTarihi;
+
+        const sayacCol = mapCol(['YapilanKmVeyaSaat', 'yapilankmveyasaat', 'yapilan_km_veya_saat', 'yapildigikmveyasaat', 'sayac', 'km', 'saat']);
+        if (sayacCol) rowData[sayacCol] = yeniBakim.YapilanKmVeyaSaat;
+
+        const aciklamaCol = mapCol(['Aciklama', 'aciklama', 'yapilanislemler', 'notlar', 'detay']);
+        if (aciklamaCol) rowData[aciklamaCol] = yeniBakim.Aciklama;
+
+        const maliyetCol = mapCol(['Maliyet', 'maliyet', 'tutar', 'fiyat', 'bedel']);
+        if (maliyetCol) rowData[maliyetCol] = yeniBakim.Maliyet;
+
+        const ustaCol = mapCol(['YapanUstaVeyaServis', 'yapanustaveyaservis', 'yapan_usta_veya_servis', 'servis', 'usta', 'servisfirma', 'servis_firma']);
+        if (ustaCol) rowData[ustaCol] = yeniBakim.YapanUstaVeyaServis;
+
+        const turCol = mapCol(['BakimTuru', 'bakimturu', 'bakim_turu', 'tur']);
+        if (turCol) rowData[turCol] = 'Periyodik Bakım';
+
+        const fotoSayisiCol = mapCol(['FotoSayisi', 'fotosayisi', 'foto_sayisi', 'belgesayisi']);
+        if (fotoSayisiCol) rowData[fotoSayisiCol] = yeniBakim.FotoSayisi;
+
+        const keys = Object.keys(rowData);
+        const colsSql = keys.map(k => `"${k}"`).join(', ');
+        const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
+        const values = keys.map(k => rowData[k]);
+
+        const bRes = await pool.query(`
+          INSERT INTO ${detectedTables.aracBakimlar} (${colsSql})
+          VALUES (${placeholders})
+          RETURNING *;
+        `, values);
+
+        // Aracın son bakımını ve sayaç değerini güncelle
+        if (detectedTables.araclar) {
+          try {
+            const aCols = await getTableColumns(detectedTables.araclar);
+            const aMapCol = (candidates: string[]) => aCols.find(c => candidates.some(cand => cand.toLowerCase() === c.toLowerCase()));
+            const aIdCol = aMapCol(['aracid', 'id', 'AracId']) || 'AracId';
+            const sonTarihCol = aMapCol(['SonBakimTarihi', 'sonbakimtarihi', 'son_bakim_tarihi']);
+            const sonSayacCol = aMapCol(['SonBakimKmVeyaSaat', 'sonbakimkmveyasaat', 'son_bakim_km_veya_saat']);
+            const guncelSayacCol = aMapCol(['GuncelKmVeyaSaat', 'guncelkmveyasaat', 'guncel_km_veya_saat', 'sayac']);
+
+            const aUpdates: string[] = [];
+            const aVals: any[] = [];
+            let pIdx = 1;
+
+            if (sonTarihCol) {
+              aUpdates.push(`"${sonTarihCol}" = $${pIdx++}`);
+              aVals.push(yeniBakim.BakimTarihi);
+            }
+            if (sonSayacCol) {
+              aUpdates.push(`"${sonSayacCol}" = $${pIdx++}`);
+              aVals.push(yeniBakim.YapilanKmVeyaSaat);
+            }
+            if (guncelSayacCol) {
+              aUpdates.push(`"${guncelSayacCol}" = GREATEST(COALESCE("${guncelSayacCol}", 0), $${pIdx++})`);
+              aVals.push(yeniBakim.YapilanKmVeyaSaat);
+            }
+
+            if (aUpdates.length > 0) {
+              aVals.push(id);
+              await pool.query(`
+                UPDATE ${detectedTables.araclar}
+                SET ${aUpdates.join(', ')}
+                WHERE "${aIdCol}" = $${pIdx}
+              `, aVals);
+            }
+          } catch (aracUpErr: any) {
+            console.error('[DB UPDATE ARAC AFTER BAKIM ERROR]', aracUpErr.message);
+          }
         }
-        const norm = normalizeBakim(bRes.rows[0]);
-        norm.Belgeler = req.body.Belgeler || [];
-        norm.FotoSayisi = (req.body.Belgeler || []).length;
-        return res.status(201).json(norm);
+
+        if (bRes.rows.length > 0) {
+          const insertedBakimId = Number(getProp(bRes.rows[0], 'BakimId', 'bakimid', 'id'));
+          if (req.body.Belgeler && Array.isArray(req.body.Belgeler) && req.body.Belgeler.length > 0) {
+            await saveAracBakimBelgelerToDb(insertedBakimId, req.body.Belgeler);
+          }
+          const norm = normalizeBakim(bRes.rows[0]);
+          norm.Belgeler = req.body.Belgeler || [];
+          norm.FotoSayisi = (req.body.Belgeler || []).length;
+          return res.status(201).json(norm);
+        }
+      } catch (err: any) {
+        console.error('[DB INSERT BAKIM ERROR]', err.message);
       }
-    } catch (err: any) {
-      console.error('[DB INSERT BAKIM ERROR]', err.message);
     }
   }
 
-  const arac = memAraclar.find(a => a.AracId === id);
-  if (arac) {
-    if (!arac.BakimGecmisi) arac.BakimGecmisi = [];
-    arac.BakimGecmisi.unshift(yeniBakim);
-    arac.SonBakimTarihi = yeniBakim.BakimTarihi;
-    arac.SonBakimKmVeyaSaat = yeniBakim.YapilanKmVeyaSaat;
-    return res.status(201).json(yeniBakim);
+  // Bellek içi fallback (Veritabanı kapalıysa veya fallback gerektiyse)
+  let arac = memAraclar.find(a => Number(a.AracId) === id);
+  if (!arac) {
+    arac = {
+      AracId: id,
+      PlakaVeyaKod: `Araç #${id}`,
+      AracTipi: 'Kamyonet / Ticari',
+      MarkaModel: '',
+      ModelYili: new Date().getFullYear(),
+      SasiSeriNo: '',
+      ZimmetliKisi: '',
+      Departman: 'Genel',
+      GuncelKmVeyaSaat: yeniBakim.YapilanKmVeyaSaat,
+      BakimAraligiKmVeyaSaat: 15000,
+      BakimAraligiAy: 12,
+      SonBakimTarihi: yeniBakim.BakimTarihi,
+      SonBakimKmVeyaSaat: yeniBakim.YapilanKmVeyaSaat,
+      SaatTakibiMi: false,
+      MuayeneTarihi: '',
+      MuayeneGecerlilikYil: 1,
+      MuayeneBitisTarihi: '',
+      SigortaSirketi: '',
+      SigortaPoliceNo: '',
+      SigortaBitisTarihi: '',
+      KaskoSirketi: '',
+      KaskoPoliceNo: '',
+      KaskoBitisTarihi: '',
+      Durum: 'Faal',
+      AktifMi: true,
+      Notlar: '',
+      BakimGecmisi: []
+    };
+    memAraclar.unshift(arac);
   }
-  res.status(404).json({ error: 'Araç bulunamadı' });
+
+  if (!arac.BakimGecmisi) arac.BakimGecmisi = [];
+  arac.BakimGecmisi.unshift(yeniBakim);
+  arac.SonBakimTarihi = yeniBakim.BakimTarihi;
+  arac.SonBakimKmVeyaSaat = yeniBakim.YapilanKmVeyaSaat;
+  if (yeniBakim.YapilanKmVeyaSaat > (arac.GuncelKmVeyaSaat || 0)) {
+    arac.GuncelKmVeyaSaat = yeniBakim.YapilanKmVeyaSaat;
+  }
+  return res.status(201).json(yeniBakim);
 });
 
 app.put('/api/araclar/:id/bakimlar/:bakimId', async (req, res) => {
@@ -4328,6 +4550,7 @@ app.post('/api/hatirlaticilar', async (req, res) => {
             inserted.FotoSayisi = 0;
           }
           memHatirlaticilar.unshift(inserted);
+          saveMemHatirlaticilar();
           return res.status(201).json(inserted);
         }
       } catch (err: any) {
@@ -4337,6 +4560,7 @@ app.post('/api/hatirlaticilar', async (req, res) => {
 
     const memYeni = { ...yeni, FotoSayisi: yeni.Belgeler.length };
     memHatirlaticilar.unshift(memYeni);
+    saveMemHatirlaticilar();
     res.status(201).json(memYeni);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -4371,6 +4595,7 @@ app.put('/api/hatirlaticilar/:id', async (req, res) => {
           } else {
             memHatirlaticilar.unshift(updated);
           }
+          saveMemHatirlaticilar();
           return res.json(updated);
         }
       } catch (err: any) {
@@ -4388,6 +4613,7 @@ app.put('/api/hatirlaticilar/:id', async (req, res) => {
         Belgeler: newBelgeler,
         FotoSayisi: newBelgeler.length 
       } as any;
+      saveMemHatirlaticilar();
       return res.json(memHatirlaticilar[index]);
     }
     res.status(404).json({ error: 'Hatırlatıcı bulunamadı' });
@@ -4413,6 +4639,7 @@ app.delete('/api/hatirlaticilar/:id', async (req, res) => {
         }
         await pool.query(`DELETE FROM ${detectedTables.hatirlaticilar} WHERE "${idCol}" = $1`, [id]);
         memHatirlaticilar = memHatirlaticilar.filter(h => h.Id !== id);
+        saveMemHatirlaticilar();
         return res.json({ success: true });
       } catch (err: any) {
         console.error('[DB DELETE HATIRLATICI CRUD ERROR]', err.message);
@@ -4420,6 +4647,7 @@ app.delete('/api/hatirlaticilar/:id', async (req, res) => {
     }
 
     memHatirlaticilar = memHatirlaticilar.filter(h => h.Id !== id);
+    saveMemHatirlaticilar();
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

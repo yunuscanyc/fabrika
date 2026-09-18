@@ -231,7 +231,22 @@ export default function App() {
       if (resOzet) setOzet(resOzet);
       if (Array.isArray(resProjeler)) setProjeler(resProjeler);
       if (Array.isArray(resAraclar)) setAraclar(resAraclar);
-      if (Array.isArray(resHatirlaticilar)) setHatirlaticilar(resHatirlaticilar);
+      if (Array.isArray(resHatirlaticilar) && resHatirlaticilar.length > 0) {
+        setHatirlaticilar(resHatirlaticilar);
+        try {
+          localStorage.setItem('fabrika_hatirlaticilar_cache_v2', JSON.stringify(resHatirlaticilar));
+        } catch (e) {}
+      } else {
+        try {
+          const cached = localStorage.getItem('fabrika_hatirlaticilar_cache_v2');
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setHatirlaticilar(parsed);
+            }
+          }
+        } catch (e) {}
+      }
       if (resDbStatus) setDbStatus(resDbStatus);
       if (Array.isArray(resPersoneller)) setPersoneller(resPersoneller);
       if (Array.isArray(resIzinler)) setIzinler(resIzinler);
@@ -331,26 +346,34 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bakim),
       });
-      const yeniBakim = await res.json();
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Bakım eklenemedi (${res.status})`);
+      }
+      const yeniBakim: BakimKaydi = await res.json();
 
       setAraclar(prev =>
         prev.map(a => {
-          if (a.AracId === aracId) {
-            const gecmis = a.BakimGecmisi || [];
+          if (Number(a.AracId) === Number(aracId)) {
+            const gecmis = (a.BakimGecmisi || []).filter(b => b.BakimId !== yeniBakim.BakimId);
+            const sonKm = Number(yeniBakim.YapilanKmVeyaSaat) || 0;
+            const guncelKm = Math.max(Number(a.GuncelKmVeyaSaat) || 0, sonKm);
             return {
               ...a,
-              SonBakimTarihi: yeniBakim.BakimTarihi,
-              SonBakimKmVeyaSaat: yeniBakim.YapilanKmVeyaSaat,
-              GuncelKmVeyaSaat: Math.max(a.GuncelKmVeyaSaat, yeniBakim.YapilanKmVeyaSaat),
+              SonBakimTarihi: yeniBakim.BakimTarihi || a.SonBakimTarihi,
+              SonBakimKmVeyaSaat: sonKm || a.SonBakimKmVeyaSaat,
+              GuncelKmVeyaSaat: guncelKm,
               BakimGecmisi: [yeniBakim, ...gecmis],
             };
           }
           return a;
         })
       );
-      fetch('/api/ozet').then(r => r.json()).then(setOzet);
+      fetch('/api/ozet').then(r => r.json()).then(setOzet).catch(() => {});
+      return yeniBakim;
     } catch (err) {
       console.error('Bakım ekleme hatası:', err);
+      throw err;
     }
   };
 
@@ -362,11 +385,15 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bakim),
       });
-      const guncel = res.ok ? await res.json() : null;
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Bakım güncellenemedi (${res.status})`);
+      }
+      const guncel = await res.json();
 
       setAraclar(prev =>
         prev.map(a => {
-          if (a.AracId === aracId && a.BakimGecmisi) {
+          if (Number(a.AracId) === Number(aracId) && a.BakimGecmisi) {
             return {
               ...a,
               BakimGecmisi: a.BakimGecmisi.map(b => (b.BakimId === bakimId ? (guncel || { ...b, ...bakim }) : b)),
@@ -375,21 +402,28 @@ export default function App() {
           return a;
         })
       );
+      fetch('/api/ozet').then(r => r.json()).then(setOzet).catch(() => {});
+      return guncel;
     } catch (err) {
       console.error('Bakım güncelleme hatası:', err);
+      throw err;
     }
   };
 
   // Bakım Sil
   const handleDeleteBakim = async (aracId: number, bakimId: number) => {
     try {
-      await fetch(`/api/araclar/${aracId}/bakimlar/${bakimId}`, {
+      const res = await fetch(`/api/araclar/${aracId}/bakimlar/${bakimId}`, {
         method: 'DELETE',
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Bakım silinemedi (${res.status})`);
+      }
 
       setAraclar(prev =>
         prev.map(a => {
-          if (a.AracId === aracId && a.BakimGecmisi) {
+          if (Number(a.AracId) === Number(aracId) && a.BakimGecmisi) {
             return {
               ...a,
               BakimGecmisi: a.BakimGecmisi.filter(b => b.BakimId !== bakimId),
@@ -398,8 +432,10 @@ export default function App() {
           return a;
         })
       );
+      fetch('/api/ozet').then(r => r.json()).then(setOzet).catch(() => {});
     } catch (err) {
       console.error('Bakım silme hatası:', err);
+      throw err;
     }
   };
 
@@ -426,9 +462,13 @@ export default function App() {
   // Hatırlatıcı Tamamlandı / Açık Durumu
   const handleToggleTamamlandi = async (id: number, tamamlandi: boolean) => {
     // 1. İyimser Arayüz Güncellemesi (Optimistic UI)
-    setHatirlaticilar(prev =>
-      prev.map(h => (h.Id === id ? { ...h, TamamlandiMi: tamamlandi } : h))
-    );
+    setHatirlaticilar(prev => {
+      const guncel = prev.map(h => (h.Id === id ? { ...h, TamamlandiMi: tamamlandi } : h));
+      try {
+        localStorage.setItem('fabrika_hatirlaticilar_cache_v2', JSON.stringify(guncel));
+      } catch (e) {}
+      return guncel;
+    });
     setOzet(prev => {
       if (!prev) return prev;
       const guncelGorevler = (prev.gorevListesi || []).map(g =>

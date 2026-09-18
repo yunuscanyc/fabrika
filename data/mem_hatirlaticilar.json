@@ -1,0 +1,98 @@
+[
+  {
+    "Id": 1,
+    "Baslik": "Jeneratör ve ön tarafa sundurma yapılması.",
+    "Aciklama": "Sundurma demir karkas montajı ve çatı kaplama işleri tamamlandı",
+    "Tarih": "2026-09-08",
+    "Kategori": "Sevkiyat / Lojistik",
+    "TamamlandiMi": true,
+    "OnemDerecesi": "Yüksek",
+    "SorumluPersonelId": null,
+    "Belgeler": [],
+    "FotoSayisi": 0
+  },
+  {
+    "Id": 2,
+    "Baslik": "Kaya Otel Add restoran",
+    "Aciklama": "Restoran mobilya teslimatı ve montaj kontrolleri tamamlandı",
+    "Tarih": "2026-09-10",
+    "Kategori": "Fabrika / Üretim",
+    "TamamlandiMi": true,
+    "OnemDerecesi": "Kritik",
+    "SorumluPersonelId": null,
+    "Belgeler": [],
+    "FotoSayisi": 0
+  },
+  {
+    "Id": 3,
+    "Baslik": "07ATF956 MUAYENE",
+    "Aciklama": "TÜVTÜRK muayene randevusu ve evrak teslimi",
+    "Tarih": "2026-09-16",
+    "Kategori": "Bakim",
+    "TamamlandiMi": false,
+    "OnemDerecesi": "Kritik",
+    "SorumluPersonelId": null,
+    "Belgeler": [],
+    "FotoSayisi": 0
+  },
+  {
+    "Id": 4,
+    "Baslik": "AMBALAJ MALZEMESİ",
+    "Aciklama": "Balonlu naylon, streç film ve koli tedariği",
+    "Tarih": "2026-09-16",
+    "Kategori": "Bakim",
+    "TamamlandiMi": false,
+    "OnemDerecesi": "Normal",
+    "SorumluPersonelId": null,
+    "Belgeler": [],
+    "FotoSayisi": 0
+  },
+  {
+    "Id": 5,
+    "Baslik": "Elektrik panosunun altına konacak lastikler kesilecek ve yerleştirilecek",
+    "Aciklama": "Titreşim önleyici yalıtım lastikleri montajı",
+    "Tarih": "2026-09-17",
+    "Kategori": "Fabrika / Üretim",
+    "TamamlandiMi": false,
+    "OnemDerecesi": "Normal",
+    "SorumluPersonelId": null,
+    "Belgeler": [],
+    "FotoSayisi": 0
+  },
+  {
+    "Id": 6,
+    "Baslik": "Fabrika yangın tüpleri periyodik dolum & test raporu teslimi",
+    "Aciklama": "Tüm üretim sahası ve atölye yangın söndürme ekipmanları kontrol edilerek mühürlendi",
+    "Tarih": "2026-09-12",
+    "Kategori": "Fabrika / Üretim",
+    "TamamlandiMi": true,
+    "OnemDerecesi": "Yüksek",
+    "SorumluPersonelId": null,
+    "Belgeler": [],
+    "FotoSayisi": 0
+  },
+  {
+    "Id": 7,
+    "Baslik": "CNC Freze aylık periyodik bakım & filtre temizliği",
+    "Aciklama": "Kızak yağlaması yapıldı, talaş hazneleri ve hava filtreleri yenilendi",
+    "Tarih": "2026-09-14",
+    "Kategori": "Bakim",
+    "TamamlandiMi": true,
+    "OnemDerecesi": "Normal",
+    "SorumluPersonelId": null,
+    "Belgeler": [],
+    "FotoSayisi": 0
+  },
+  {
+    "Id": 8,
+    "Baslik": "İSG 3. Çeyrek risk analiz raporu imza süreci",
+    "Aciklama": "İş yeri hekimi ve uzmanı ortak saha denetim raporu onaylandı",
+    "Tarih": "2026-09-15",
+    "Kategori": "Fabrika / Üretim",
+    "TamamlandiMi": true,
+    "OnemDerecesi": "Kritik",
+    "SorumluPersonelId": null,
+    "Belgeler": [],
+    "FotoSayisi": 0
+  }
+]

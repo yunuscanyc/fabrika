@@ -40,31 +40,54 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
   const [secilenHatirlatici, setSecilenHatirlatici] = useState<Hatirlatici | null>(null);
   const [filtre, setFiltre] = useState<'hepsi' | 'bugun' | 'tamamlanmayan' | 'tamamlanan'>('hepsi');
   const [doubleClickHintId, setDoubleClickHintId] = useState<number | null>(null);
-  const lastClickRef = useRef<{ id: number; time: number } | null>(null);
+  const clickTrackerRef = useRef<{ id: number; time: number } | null>(null);
+  const lastToggleRef = useRef<{ id: number; time: number } | null>(null);
+
+  const executeToggle = (h: Hatirlatici) => {
+    if (!onToggleTamamlandi) return;
+    const now = Date.now();
+    // 700ms debounce koruması
+    if (lastToggleRef.current && lastToggleRef.current.id === h.Id && now - lastToggleRef.current.time < 700) {
+      return;
+    }
+    lastToggleRef.current = { id: h.Id, time: now };
+    clickTrackerRef.current = null;
+    setDoubleClickHintId(null);
+    onToggleTamamlandi(h.Id, !h.TamamlandiMi);
+  };
 
   const handleCircleClick = (e: React.MouseEvent, h: Hatirlatici) => {
     e.stopPropagation();
-    const now = Date.now();
-    const last = lastClickRef.current;
+    e.preventDefault();
+    if (!onToggleTamamlandi) return;
 
-    if (last && last.id === h.Id && now - last.time < 450) {
-      lastClickRef.current = null;
-      setDoubleClickHintId(null);
-      onToggleTamamlandi(h.Id, !h.TamamlandiMi);
-    } else {
-      lastClickRef.current = { id: h.Id, time: now };
-      setDoubleClickHintId(h.Id);
-      setTimeout(() => {
-        setDoubleClickHintId(prev => (prev === h.Id ? null : prev));
-      }, 2000);
+    const now = Date.now();
+
+    // 1. Tarayıcı yerel çift tıklama
+    if (e.detail === 2) {
+      executeToggle(h);
+      return;
     }
+
+    // 2. Çift tıklama / çift dokunma zamanlama aralığı (100ms - 500ms)
+    const prev = clickTrackerRef.current;
+    if (prev && prev.id === h.Id && now - prev.time >= 100 && now - prev.time <= 500) {
+      executeToggle(h);
+      return;
+    }
+
+    // 3. Tek tıklama -> ASLA TAMAMLAMA! Sadece uyarı gösterilir
+    clickTrackerRef.current = { id: h.Id, time: now };
+    setDoubleClickHintId(h.Id);
+    setTimeout(() => {
+      setDoubleClickHintId(prevId => (prevId === h.Id ? null : prevId));
+    }, 2200);
   };
 
   const handleCircleDoubleClick = (e: React.MouseEvent, h: Hatirlatici) => {
     e.stopPropagation();
-    lastClickRef.current = null;
-    setDoubleClickHintId(null);
-    onToggleTamamlandi(h.Id, !h.TamamlandiMi);
+    e.preventDefault();
+    executeToggle(h);
   };
   
   // Yeni Ekleme Formu için Ekler (Belgeler)
@@ -102,9 +125,9 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
     if (h.TamamlandiMi) {
       return {
         tur: 'tamamlandi',
-        renk: 'bg-slate-50 border-slate-200 text-slate-400 opacity-70 hover:opacity-100',
+        renk: 'bg-emerald-50/40 border-emerald-200/90 text-slate-700 hover:border-emerald-300',
         etiket: 'Tamamlandı',
-        badge: 'bg-slate-200 text-slate-600'
+        badge: 'bg-emerald-100 text-emerald-800 font-bold border border-emerald-300'
       };
     }
     if (h.Tarih < bugunStr) {
@@ -288,8 +311,9 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                     </button>
 
                     {doubleClickHintId === h.Id && (
-                      <div className="absolute top-8 left-0 z-30 whitespace-nowrap bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-lg border border-slate-700 animate-bounce">
-                        👆 Çift tıklayın!
+                      <div className="absolute top-8 left-0 z-30 whitespace-nowrap bg-slate-900 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg shadow-xl border border-slate-700 animate-bounce flex items-center gap-1.5 pointer-events-none">
+                        <span>👆</span>
+                        <span>{h.TamamlandiMi ? 'Açmak için ÇİFT TIKLAYIN' : 'Tamamlamak için ÇİFT TIKLAYIN'}</span>
                       </div>
                     )}
                   </div>

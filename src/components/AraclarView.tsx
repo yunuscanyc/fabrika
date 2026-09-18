@@ -22,7 +22,8 @@ import {
   Download,
   Eye,
   FileCheck2,
-  AlertCircle
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
 import { PersonelCombobox } from './PersonelCombobox';
 import { formatTarihTR } from '../utils/dateUtils';
@@ -64,6 +65,8 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
   const [seciliAracBakimModal, setSeciliAracBakimModal] = useState<Arac | null>(null);
   const [duzenlenenBakim, setDuzenlenenBakim] = useState<BakimKaydi | null>(null);
   const [yeniBakimFormAcik, setYeniBakimFormAcik] = useState(false);
+  const [bakimKaydediliyor, setBakimKaydediliyor] = useState(false);
+  const [bakimHataMesaji, setBakimHataMesaji] = useState<string | null>(null);
   const [bakimBelgeler, setBakimBelgeler] = useState<any[]>([]);
   const [lightboxDosya, setLightboxDosya] = useState<any | null>(null);
 
@@ -1200,41 +1203,72 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
             {/* Yeni Bakım Ekle / Düzenle Formu */}
             {yeniBakimFormAcik ? (
               <form
-                onSubmit={(e) => {
+                onSubmit={async (e) => {
                   e.preventDefault();
+                  setBakimHataMesaji(null);
                   const form = e.target as any;
+
+                  // Güvenli sayısal temizleme (nokta, virgül veya boşluk içeren değerler)
+                  const rawSayac = String(form.sayac?.value || '').replace(/\s+/g, '').replace(/\./g, '').replace(/,/g, '.');
+                  const rawMaliyet = String(form.maliyet?.value || '').replace(/\s+/g, '').replace(/\./g, '').replace(/,/g, '.');
+
                   const data: Partial<BakimKaydi> = {
-                    BakimTarihi: form.tarih.value,
-                    YapilanKmVeyaSaat: Number(form.sayac.value),
-                    Aciklama: form.aciklama.value,
-                    Maliyet: Number(form.maliyet.value) || 0,
-                    YapanUstaVeyaServis: form.servis.value,
+                    BakimTarihi: form.tarih?.value || new Date().toISOString().split('T')[0],
+                    YapilanKmVeyaSaat: Number(rawSayac) || 0,
+                    Aciklama: form.aciklama?.value || 'Periyodik Bakım',
+                    Maliyet: Number(rawMaliyet) || 0,
+                    YapanUstaVeyaServis: form.servis?.value || '',
                     Belgeler: bakimBelgeler,
                     FotoSayisi: bakimBelgeler.length
                   };
 
-                  if (duzenlenenBakim) {
-                    onUpdateBakim(aktifSeciliArac.AracId, duzenlenenBakim.BakimId, data);
-                  } else {
-                    onAddBakim(aktifSeciliArac.AracId, data);
+                  try {
+                    setBakimKaydediliyor(true);
+                    if (duzenlenenBakim) {
+                      await onUpdateBakim(aktifSeciliArac.AracId, duzenlenenBakim.BakimId, data);
+                    } else {
+                      await onAddBakim(aktifSeciliArac.AracId, data);
+                    }
+                    setYeniBakimFormAcik(false);
+                    setDuzenlenenBakim(null);
+                    setBakimBelgeler([]);
+                  } catch (err: any) {
+                    console.error('Bakım form kayıt hatası:', err);
+                    setBakimHataMesaji(err.message || 'Bakım kaydedilirken bir hata oluştu. Lütfen tekrar deneyin.');
+                  } finally {
+                    setBakimKaydediliyor(false);
                   }
-                  setYeniBakimFormAcik(false);
-                  setDuzenlenenBakim(null);
-                  setBakimBelgeler([]);
                 }}
                 className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 text-xs sm:text-sm overflow-y-auto max-h-[60vh]"
               >
-                <h4 className="font-bold text-slate-800">
-                  {duzenlenenBakim ? 'Bakım Kaydını Düzenle' : 'Yeni Bakım İşle'}
-                </h4>
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-slate-800">
+                    {duzenlenenBakim ? 'Bakım Kaydını Düzenle' : 'Yeni Bakım İşle'}
+                  </h4>
+                  {bakimKaydediliyor && (
+                    <span className="text-xs text-blue-600 font-semibold flex items-center gap-1">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Kaydediliyor...
+                    </span>
+                  )}
+                </div>
+
+                {bakimHataMesaji && (
+                  <div className="p-2.5 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                    <span>{bakimHataMesaji}</span>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="font-semibold text-slate-700 block mb-1">Bakım Tarihi:</label>
                     <input
                       type="date"
                       name="tarih"
+                      disabled={bakimKaydediliyor}
                       defaultValue={duzenlenenBakim?.BakimTarihi || new Date().toISOString().split('T')[0]}
-                      className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white"
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white disabled:opacity-60"
                       required
                     />
                   </div>
@@ -1245,9 +1279,10 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                     <input
                       type="text"
                       name="sayac"
+                      disabled={bakimKaydediliyor}
                       defaultValue={duzenlenenBakim?.YapilanKmVeyaSaat ?? aktifSeciliArac.GuncelKmVeyaSaat}
                       onKeyDown={sadeceRakamGiris}
-                      className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-mono font-bold"
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-mono font-bold disabled:opacity-60"
                       required
                     />
                   </div>
@@ -1257,8 +1292,9 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                   <input
                     type="text"
                     name="aciklama"
+                    disabled={bakimKaydediliyor}
                     defaultValue={duzenlenenBakim?.Aciklama || 'Periyodik Bakım, Yağ & Filtre Değişimi'}
-                    className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white"
+                    className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white disabled:opacity-60"
                     required
                   />
                 </div>
@@ -1268,9 +1304,10 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                     <input
                       type="text"
                       name="maliyet"
+                      disabled={bakimKaydediliyor}
                       defaultValue={duzenlenenBakim?.Maliyet ?? 0}
                       onKeyDown={sadeceRakamGiris}
-                      className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-mono"
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-mono disabled:opacity-60"
                     />
                   </div>
                   <div>
@@ -1278,8 +1315,9 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                     <input
                       type="text"
                       name="servis"
+                      disabled={bakimKaydediliyor}
                       defaultValue={duzenlenenBakim?.YapanUstaVeyaServis || 'Yetkili Servis'}
-                      className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white"
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white disabled:opacity-60"
                     />
                   </div>
                 </div>
@@ -1311,6 +1349,7 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                       multiple
                       accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx"
                       onChange={handleBakimDosyaYukle}
+                      disabled={bakimKaydediliyor}
                       className="hidden"
                     />
                   </label>
@@ -1339,7 +1378,8 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                               <button
                                 type="button"
                                 onClick={() => bakimDosyaSil(idx)}
-                                className="text-slate-400 hover:text-red-600"
+                                disabled={bakimKaydediliyor}
+                                className="text-slate-400 hover:text-red-600 disabled:opacity-50"
                                 title="Kaldır"
                               >
                                 <X className="w-3.5 h-3.5" />
@@ -1355,20 +1395,24 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                 <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
                   <button
                     type="button"
+                    disabled={bakimKaydediliyor}
                     onClick={() => {
                       setYeniBakimFormAcik(false);
                       setDuzenlenenBakim(null);
                       setBakimBelgeler([]);
+                      setBakimHataMesaji(null);
                     }}
-                    className="px-3 py-1.5 rounded-lg text-slate-600 hover:bg-slate-200 text-xs font-semibold"
+                    className="px-3 py-1.5 rounded-lg text-slate-600 hover:bg-slate-200 disabled:opacity-50 text-xs font-semibold"
                   >
                     Vazgeç
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm"
+                    disabled={bakimKaydediliyor}
+                    className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-xs font-bold shadow-sm flex items-center gap-1.5"
                   >
-                    {duzenlenenBakim ? 'Güncellemeyi Kaydet' : 'Bakımı Ekle'}
+                    {bakimKaydediliyor && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    <span>{bakimKaydediliyor ? 'Kaydediliyor...' : duzenlenenBakim ? 'Güncellemeyi Kaydet' : 'Bakımı Ekle'}</span>
                   </button>
                 </div>
               </form>
@@ -1378,6 +1422,7 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                   onClick={() => {
                     setDuzenlenenBakim(null);
                     setBakimBelgeler([]);
+                    setBakimHataMesaji(null);
                     setYeniBakimFormAcik(true);
                   }}
                   className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors"
@@ -1409,7 +1454,7 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                           {formatTarihTR(b.BakimTarihi)}
                         </td>
                         <td className="p-2.5 font-bold font-mono">
-                          {b.YapilanKmVeyaSaat.toLocaleString()} {aktifSeciliArac.SaatTakibiMi ? 'Saat' : 'KM'}
+                          {(Number(b.YapilanKmVeyaSaat) || 0).toLocaleString()} {aktifSeciliArac.SaatTakibiMi ? 'Saat' : 'KM'}
                         </td>
                         <td className="p-2.5 font-medium text-slate-700">
                           <div>{b.Aciklama}</div>
@@ -1418,7 +1463,7 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                           )}
                         </td>
                         <td className="p-2.5 font-mono text-slate-900 font-semibold whitespace-nowrap">
-                          {b.Maliyet ? `${b.Maliyet.toLocaleString()} TL` : '-'}
+                          {b.Maliyet != null && !isNaN(Number(b.Maliyet)) && Number(b.Maliyet) > 0 ? `${(Number(b.Maliyet) || 0).toLocaleString()} TL` : '-'}
                         </td>
                         <td className="p-2.5">
                           {b.Belgeler && b.Belgeler.length > 0 ? (

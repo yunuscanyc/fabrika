@@ -39,7 +39,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [ajandaFiltre, setAjandaFiltre] = useState<'hepsi' | 'acik' | 'bugun' | 'gecikmis' | 'tamamlanan'>('hepsi');
   const [togglingId, setTogglingId] = useState<number | null>(null);
   const [doubleClickHintId, setDoubleClickHintId] = useState<number | null>(null);
-  const lastClickRef = useRef<{ id: number; time: number } | null>(null);
+  const clickTrackerRef = useRef<{ id: number; time: number } | null>(null);
+  const lastToggleRef = useRef<{ id: number; time: number } | null>(null);
 
   const gorevler: OzetGorevItem[] = ozet?.gorevListesi || [];
   const acikGorevSayisi = gorevler.filter(g => !g.tamamlandiMi).length;
@@ -56,44 +57,56 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return true; // 'hepsi'
   });
 
-  const handleCircleClick = async (e: React.MouseEvent, g: OzetGorevItem) => {
-    e.stopPropagation();
+  const executeToggle = async (g: OzetGorevItem) => {
     if (!onToggleTamamlandi || togglingId === g.id) return;
-
     const now = Date.now();
-    const last = lastClickRef.current;
-
-    // Çift Tıklama Kontrolü (450ms aralıkla iki tıklama)
-    if (last && last.id === g.id && now - last.time < 450) {
-      lastClickRef.current = null;
-      setDoubleClickHintId(null);
-      setTogglingId(g.id);
-      try {
-        await onToggleTamamlandi(g.id, !g.tamamlandiMi);
-      } finally {
-        setTimeout(() => setTogglingId(null), 300);
-      }
-    } else {
-      // Tek tıklandığında çift tıklama uyarısı ver
-      lastClickRef.current = { id: g.id, time: now };
-      setDoubleClickHintId(g.id);
-      setTimeout(() => {
-        setDoubleClickHintId(prev => (prev === g.id ? null : prev));
-      }, 2000);
+    // 700ms debounce koruması ile çift tetiklenmeyi engelle
+    if (lastToggleRef.current && lastToggleRef.current.id === g.id && now - lastToggleRef.current.time < 700) {
+      return;
     }
-  };
-
-  const handleCircleDoubleClick = async (e: React.MouseEvent, g: OzetGorevItem) => {
-    e.stopPropagation();
-    if (!onToggleTamamlandi || togglingId === g.id) return;
-    lastClickRef.current = null;
+    lastToggleRef.current = { id: g.id, time: now };
+    clickTrackerRef.current = null;
     setDoubleClickHintId(null);
     setTogglingId(g.id);
     try {
       await onToggleTamamlandi(g.id, !g.tamamlandiMi);
     } finally {
-      setTimeout(() => setTogglingId(null), 300);
+      setTimeout(() => setTogglingId(null), 350);
     }
+  };
+
+  const handleCircleClick = async (e: React.MouseEvent, g: OzetGorevItem) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!onToggleTamamlandi || togglingId === g.id) return;
+
+    const now = Date.now();
+
+    // 1. Tarayıcı yerel çift tıklama sayısı
+    if (e.detail === 2) {
+      await executeToggle(g);
+      return;
+    }
+
+    // 2. Çift dokunma/tıklama zamanlama kontrolü (100ms - 500ms arası)
+    const prev = clickTrackerRef.current;
+    if (prev && prev.id === g.id && now - prev.time >= 100 && now - prev.time <= 500) {
+      await executeToggle(g);
+      return;
+    }
+
+    // 3. Tek tıklama: ASLA TAMAMLAMA! Kesinlikle sadece uyarı gösterilir
+    clickTrackerRef.current = { id: g.id, time: now };
+    setDoubleClickHintId(g.id);
+    setTimeout(() => {
+      setDoubleClickHintId(prevId => (prevId === g.id ? null : prevId));
+    }, 2200);
+  };
+
+  const handleCircleDoubleClick = async (e: React.MouseEvent, g: OzetGorevItem) => {
+    e.stopPropagation();
+    e.preventDefault();
+    await executeToggle(g);
   };
   return (
     <div className="space-y-6 pb-20 md:pb-6">
@@ -456,8 +469,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 let statusLabel = 'Planlandı';
 
                 if (g.tamamlandiMi) {
-                  cardStyle = 'bg-slate-50/70 border-slate-200 text-slate-400 opacity-65 hover:opacity-100';
-                  badgeStyle = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                  cardStyle = 'bg-emerald-50/40 border-emerald-200/90 text-slate-700 hover:border-emerald-300';
+                  badgeStyle = 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold';
                   statusLabel = 'Tamamlandı';
                 } else if (isGecikmis) {
                   cardStyle = 'bg-gradient-to-r from-rose-50/90 via-rose-50/40 to-white border-rose-200 hover:border-rose-300 shadow-xs';
@@ -507,8 +520,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                         {/* Çift Tıklama Uyarı Rozeti */}
                         {doubleClickHintId === g.id && (
-                          <div className="absolute top-9 left-0 z-30 whitespace-nowrap bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-lg border border-slate-700 animate-bounce">
-                            👆 Çift tıklayın!
+                          <div className="absolute top-9 left-0 z-30 whitespace-nowrap bg-slate-900 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg shadow-xl border border-slate-700 animate-bounce flex items-center gap-1.5 pointer-events-none">
+                            <span>👆</span>
+                            <span>{g.tamamlandiMi ? 'Açmak için ÇİFT TIKLAYIN' : 'Tamamlamak için ÇİFT TIKLAYIN'}</span>
                           </div>
                         )}
                       </div>
