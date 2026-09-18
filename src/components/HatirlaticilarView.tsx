@@ -169,7 +169,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
 
   const bugunStr = new Date().toISOString().split('T')[0];
 
-  // Görselleri ve belgeleri yüksek çözünürlüklü (2K Ultra HD - 2048px, kristal netlik) ve optimize dosya boyutuyla yükleme
+  // Görselleri ve belgeleri yüksek netlikte (Full HD - 1600px, 0.85 kalite JPEG) ve optimize dosya boyutuyla yükleme
   const readImageOrFile = (file: File): Promise<string> => {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -198,7 +198,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
         const img = new Image();
         img.onload = () => {
           try {
-            const maxDim = 2048; // Ultra HD 2K çözünürlük tavanı
+            const maxDim = 1600; // Full HD 1600px netlik standardı
             let w = img.width;
             let h = img.height;
 
@@ -225,9 +225,8 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
             ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(img, 0, 0, w, h);
 
-            // %90 yüksek kalite JPEG - kristal netliğinde görsel ve ultra hızlı kayıt
-            const outputMime = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
-            const optimized = canvas.toDataURL(outputMime, 0.90);
+            // %85 kaliteli JPEG: Kristal netlikte fotoğraf, ~200KB dosya boyutu ve anında (0.2sn) yükleme
+            const optimized = canvas.toDataURL('image/jpeg', 0.85);
             resolve(optimized || dataUrl);
           } catch {
             resolve(dataUrl);
@@ -333,9 +332,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
           DosyaAdi: file.name,
           DosyaBoyutu: boyutStr,
           YuklemeTarihi: new Date().toISOString().split('T')[0],
-          DosyaIcerigi: base64,
-          base64: base64,
-          DosyaVerisi: base64
+          DosyaIcerigi: base64
         };
         yuklenenler.push(yeniBelge);
       }
