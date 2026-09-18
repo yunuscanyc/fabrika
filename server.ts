@@ -811,6 +811,59 @@ async function isTableColumnBytea(tableName: string, colCandidates: string[]): P
   return false;
 }
 
+async function ensureDocumentTableColumnsText(tableName: string) {
+  if (!tableName) return;
+  try {
+    const cleanName = tableName.replace(/"/g, '');
+    const colInfoRes = await pool.query(`
+      SELECT column_name, data_type, character_maximum_length 
+      FROM information_schema.columns 
+      WHERE table_name = $1 OR table_name = $2
+    `, [cleanName, cleanName.toLowerCase()]);
+
+    for (const row of colInfoRes.rows) {
+      const colName = row.column_name;
+      const lower = colName.toLowerCase();
+      const dt = (row.data_type || '').toLowerCase();
+      
+      const isContentCol = 
+        lower.includes('veri') ||
+        lower.includes('icerik') ||
+        lower.includes('base64') ||
+        lower.includes('content') ||
+        lower.includes('data') ||
+        lower.includes('byte') ||
+        lower.includes('blob') ||
+        lower.includes('yol') ||
+        lower.includes('path') ||
+        lower.includes('url') ||
+        lower.includes('link') ||
+        lower.includes('foto') ||
+        lower.includes('resim') ||
+        lower.includes('gorsel') ||
+        lower === 'dosya' ||
+        lower === 'belge';
+
+      const isNameOrMeta = 
+        lower.includes('adi') || lower.includes('name') || lower.includes('ad_') || lower.endsWith('_ad') ||
+        lower.includes('boyut') || lower.includes('size') ||
+        lower.includes('tarih') || lower.includes('date') || lower.includes('time') ||
+        lower.includes('uzanti') || lower.includes('ext');
+
+      if (isContentCol && !isNameOrMeta && (dt.includes('char') || dt.includes('varchar'))) {
+        try {
+          await pool.query(`ALTER TABLE ${tableName} ALTER COLUMN "${colName}" TYPE TEXT;`);
+          console.log(`[DB SCHEMA] Converted ${tableName}."${colName}" from ${dt} to TEXT.`);
+        } catch (alterE: any) {
+          console.error(`[DB SCHEMA] Could not convert ${tableName}."${colName}" to TEXT:`, alterE.message);
+        }
+      }
+    }
+  } catch (err: any) {
+    console.error('[DB SCHEMA ENSURE ERROR]', err.message);
+  }
+}
+
 function buildDocumentRowData(
   cols: string[],
   foreignKeyCol: string | null,
@@ -883,31 +936,30 @@ function buildDocumentRowData(
       continue;
     }
 
+    // 1. Dosya adı sütunları (Öncelikli olarak dosya adını almalı, görsel içeriğini değil)
     if (
-      lower.includes('veri') ||
-      lower.includes('icerik') ||
-      lower.includes('base64') ||
-      lower.includes('content') ||
-      lower.includes('data') ||
-      lower.includes('byte') ||
-      lower.includes('resim') ||
-      lower.includes('foto') ||
-      lower.includes('gorsel') ||
-      lower.includes('blob') ||
-      lower === 'dosya' ||
-      lower === 'belge'
+      lower.includes('adi') || 
+      lower.includes('name') || 
+      lower.includes('baslik') || 
+      lower.includes('filename') || 
+      lower.includes('file_name') || 
+      lower.endsWith('_ad') || 
+      lower.endsWith('_adi') ||
+      lower === 'ad' ||
+      lower === 'adi' ||
+      lower === 'fotoadi' ||
+      lower === 'resimadi' ||
+      lower === 'dosyaadi'
     ) {
-      rowData[col] = formattedContent ?? '';
-    } else if (lower.includes('uzanti') || lower.includes('ext')) {
-      rowData[col] = fileExt || 'png';
-    } else if (lower.includes('mime') || lower.includes('type') || lower.includes('tur') || lower.includes('tip') || lower.includes('format')) {
-      rowData[col] = mimeType || 'image/png';
-    } else if (lower.includes('ad') || lower.includes('name') || lower.includes('baslik') || lower.includes('filename') || lower.includes('file_name')) {
       rowData[col] = fileName || 'belge.png';
     } else if (lower.includes('boyut') || lower.includes('size')) {
       rowData[col] = fileSize || '0 KB';
     } else if (lower.includes('tarih') || lower.includes('date') || lower.includes('time') || lower.includes('created')) {
       rowData[col] = uploadDate || getBugunStr();
+    } else if (lower.includes('uzanti') || lower.includes('ext')) {
+      rowData[col] = fileExt || 'png';
+    } else if (lower.includes('mime') || lower.includes('type') || lower.includes('tur') || lower.includes('tip') || lower.includes('format')) {
+      rowData[col] = mimeType || 'image/png';
     } else if (lower.includes('kullanici') || lower.includes('kisi') || lower.includes('user') || lower.includes('ekleyen') || lower.includes('yukleyen') || lower.includes('author')) {
       rowData[col] = uploader || 'Sistem';
     } else if (lower.includes('aciklama') || lower.includes('not') || lower.includes('desc')) {
@@ -918,6 +970,28 @@ function buildDocumentRowData(
       } else {
         rowData[col] = '';
       }
+    } else if (
+      lower.includes('veri') ||
+      lower.includes('icerik') ||
+      lower.includes('base64') ||
+      lower.includes('content') ||
+      lower.includes('data') ||
+      lower.includes('byte') ||
+      lower.includes('resim') ||
+      lower.includes('foto') ||
+      lower.includes('gorsel') ||
+      lower.includes('blob') ||
+      lower.includes('yol') ||
+      lower.includes('path') ||
+      lower.includes('url') ||
+      lower.includes('link') ||
+      lower.includes('dosya') ||
+      lower.includes('belge') ||
+      lower.includes('file') ||
+      lower.includes('img') ||
+      lower.includes('image')
+    ) {
+      rowData[col] = formattedContent ?? '';
     } else {
       rowData[col] = '';
     }
@@ -1323,6 +1397,7 @@ async function saveHatirlaticiBelgelerToDb(hatirlaticiId: number, belgeler: any[
     return;
   }
   try {
+    await ensureDocumentTableColumnsText(detectedTables.hatirlaticiBelgeler);
     const cols = await getTableColumns(detectedTables.hatirlaticiBelgeler);
     const mapCol = (candidates: string[]) => cols.find(c => candidates.some(cand => cand.toLowerCase() === c.toLowerCase()));
     const idCol = mapCol(['HatirlaticiId', 'GorevId', 'hatirlatici_id', 'gorev_id', 'id']) || 'HatirlaticiId';
@@ -1353,7 +1428,19 @@ async function saveHatirlaticiBelgelerToDb(hatirlaticiId: number, belgeler: any[
           INSERT INTO ${detectedTables.hatirlaticiBelgeler} (${keys.map(k => `"${k}"`).join(', ')})
           VALUES (${placeholders})
         `;
-        await pool.query(query, keys.map(k => rowData[k]));
+        try {
+          await pool.query(query, keys.map(k => rowData[k]));
+        } catch (insErr: any) {
+          console.error('[DB SAVE HATIRLATICI BELGE ROW RETRY]', insErr.message);
+          if (insErr.message && (insErr.message.includes('value too long') || insErr.message.includes('varying') || insErr.message.includes('character varying'))) {
+            for (const k of keys) {
+              try {
+                await pool.query(`ALTER TABLE ${detectedTables.hatirlaticiBelgeler} ALTER COLUMN "${k}" TYPE TEXT;`);
+              } catch (e) {}
+            }
+            await pool.query(query, keys.map(k => rowData[k]));
+          }
+        }
       }
     }
 
@@ -3159,8 +3246,19 @@ async function getHatirlaticilarList(): Promise<any[]> {
                 };
               });
 
+            // Eğer DB'den gelen belgeler boşsa veya içerikleri yoksa, hafızadaki (memHatirlaticilar) zengin veriden eşleştir
+            const memMatch = memHatirlaticilar.find(m => Number(m.Id) === Number(h.Id));
+            if (memMatch && Array.isArray(memMatch.Belgeler) && memMatch.Belgeler.length > 0) {
+              const hasValidDbContent = hBelgeler.some(b => b.DosyaIcerigi && b.DosyaIcerigi.length > 20);
+              if (!hasValidDbContent) {
+                h.Belgeler = memMatch.Belgeler;
+                h.FotoSayisi = memMatch.Belgeler.length;
+                return h;
+              }
+            }
+
             // Eğer ilişkili tabloda belge yoksa fakat ana tabloda doğrudan bir görsel alanı bulunmuşsa
-            if (hBelgeler.length === 0 && h._directPhoto) {
+            if (hBelgeler.length === 0 && h._directPhoto && h._directPhoto.length > 20) {
               hBelgeler.push({
                 BelgeId: 0,
                 HatirlaticiId: h.Id,
@@ -3176,7 +3274,7 @@ async function getHatirlaticilarList(): Promise<any[]> {
             return {
               ...h,
               Belgeler: hBelgeler,
-              FotoSayisi: hBelgeler.length
+              FotoSayisi: hBelgeler.length || h.FotoSayisi || 0
             };
           });
         } catch (belgeErr: any) {
@@ -3184,8 +3282,16 @@ async function getHatirlaticilarList(): Promise<any[]> {
         }
       } else {
         hatirlaticilar = hatirlaticilar.map(h => {
+          const memMatch = memHatirlaticilar.find(m => Number(m.Id) === Number(h.Id));
+          if (memMatch && Array.isArray(memMatch.Belgeler) && memMatch.Belgeler.length > 0) {
+            return {
+              ...h,
+              Belgeler: memMatch.Belgeler,
+              FotoSayisi: memMatch.Belgeler.length
+            };
+          }
           const hBelgeler = [];
-          if (h._directPhoto) {
+          if (h._directPhoto && h._directPhoto.length > 20) {
             hBelgeler.push({
               BelgeId: 0,
               HatirlaticiId: h.Id,
@@ -3200,7 +3306,7 @@ async function getHatirlaticilarList(): Promise<any[]> {
           return {
             ...h,
             Belgeler: hBelgeler,
-            FotoSayisi: hBelgeler.length
+            FotoSayisi: hBelgeler.length || h.FotoSayisi || 0
           };
         });
       }

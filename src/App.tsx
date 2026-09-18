@@ -486,10 +486,7 @@ export default function App() {
     });
 
     try {
-      const existing = hatirlaticilar.find(h => h.Id === id);
-      const payload = existing
-        ? { ...existing, TamamlandiMi: tamamlandi }
-        : { TamamlandiMi: tamamlandi };
+      const payload = { TamamlandiMi: tamamlandi };
 
       const res = await fetch(`/api/hatirlaticilar/${id}`, {
         method: 'PUT',
