@@ -442,11 +442,17 @@ export default function App() {
   // Hatırlatıcı Ekle
   const handleAddHatirlatici = async (h: Partial<Hatirlatici>): Promise<boolean> => {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000);
+
       const res = await fetch('/api/hatirlaticilar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(h),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
+
       if (!res.ok) {
         if (res.status === 413) {
           throw new Error('Yüklenen görseller Nginx/Sunucu yükleme sınırını aştı (413 Request Entity Too Large). Nginx yapılandırma dosyanıza (nginx.conf) "client_max_body_size 100M;" ekleyip "sudo nginx -s reload" komutuyla kotayı artırabilirsiniz.');
@@ -458,7 +464,10 @@ export default function App() {
       setHatirlaticilar(prev => [yeni, ...prev]);
       fetch('/api/ozet').then(r => r.json()).then(setOzet);
       return true;
-    } catch (err) {
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        throw new Error('Kayıt işlemi zaman aşımına uğradı. Lütfen internet bağlantınızı kontrol edip tekrar deneyin.');
+      }
       console.error('Hatırlatıcı ekleme hatası:', err);
       throw err;
     }
@@ -511,11 +520,17 @@ export default function App() {
   // Hatırlatıcı Tüm Alanları Güncelle
   const handleUpdateHatirlatici = async (id: number, fields: Partial<Hatirlatici>) => {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000);
+
       const res = await fetch(`/api/hatirlaticilar/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(fields),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
+
       if (!res.ok) {
         if (res.status === 413) {
           throw new Error('Yüklenen görseller Nginx/Sunucu yükleme sınırını aştı (413 Request Entity Too Large). Nginx yapılandırma dosyanıza (nginx.conf) "client_max_body_size 100M;" ekleyip "sudo nginx -s reload" komutuyla kotayı artırabilirsiniz.');
@@ -529,7 +544,10 @@ export default function App() {
       );
       fetch('/api/ozet').then(r => r.json()).then(setOzet);
       return guncellenen;
-    } catch (err) {
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        throw new Error('Güncelleme işlemi zaman aşımına uğradı. Lütfen internet bağlantınızı kontrol edip tekrar deneyin.');
+      }
       console.error('Hatırlatıcı güncelleme hatası:', err);
       throw err;
     }

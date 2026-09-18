@@ -169,7 +169,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
 
   const bugunStr = new Date().toISOString().split('T')[0];
 
-  // Görselleri ve belgeleri tam orijinal kalitesinde yükleme (Hiçbir kalite düşürme / sıkıştırma yapılmaz)
+  // Görselleri ve belgeleri yüksek çözünürlüklü (2K Ultra HD - 2048px, kristal netlik) ve optimize dosya boyutuyla yükleme
   const readImageOrFile = (file: File): Promise<string> => {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -180,7 +180,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
           return;
         }
 
-        // Windows/tarayıcı MIME tipi boş veya application/octet-stream ise dosya uzantısına göre data-uri düzelt
+        // Windows/tarayıcı MIME tipi düzeltme
         if (dataUrl.startsWith('data:application/octet-stream') || dataUrl.startsWith('data:;')) {
           const ext = file.name.split('.').pop()?.toLowerCase() || '';
           if (['jpg', 'jpeg'].includes(ext)) dataUrl = dataUrl.replace(/^data:[^;]*/, 'data:image/jpeg');
@@ -189,7 +189,54 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
           else if (['gif'].includes(ext)) dataUrl = dataUrl.replace(/^data:[^;]*/, 'data:image/gif');
         }
 
-        resolve(dataUrl);
+        const isImage = file.type.startsWith('image/') || /\.(jpe?g|png|webp|bmp)$/i.test(file.name);
+        if (!isImage) {
+          resolve(dataUrl);
+          return;
+        }
+
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const maxDim = 2048; // Ultra HD 2K çözünürlük tavanı
+            let w = img.width;
+            let h = img.height;
+
+            if (w > maxDim || h > maxDim) {
+              if (w > h) {
+                h = Math.round((h * maxDim) / w);
+                w = maxDim;
+              } else {
+                w = Math.round((w * maxDim) / h);
+                h = maxDim;
+              }
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              resolve(dataUrl);
+              return;
+            }
+
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, w, h);
+
+            // %90 yüksek kalite JPEG - kristal netliğinde görsel ve ultra hızlı kayıt
+            const outputMime = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+            const optimized = canvas.toDataURL(outputMime, 0.90);
+            resolve(optimized || dataUrl);
+          } catch {
+            resolve(dataUrl);
+          }
+        };
+        img.onerror = () => {
+          resolve(dataUrl);
+        };
+        img.src = dataUrl;
       };
       reader.onerror = () => resolve('');
       reader.readAsDataURL(file);

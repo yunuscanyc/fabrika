@@ -811,8 +811,10 @@ async function isTableColumnBytea(tableName: string, colCandidates: string[]): P
   return false;
 }
 
+const ensuredTablesSet = new Set<string>();
+
 async function ensureDocumentTableColumnsText(tableName: string) {
-  if (!tableName) return;
+  if (!tableName || ensuredTablesSet.has(tableName)) return;
   try {
     const cleanName = tableName.replace(/"/g, '');
     const colInfoRes = await pool.query(`
@@ -859,6 +861,7 @@ async function ensureDocumentTableColumnsText(tableName: string) {
         }
       }
     }
+    ensuredTablesSet.add(tableName);
   } catch (err: any) {
     console.error('[DB SCHEMA ENSURE ERROR]', err.message);
   }
