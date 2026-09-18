@@ -449,7 +449,7 @@ export default function App() {
       });
       if (!res.ok) {
         if (res.status === 413) {
-          throw new Error('Yüklenen görseller sunucu/Nginx boyut sınırını aştı (413 Payload Too Large). Görseller otomatik optimize edildi; lütfen tekrar deneyin veya Nginx ayarlarında client_max_body_size değerini artırın.');
+          throw new Error('Yüklenen görseller Nginx/Sunucu yükleme sınırını aştı (413 Request Entity Too Large). Nginx yapılandırma dosyanıza (nginx.conf) "client_max_body_size 100M;" ekleyip "sudo nginx -s reload" komutuyla kotayı artırabilirsiniz.');
         }
         const txt = await res.text();
         throw new Error(`Sunucu Hatası (${res.status}): ${txt || res.statusText}`);
@@ -518,7 +518,7 @@ export default function App() {
       });
       if (!res.ok) {
         if (res.status === 413) {
-          throw new Error('Yüklenen görseller sunucu/Nginx boyut sınırını aştı (413 Payload Too Large). Görseller otomatik optimize edildi; lütfen tekrar deneyin veya Nginx ayarlarında client_max_body_size değerini artırın.');
+          throw new Error('Yüklenen görseller Nginx/Sunucu yükleme sınırını aştı (413 Request Entity Too Large). Nginx yapılandırma dosyanıza (nginx.conf) "client_max_body_size 100M;" ekleyip "sudo nginx -s reload" komutuyla kotayı artırabilirsiniz.');
         }
         const txt = await res.text();
         throw new Error(`Sunucu Hatası (${res.status}): ${txt || res.statusText}`);

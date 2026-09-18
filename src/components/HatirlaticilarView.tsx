@@ -169,8 +169,8 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
 
   const bugunStr = new Date().toISOString().split('T')[0];
 
-  // Görsel Sıkıştırma Fonksiyonu (Nginx 413 Request Entity Too Large hatasını önlemek için optimize boyutlama)
-  const compressImageFile = (file: File, maxDim = 800, quality = 0.68): Promise<string> => {
+  // Görselleri ve belgeleri tam orijinal kalitesinde yükleme (Hiçbir kalite düşürme / sıkıştırma yapılmaz)
+  const readImageOrFile = (file: File): Promise<string> => {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -189,73 +189,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
           else if (['gif'].includes(ext)) dataUrl = dataUrl.replace(/^data:[^;]*/, 'data:image/gif');
         }
 
-        const isImage = file.type.startsWith('image/') || /\.(jpe?g|png|webp|bmp|gif)$/i.test(file.name);
-        if (!isImage) {
-          resolve(dataUrl);
-          return;
-        }
-
-        const img = new Image();
-        img.onload = () => {
-          try {
-            const scaleDims = (targetMax: number) => {
-              let w = img.width;
-              let h = img.height;
-              if (w > h) {
-                if (w > targetMax) {
-                  h = Math.round((h * targetMax) / w);
-                  w = targetMax;
-                }
-              } else {
-                if (h > targetMax) {
-                  w = Math.round((w * targetMax) / h);
-                  h = targetMax;
-                }
-              }
-              return { w, h };
-            };
-
-            let { w, h } = scaleDims(maxDim);
-            const canvas = document.createElement('canvas');
-            canvas.width = w;
-            canvas.height = h;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) {
-              resolve(dataUrl);
-              return;
-            }
-            ctx.drawImage(img, 0, 0, w, h);
-            let compressed = canvas.toDataURL('image/jpeg', quality);
-
-            // Nginx 1MB sınırına takılmamak için (her görsel azami ~150-200KB base64 olmalı)
-            // Eğer çıktı 220KB'dan büyükse kademeli olarak yeniden küçült
-            if (compressed.length > 220000) {
-              const rescaled = scaleDims(650);
-              canvas.width = rescaled.w;
-              canvas.height = rescaled.h;
-              ctx.clearRect(0, 0, rescaled.w, rescaled.h);
-              ctx.drawImage(img, 0, 0, rescaled.w, rescaled.h);
-              compressed = canvas.toDataURL('image/jpeg', 0.58);
-            }
-
-            if (compressed.length > 180000) {
-              const rescaled = scaleDims(500);
-              canvas.width = rescaled.w;
-              canvas.height = rescaled.h;
-              ctx.clearRect(0, 0, rescaled.w, rescaled.h);
-              ctx.drawImage(img, 0, 0, rescaled.w, rescaled.h);
-              compressed = canvas.toDataURL('image/jpeg', 0.52);
-            }
-
-            resolve(compressed || dataUrl);
-          } catch {
-            resolve(dataUrl);
-          }
-        };
-        img.onerror = () => {
-          resolve(dataUrl);
-        };
-        img.src = dataUrl;
+        resolve(dataUrl);
       };
       reader.onerror = () => resolve('');
       reader.readAsDataURL(file);
@@ -324,7 +258,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
     return a.Tarih.localeCompare(b.Tarih);
   });
 
-  // Çoklu Dosya Yükleme (Otomatik Optimizasyonlu Base64) Helper
+  // Çoklu Dosya Yükleme (Tam Orijinal Çözünürlük & Kalite)
   const handleDosyaYukle = async (e: React.ChangeEvent<HTMLInputElement>, isEditMode: boolean) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -341,14 +275,12 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
       const yuklenenler: any[] = [];
 
       for (const file of fileList) {
-        const base64 = await compressImageFile(file, 800, 0.68);
+        const base64 = await readImageOrFile(file);
         if (!base64) continue;
 
-        // Gerçek taban boyutu hesaplama
-        const approxBytes = Math.round((base64.length * 3) / 4);
-        const boyutStr = approxBytes > 1024 * 1024 
-          ? (approxBytes / (1024 * 1024)).toFixed(1) + ' MB' 
-          : (approxBytes / 1024).toFixed(1) + ' KB';
+        const boyutStr = file.size > 1024 * 1024 
+          ? (file.size / (1024 * 1024)).toFixed(2) + ' MB' 
+          : (file.size / 1024).toFixed(1) + ' KB';
 
         const yeniBelge = {
           DosyaAdi: file.name,
@@ -369,7 +301,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
         }
       }
     } catch (err: any) {
-      console.error('Dosya yükleme/sıkıştırma hatası:', err);
+      console.error('Dosya yükleme hatası:', err);
     } finally {
       setIsProcessingFiles(false);
       e.target.value = '';
