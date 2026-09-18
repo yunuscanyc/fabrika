@@ -3,7 +3,7 @@ import { Lock, Key, Shield, Eye, EyeOff, CheckCircle2, AlertCircle, ArrowRight, 
 import { PWAInstallPrompt } from './PWAInstallPrompt';
 
 interface LoginScreenProps {
-  onLoginSuccess: (token: string, autoLockMinutes: number) => void;
+  onLoginSuccess: (token: string, autoLockMinutes: number, role?: 'admin' | 'ustabasi') => void;
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
@@ -64,14 +64,15 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
       const data = await res.json();
       if (res.ok && data.success) {
-        // Sekme kapatıldığında oturumun otomatik sonlanması için sadece sessionStorage kullanıyoruz
+        const userRole: 'admin' | 'ustabasi' = data.role === 'ustabasi' ? 'ustabasi' : 'admin';
         localStorage.removeItem('rende_auth_token');
         sessionStorage.setItem('rende_auth_token', data.token);
+        sessionStorage.setItem('rende_user_role', userRole);
         sessionStorage.setItem('rende_last_active', Date.now().toString());
         if (data.autoLockMinutes !== undefined) {
           localStorage.setItem('rende_autolock_min', data.autoLockMinutes.toString());
         }
-        onLoginSuccess(data.token, data.autoLockMinutes || 15);
+        onLoginSuccess(data.token, data.autoLockMinutes || 15, userRole);
       } else {
         setError(data.error || 'Parola veya PIN hatalı! Lütfen tekrar deneyiniz.');
       }

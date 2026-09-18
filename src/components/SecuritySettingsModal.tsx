@@ -23,6 +23,8 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
+  const [newUstabasiPin, setNewUstabasiPin] = useState('');
+  const [confirmUstabasiPin, setConfirmUstabasiPin] = useState('');
   const [autoLockMinutes, setAutoLockMinutes] = useState<number>(15);
   const [isProtectionEnabled, setIsProtectionEnabled] = useState<boolean>(true);
 
@@ -35,6 +37,8 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
       setConfirmPassword('');
       setNewPin('');
       setConfirmPin('');
+      setNewUstabasiPin('');
+      setConfirmUstabasiPin('');
       setFetching(true);
 
       fetch('/api/auth/status')
@@ -74,11 +78,22 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
 
     if (newPin) {
       if (!/^\d{4,8}$/.test(newPin.trim())) {
-        setError('Hızlı PIN sadece 4 ile 8 hane arasındaki rakamlardan oluşmalıdır.');
+        setError('Yönetici Hızlı PIN sadece 4 ile 8 hane arasındaki rakamlardan oluşmalıdır.');
         return;
       }
       if (newPin !== confirmPin) {
-        setError('Belirlediğiniz yeni PIN kodları birbiriyle eşleşmiyor.');
+        setError('Belirlediğiniz yeni Yönetici PIN kodları birbiriyle eşleşmiyor.');
+        return;
+      }
+    }
+
+    if (newUstabasiPin) {
+      if (!/^\d{4,8}$/.test(newUstabasiPin.trim())) {
+        setError('Ustabaşı PIN sadece 4 ile 8 hane arasındaki rakamlardan oluşmalıdır.');
+        return;
+      }
+      if (newUstabasiPin !== confirmUstabasiPin) {
+        setError('Belirlediğiniz yeni Ustabaşı PIN kodları birbiriyle eşleşmiyor.');
         return;
       }
     }
@@ -93,6 +108,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
           currentPassword: currentPassword.trim(),
           newPassword: newPassword.trim() || undefined,
           newPin: newPin.trim() || undefined,
+          newUstabasiPin: newUstabasiPin.trim() || undefined,
           autoLockMinutes: Number(autoLockMinutes),
           isProtectionEnabled
         })
@@ -110,6 +126,8 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
         setConfirmPassword('');
         setNewPin('');
         setConfirmPin('');
+        setNewUstabasiPin('');
+        setConfirmUstabasiPin('');
         setTimeout(() => {
           onClose();
         }, 1200);
@@ -203,22 +221,22 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                 </div>
               </div>
 
-              {/* 2. Hızlı PIN Tanımlama (Tamamen Maskeli / Güvenli) */}
+              {/* 2. Yönetici Hızlı PIN Tanımlama (Tamamen Maskeli / Güvenli) */}
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
                 <div>
                   <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                     <Hash className="w-4 h-4 text-blue-600" />
-                    Yeni Hızlı Kilit PIN Kodu (4-8 Hane)
+                    Yönetici / Tam Yetkili Hızlı PIN (4-8 Hane)
                   </label>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    PIN kodu ekranda daima gizli (noktalı) olarak saklanır.
+                    Tüm fabrikaya, şantiyelere, araçlara ve sipariş kilitleme işlemlerine tam erişim sağlar.
                   </p>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                      Yeni PIN
+                      Yeni Yönetici PIN
                     </label>
                     <input
                       type="password"
@@ -227,14 +245,14 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                       autoComplete="new-password"
                       value={newPin}
                       onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
-                      placeholder="Yeni PIN girin (••••)"
+                      placeholder="Yönetici PIN girin (••••)"
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono tracking-widest text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
 
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                      Yeni PIN Tekrar
+                      Yönetici PIN Tekrar
                     </label>
                     <input
                       type="password"
@@ -243,8 +261,55 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                       autoComplete="new-password"
                       value={confirmPin}
                       onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
-                      placeholder="PIN tekrar girin (••••)"
+                      placeholder="Yönetici PIN tekrar (••••)"
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono tracking-widest text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. Ustabaşı Özel PIN Kodu (Sadece Sipariş Girişi) */}
+              <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200 space-y-2.5">
+                <div>
+                  <label className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                    <Lock className="w-4 h-4 text-amber-700" />
+                    Ustabaşı Özel PIN Kodu (Sadece Sipariş Girişi)
+                  </label>
+                  <p className="text-[11px] text-amber-800/80 mt-0.5">
+                    Ustabaşı bu PIN ile giriş yaptığında <strong>yalnızca Sipariş Giriş ve Takip ekranını</strong> görür. Fabrika genel yönetimine ve diğer modüllere erişemez.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-amber-900 mb-1">
+                      Yeni Ustabaşı PIN (4-8 Hane)
+                    </label>
+                    <input
+                      type="password"
+                      inputMode="numeric"
+                      maxLength={8}
+                      autoComplete="new-password"
+                      value={newUstabasiPin}
+                      onChange={(e) => setNewUstabasiPin(e.target.value.replace(/\D/g, ''))}
+                      placeholder="Ustabaşı PIN girin (••••)"
+                      className="w-full px-3 py-2 bg-white border border-amber-300 rounded-lg text-xs font-mono tracking-widest text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-amber-900 mb-1">
+                      Ustabaşı PIN Tekrar
+                    </label>
+                    <input
+                      type="password"
+                      inputMode="numeric"
+                      maxLength={8}
+                      autoComplete="new-password"
+                      value={confirmUstabasiPin}
+                      onChange={(e) => setConfirmUstabasiPin(e.target.value.replace(/\D/g, ''))}
+                      placeholder="Ustabaşı PIN tekrar (••••)"
+                      className="w-full px-3 py-2 bg-white border border-amber-300 rounded-lg text-xs font-mono tracking-widest text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
                     />
                   </div>
                 </div>

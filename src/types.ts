@@ -340,6 +340,7 @@ export interface OzetIstatistikler {
   isgUyarisiSayisi?: number;
   bugunBitenGorevler: number;
   yaklasanGorevler: number;
+  bekleyenSiparisSayisi?: number;
   bugunGorevListesi?: string[];
   gorevListesi?: OzetGorevItem[];
   bakimUyarilari: BakimUyarisi[];
@@ -423,6 +424,59 @@ export interface SantiyeGunlukDurum {
   KayitZamani?: string; // ISO tarih veya saat
 }
 
+export interface MalzemeSiparisiBelge {
+  BelgeId?: number;
+  SiparisId?: number;
+  DosyaAdi: string;
+  DosyaBoyutu: string;
+  YuklemeTarihi: string;
+  DosyaIcerigi: string;
+}
+
+export type MalzemeSiparisBelgesi = MalzemeSiparisiBelge;
+
+export type SiparisDurumu = 
+  | 'Bekliyor' 
+  | 'Incelemede' 
+  | 'FiyatAliniyor'
+  | 'SiparisVerildi' 
+  | 'KismiGeldi'
+  | 'FabrikayaGeldi' 
+  | 'Iptal';
+
+export type SiparisAciliyet = 'Normal' | 'Acil' | 'CokAcil';
+
+export interface MalzemeSiparisi {
+  Id: number;
+  SiparisNo: string;
+  ProjeAdi: string;
+  Kategori: string;
+  MalzemeAdi: string;
+  Miktar: number;
+  Birim: string;
+  Olculer?: string;
+  Aciklama?: string;
+  Aciliyet: SiparisAciliyet;
+  TerminTarihi?: string;
+  Tarih: string;
+  TalepEden: string;
+  Durum: SiparisDurumu;
+  KilitliMi: boolean;
+  KilitleyenKisi?: string;
+  KilitTarihi?: string;
+  KilitNotu?: string;
+  TedarikciFirma?: string;
+  SiparisTarihi?: string;
+  TahminiTutar?: number | null;
+  FaturaIrsaliyeNo?: string;
+  SatinalmaNotu?: string;
+  Belgeler: MalzemeSiparisiBelge[];
+  FotoSayisi?: number;
+  OkunduMu: boolean;
+  OlusturanRol?: 'ustabasi' | 'admin';
+  GuncellemeTarihi?: string;
+}
+
 export interface SantiyeMontajGrubu {
   Id: number | string;
   SantiyeAdi: string; // İş / Şantiye adı (örn. Kadıköy Villa Montajı)
@@ -438,14 +492,12 @@ export interface SantiyeMontajGrubu {
   Durum: 'Aktif' | 'Tamamlandi'; // Aktif şantiyeler ve arşiv
   Aciklama?: string;
   Ekip: SantiyeEkipUyesi[];
-  // Tarih bazlı yoklama kayıtları: { [Tarih: string]: { [UyeId: string]: boolean } }
-  // true = Geldi, false = Gelmedi
   YoklamaKayitlari: Record<string, Record<string, boolean>>;
-  // Tarih ve personel bazlı notlar: { [Tarih: string]: { [UyeId: string]: string } }
   YoklamaNotlari?: Record<string, Record<string, string>>;
-  // Gün gün şantiye durumu ve saha günlüğü kayıtları: { [Tarih: string]: SantiyeGunlukDurum }
   GunlukDurumlar?: Record<string, SantiyeGunlukDurum>;
   OlusturmaTarihi?: string;
   ArsivlenmeTarihi?: string;
 }
+
+
 

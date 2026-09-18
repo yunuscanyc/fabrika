@@ -90,6 +90,8 @@ let detectedTables: {
   yevmiyeciler?: string;
   projePersoneller?: string;
   sistemGuvenlik?: string;
+  malzemeSiparisleri?: string;
+  malzemeSiparisBelgeler?: string;
 } = {};
 
 // Nesnelerden büyük/küçük harf duyarsız ve alternatif alan isimlerini okuma
@@ -1882,7 +1884,9 @@ async function checkDbConnection() {
         'MakineBakimFotograflari', 'makine_bakim_fotograflari'
       ]),
       yevmiyeciler: matchTable(['Yevmiyeciler', 'yevmiyeciler', 'DisCalisanlar', 'dis_calisanlar']),
-      projePersoneller: matchTable(['ProjePersonelleri', 'proje_personelleri', 'ProjePersoneller', 'proje_personeller', 'ProjeKadrosu', 'proje_kadrosu'])
+      projePersoneller: matchTable(['ProjePersonelleri', 'proje_personelleri', 'ProjePersoneller', 'proje_personeller', 'ProjeKadrosu', 'proje_kadrosu']),
+      malzemeSiparisleri: matchTable(['MalzemeSiparisleri', 'malzeme_siparisleri', 'Siparisler', 'siparisler']),
+      malzemeSiparisBelgeler: matchTable(['MalzemeSiparisBelgeleri', 'malzeme_siparis_belgeleri', 'SiparisBelgeleri', 'siparis_belgeleri'])
     };
 
     if (!detectedTables.projeBelgeler) {
@@ -2536,6 +2540,7 @@ async function checkDbConnection() {
             "Id" INT PRIMARY KEY DEFAULT 1,
             "MasterPassword" VARCHAR(255) DEFAULT 'rende2026',
             "QuickPin" VARCHAR(50) DEFAULT '1234',
+            "UstabasiPin" VARCHAR(50) DEFAULT '1923',
             "AutoLockMinutes" INT DEFAULT 15,
             "IsProtectionEnabled" BOOLEAN DEFAULT true
           )
@@ -2544,6 +2549,64 @@ async function checkDbConnection() {
         detectedTables.sistemGuvenlik = '"SistemGuvenlik"';
       } catch (createErr: any) {
         console.error('[DB] "SistemGuvenlik" tablosu oluşturulamadı:', createErr.message);
+      }
+    }
+
+    if (!detectedTables.malzemeSiparisleri) {
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS "MalzemeSiparisleri" (
+            "Id" SERIAL PRIMARY KEY,
+            "SiparisNo" VARCHAR(50),
+            "ProjeAdi" VARCHAR(255),
+            "Kategori" VARCHAR(100),
+            "MalzemeAdi" VARCHAR(255),
+            "Miktar" NUMERIC,
+            "Birim" VARCHAR(50),
+            "Olculer" TEXT,
+            "Aciklama" TEXT,
+            "Aciliyet" VARCHAR(50) DEFAULT 'Normal',
+            "TerminTarihi" VARCHAR(50),
+            "Tarih" VARCHAR(50),
+            "TalepEden" VARCHAR(100),
+            "Durum" VARCHAR(50) DEFAULT 'Bekliyor',
+            "KilitliMi" BOOLEAN DEFAULT false,
+            "KilitleyenKisi" VARCHAR(100),
+            "KilitTarihi" VARCHAR(50),
+            "KilitNotu" TEXT,
+            "TedarikciFirma" VARCHAR(255),
+            "SiparisTarihi" VARCHAR(50),
+            "TahminiTutar" NUMERIC,
+            "FaturaIrsaliyeNo" VARCHAR(100),
+            "SatinalmaNotu" TEXT,
+            "OkunduMu" BOOLEAN DEFAULT false,
+            "OlusturanRol" VARCHAR(50) DEFAULT 'ustabasi',
+            "GuncellemeTarihi" VARCHAR(50)
+          )
+        `);
+        console.log('[DB] "MalzemeSiparisleri" tablosu hazırlandı.');
+        detectedTables.malzemeSiparisleri = '"MalzemeSiparisleri"';
+      } catch (createErr: any) {
+        console.error('[DB] "MalzemeSiparisleri" tablosu oluşturulamadı:', createErr.message);
+      }
+    }
+
+    if (!detectedTables.malzemeSiparisBelgeler) {
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS "MalzemeSiparisBelgeleri" (
+            "BelgeId" SERIAL PRIMARY KEY,
+            "SiparisId" INT NOT NULL,
+            "DosyaAdi" VARCHAR(255) NOT NULL,
+            "DosyaBoyutu" VARCHAR(50) NOT NULL,
+            "YuklemeTarihi" VARCHAR(50) NOT NULL,
+            "DosyaIcerigi" TEXT NOT NULL
+          )
+        `);
+        console.log('[DB] "MalzemeSiparisBelgeleri" tablosu hazırlandı.');
+        detectedTables.malzemeSiparisBelgeler = '"MalzemeSiparisBelgeleri"';
+      } catch (createErr: any) {
+        console.error('[DB] "MalzemeSiparisBelgeleri" tablosu oluşturulamadı:', createErr.message);
       }
     }
 
@@ -2766,6 +2829,7 @@ let memHatirlaticilar: any[] = [
 // Kalıcı Depolama (Disk Persistence) - Sunucu yeniden başladığında tamamlanan ve yeni görevlerin kaybolmasını önler
 const DATA_DIR = path.join(process.cwd(), 'data');
 const HATIRLATICI_FILE = path.join(DATA_DIR, 'mem_hatirlaticilar.json');
+const MALZEME_SIPARIS_FILE = path.join(DATA_DIR, 'mem_malzeme_siparisleri.json');
 
 function ensureDataDir() {
   try {
@@ -2799,6 +2863,160 @@ function loadMemHatirlaticilar(): any[] | null {
     console.error('[LOAD HATIRLATICILAR FILE ERROR]', e.message);
   }
   return null;
+}
+
+let memMalzemeSiparisleri: any[] = [
+  {
+    Id: 1,
+    SiparisNo: 'SIP-2026-001',
+    ProjeAdi: 'Kaya Belek Otel - Lobi & Resepsiyon Mobilyaları',
+    Kategori: 'Cam & Ayna',
+    MalzemeAdi: '6mm Füme Temperli Reflekte Cam',
+    Miktar: 8,
+    Birim: 'Adet',
+    Olculer: '1450 x 820 x 6 mm (Düz Rodajlı, 4 Köşe 5mm Kırma)',
+    Aciklama: 'Resepsiyon arkası pirinç çıtalı bölme panolarına takılacak. Ölçüler net imalat ölçüsüdür, rodajda tolerans +0/-1mm olmalı.',
+    Aciliyet: 'Acil',
+    TerminTarihi: '2026-09-24',
+    Tarih: '2026-09-17',
+    TalepEden: 'Ahşap Atölye / Ustabaşı',
+    Durum: 'SiparisVerildi',
+    KilitliMi: true,
+    KilitleyenKisi: 'Satınalma / Yönetici',
+    KilitTarihi: '2026-09-17 14:30',
+    KilitNotu: 'Şişecam yetkili bayisine sipariş geçildi. İrsaliye bekleniyor.',
+    TedarikciFirma: 'Akdeniz Cam Sanayi A.Ş.',
+    SiparisTarihi: '2026-09-17',
+    TahminiTutar: 14500,
+    FaturaIrsaliyeNo: 'IRS-2026/8941',
+    SatinalmaNotu: 'Termin sözü 23 Eylül Çarşamba öğleden önce teslim.',
+    Belgeler: [],
+    FotoSayisi: 0,
+    OkunduMu: true,
+    OlusturanRol: 'ustabasi',
+    GuncellemeTarihi: '2026-09-17'
+  },
+  {
+    Id: 2,
+    SiparisNo: 'SIP-2026-002',
+    ProjeAdi: 'Bodrum Loft Villa - Mutfak & Ada Tezgahı',
+    Kategori: 'Mobilya Aksesuarı & Hırdavat',
+    MalzemeAdi: 'Blum Tandembox Antrasit Çekmece Rayı (500mm / 40kg)',
+    Miktar: 16,
+    Birim: 'Takım',
+    Olculer: '500 mm Derinlik / 40 Kg Taşıma / Frenli Bas-Aç Tip-On',
+    Aciklama: 'Ada mutfak çekmeceleri için çift cidar antrasit gövde ve iç bölücü raylar dahil takım olarak sipariş edilecek.',
+    Aciliyet: 'Normal',
+    TerminTarihi: '2026-09-26',
+    Tarih: '2026-09-18',
+    TalepEden: 'Montaj & İmalat Ustabaşı',
+    Durum: 'FiyatAliniyor',
+    KilitliMi: false,
+    KilitleyenKisi: '',
+    KilitTarihi: '',
+    KilitNotu: '',
+    TedarikciFirma: 'Häfele Türkiye Yetkili Dağıtıcı',
+    SiparisTarihi: '',
+    TahminiTutar: 22800,
+    FaturaIrsaliyeNo: '',
+    SatinalmaNotu: '3 ayrı toptancıdan teklif istendi, gün içinde karar verilecek.',
+    Belgeler: [],
+    FotoSayisi: 0,
+    OkunduMu: false,
+    OlusturanRol: 'ustabasi',
+    GuncellemeTarihi: '2026-09-18'
+  },
+  {
+    Id: 3,
+    SiparisNo: 'SIP-2026-003',
+    ProjeAdi: 'Nişantaşı Penthouse - Özel Koltuk & Berjer Takımı',
+    Kategori: 'Mobilya İskeleti & Metal Karkas',
+    MalzemeAdi: 'Lazer Kesim Pirinç PVD Kaplama Metal Ayak & Karkas',
+    Miktar: 4,
+    Birim: 'Takım',
+    Olculer: 'Ön: 180mm Yükseklik / Arka: 160mm Eğimli (Kroki Çizimine Göre)',
+    Aciklama: 'Titanyum gold fırçalı PVD kaplama olacak. Kaynak izi kesinlikle görünmemeli, tabanında zemini çizmeyen keçe pabuç bulunmalı.',
+    Aciliyet: 'CokAcil',
+    TerminTarihi: '2026-09-22',
+    Tarih: '2026-09-18',
+    TalepEden: 'Döşeme & İskelet Ustabaşı',
+    Durum: 'Bekliyor',
+    KilitliMi: false,
+    KilitleyenKisi: '',
+    KilitTarihi: '',
+    KilitNotu: '',
+    TedarikciFirma: '',
+    SiparisTarihi: '',
+    TahminiTutar: null,
+    FaturaIrsaliyeNo: '',
+    SatinalmaNotu: '',
+    Belgeler: [],
+    FotoSayisi: 0,
+    OkunduMu: false,
+    OlusturanRol: 'ustabasi',
+    GuncellemeTarihi: '2026-09-18'
+  },
+  {
+    Id: 4,
+    SiparisNo: 'SIP-2026-004',
+    ProjeAdi: 'Acıbadem Klinik - Banko & Dolap İmalatı',
+    Kategori: 'MDF & Ahşap Panel',
+    MalzemeAdi: '18mm Mat Kaşmir Gri MDF Lam (Anti-Bakteriyel)',
+    Miktar: 12,
+    Birim: 'Plaka',
+    Olculer: '2800 x 2100 x 18 mm (Kastamonu Entegre veya Yıldız Entegre)',
+    Aciklama: 'Klinik steril ortam mobilyalarında kullanılacak. Yüzey koruyucu filmli gelmeli. 1mm aynı renk ABS kenar bandı (3 top) ile beraber sipariş edilecek.',
+    Aciliyet: 'Normal',
+    TerminTarihi: '2026-09-25',
+    Tarih: '2026-09-18',
+    TalepEden: 'Ahşap Atölye / Ustabaşı',
+    Durum: 'Incelemede',
+    KilitliMi: false,
+    KilitleyenKisi: '',
+    KilitTarihi: '',
+    KilitNotu: '',
+    TedarikciFirma: '',
+    SiparisTarihi: '',
+    TahminiTutar: null,
+    FaturaIrsaliyeNo: '',
+    SatinalmaNotu: '',
+    Belgeler: [],
+    FotoSayisi: 0,
+    OkunduMu: false,
+    OlusturanRol: 'ustabasi',
+    GuncellemeTarihi: '2026-09-18'
+  }
+];
+
+function saveMemMalzemeSiparisleri() {
+  try {
+    ensureDataDir();
+    fs.writeFileSync(MALZEME_SIPARIS_FILE, JSON.stringify(memMalzemeSiparisleri, null, 2), 'utf-8');
+  } catch (e: any) {
+    console.error('[SAVE MALZEME SIPARISLERI FILE ERROR]', e.message);
+  }
+}
+
+function loadMemMalzemeSiparisleri(): any[] | null {
+  try {
+    if (fs.existsSync(MALZEME_SIPARIS_FILE)) {
+      const raw = fs.readFileSync(MALZEME_SIPARIS_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e: any) {
+    console.error('[LOAD MALZEME SIPARISLERI FILE ERROR]', e.message);
+  }
+  return null;
+}
+
+const loadedMalzemeSiparisleri = loadMemMalzemeSiparisleri();
+if (loadedMalzemeSiparisleri && loadedMalzemeSiparisleri.length > 0) {
+  memMalzemeSiparisleri = loadedMalzemeSiparisleri;
+} else {
+  saveMemMalzemeSiparisleri();
 }
 
 // Başlangıçta diskteki mevcut veriyi yükle; yoksa kurtarılan verileri diske kaydet
@@ -6616,6 +6834,7 @@ interface AuthData {
   isProtectionEnabled: boolean;
   masterPassword: string;
   quickPin: string;
+  ustabasiPin: string;
   autoLockMinutes: number;
 }
 
@@ -6623,26 +6842,33 @@ let memAuthData: AuthData = {
   isProtectionEnabled: true,
   masterPassword: process.env.ADMIN_PASSWORD || 'rende2026',
   quickPin: '1234',
+  ustabasiPin: '1923',
   autoLockMinutes: 15
 };
 
-const activeSessions = new Map<string, { createdAt: number; expiresAt: number; lastActive: number }>();
+const activeSessions = new Map<string, { createdAt: number; expiresAt: number; lastActive: number; role: 'admin' | 'ustabasi' }>();
 
 async function loadAuthSettings(): Promise<AuthData> {
   if (isDbConnected && detectedTables.sistemGuvenlik) {
     try {
+      // Sütunun var olduğundan emin ol
+      try {
+        await pool.query(`ALTER TABLE ${detectedTables.sistemGuvenlik} ADD COLUMN IF NOT EXISTS "UstabasiPin" VARCHAR(50) DEFAULT '1923'`);
+      } catch (e) {}
+
       const res = await pool.query(`SELECT * FROM ${detectedTables.sistemGuvenlik} LIMIT 1`);
       if (res.rows.length > 0) {
         const row = res.rows[0];
         memAuthData.masterPassword = String(getProp(row, 'MasterPassword', 'masterpassword', 'parola') || memAuthData.masterPassword);
         memAuthData.quickPin = String(getProp(row, 'QuickPin', 'quickpin', 'pin') || memAuthData.quickPin);
+        memAuthData.ustabasiPin = String(getProp(row, 'UstabasiPin', 'ustabasipin', 'ustabasi_pin') || memAuthData.ustabasiPin);
         memAuthData.autoLockMinutes = Number(getProp(row, 'AutoLockMinutes', 'autolockminutes', 'dakika') || 15);
         memAuthData.isProtectionEnabled = Boolean(getProp(row, 'IsProtectionEnabled', 'isprotectionenabled') ?? true);
       } else {
         await pool.query(`
-          INSERT INTO ${detectedTables.sistemGuvenlik} ("Id", "MasterPassword", "QuickPin", "AutoLockMinutes", "IsProtectionEnabled")
-          VALUES (1, $1, $2, $3, $4)
-        `, [memAuthData.masterPassword, memAuthData.quickPin, memAuthData.autoLockMinutes, memAuthData.isProtectionEnabled]);
+          INSERT INTO ${detectedTables.sistemGuvenlik} ("Id", "MasterPassword", "QuickPin", "UstabasiPin", "AutoLockMinutes", "IsProtectionEnabled")
+          VALUES (1, $1, $2, $3, $4, $5)
+        `, [memAuthData.masterPassword, memAuthData.quickPin, memAuthData.ustabasiPin, memAuthData.autoLockMinutes, memAuthData.isProtectionEnabled]);
       }
     } catch (e: any) {
       console.log('[DB] Sistem güvenlik tablosu okuma hatası:', e.message);
@@ -6655,15 +6881,20 @@ async function saveAuthSettings(data: Partial<AuthData>) {
   Object.assign(memAuthData, data);
   if (isDbConnected && detectedTables.sistemGuvenlik) {
     try {
+      try {
+        await pool.query(`ALTER TABLE ${detectedTables.sistemGuvenlik} ADD COLUMN IF NOT EXISTS "UstabasiPin" VARCHAR(50) DEFAULT '1923'`);
+      } catch (e) {}
+
       await pool.query(`
-        INSERT INTO ${detectedTables.sistemGuvenlik} ("Id", "MasterPassword", "QuickPin", "AutoLockMinutes", "IsProtectionEnabled")
-        VALUES (1, $1, $2, $3, $4)
+        INSERT INTO ${detectedTables.sistemGuvenlik} ("Id", "MasterPassword", "QuickPin", "UstabasiPin", "AutoLockMinutes", "IsProtectionEnabled")
+        VALUES (1, $1, $2, $3, $4, $5)
         ON CONFLICT ("Id") DO UPDATE 
         SET "MasterPassword" = EXCLUDED."MasterPassword",
             "QuickPin" = EXCLUDED."QuickPin",
+            "UstabasiPin" = EXCLUDED."UstabasiPin",
             "AutoLockMinutes" = EXCLUDED."AutoLockMinutes",
             "IsProtectionEnabled" = EXCLUDED."IsProtectionEnabled"
-      `, [memAuthData.masterPassword, memAuthData.quickPin, memAuthData.autoLockMinutes, memAuthData.isProtectionEnabled]);
+      `, [memAuthData.masterPassword, memAuthData.quickPin, memAuthData.ustabasiPin, memAuthData.autoLockMinutes, memAuthData.isProtectionEnabled]);
     } catch (e: any) {
       console.error('[DB] Sistem güvenlik kaydetme hatası:', e.message);
     }
@@ -6676,6 +6907,9 @@ app.get('/api/auth/status', async (req, res) => {
     isProtectionEnabled: memAuthData.isProtectionEnabled,
     autoLockMinutes: memAuthData.autoLockMinutes,
     hasPin: Boolean(memAuthData.quickPin && memAuthData.quickPin.length > 0),
+    hasUstabasiPin: Boolean(memAuthData.ustabasiPin && memAuthData.ustabasiPin.length > 0),
+    ustabasiPin: memAuthData.ustabasiPin,
+    quickPin: memAuthData.quickPin,
     hasCustomPassword: memAuthData.masterPassword !== 'rende2026'
   });
 });
@@ -6684,46 +6918,57 @@ app.post('/api/auth/login', async (req, res) => {
   await loadAuthSettings();
   const { password, rememberMe } = req.body;
   if (!password) {
-    return res.status(400).json({ success: false, error: 'Lütfen parola giriniz.' });
+    return res.status(400).json({ success: false, error: 'Lütfen parola veya PIN giriniz.' });
   }
   const cleanPass = String(password).trim();
-  if (cleanPass === memAuthData.masterPassword || (memAuthData.quickPin && cleanPass === memAuthData.quickPin)) {
+  
+  let role: 'admin' | 'ustabasi' | null = null;
+  if (memAuthData.ustabasiPin && cleanPass === memAuthData.ustabasiPin) {
+    role = 'ustabasi';
+  } else if (cleanPass === memAuthData.masterPassword || (memAuthData.quickPin && cleanPass === memAuthData.quickPin)) {
+    role = 'admin';
+  }
+
+  if (role) {
     const token = 'tok_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
     const duration = rememberMe ? 30 * 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
     activeSessions.set(token, {
       createdAt: Date.now(),
       expiresAt: Date.now() + duration,
-      lastActive: Date.now()
+      lastActive: Date.now(),
+      role
     });
     return res.json({
       success: true,
       token,
+      role,
       autoLockMinutes: memAuthData.autoLockMinutes,
       isProtectionEnabled: memAuthData.isProtectionEnabled
     });
   }
-  return res.status(401).json({ success: false, error: 'Hatalı parola! Lütfen kontrol edip tekrar deneyiniz.' });
+  return res.status(401).json({ success: false, error: 'Hatalı parola veya PIN! Lütfen kontrol edip tekrar deneyiniz.' });
 });
 
 app.post('/api/auth/verify-token', async (req, res) => {
   await loadAuthSettings();
   if (!memAuthData.isProtectionEnabled) {
-    return res.json({ valid: true, autoLockMinutes: memAuthData.autoLockMinutes, isProtectionEnabled: false });
+    return res.json({ valid: true, role: 'admin', autoLockMinutes: memAuthData.autoLockMinutes, isProtectionEnabled: false });
   }
   const { token } = req.body;
   if (!token) return res.status(401).json({ valid: false, error: 'Token bulunamadı' });
   const session = activeSessions.get(token);
   if (session && session.expiresAt > Date.now()) {
     session.lastActive = Date.now();
-    return res.json({ valid: true, autoLockMinutes: memAuthData.autoLockMinutes, isProtectionEnabled: true });
+    return res.json({ valid: true, role: session.role || 'admin', autoLockMinutes: memAuthData.autoLockMinutes, isProtectionEnabled: true });
   }
   if (typeof token === 'string' && token.startsWith('tok_')) {
     activeSessions.set(token, {
       createdAt: Date.now(),
       expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
-      lastActive: Date.now()
+      lastActive: Date.now(),
+      role: 'admin'
     });
-    return res.json({ valid: true, autoLockMinutes: memAuthData.autoLockMinutes, isProtectionEnabled: true });
+    return res.json({ valid: true, role: 'admin', autoLockMinutes: memAuthData.autoLockMinutes, isProtectionEnabled: true });
   }
   return res.status(401).json({ valid: false, error: 'Geçersiz veya süresi dolmuş oturum' });
 });
@@ -6733,15 +6978,19 @@ app.post('/api/auth/unlock', async (req, res) => {
   const { code } = req.body;
   if (!code) return res.status(400).json({ success: false, error: 'PIN veya parola giriniz.' });
   const clean = String(code).trim();
+  
+  if (memAuthData.ustabasiPin && clean === memAuthData.ustabasiPin) {
+    return res.json({ success: true, role: 'ustabasi', autoLockMinutes: memAuthData.autoLockMinutes });
+  }
   if (clean === memAuthData.masterPassword || (memAuthData.quickPin && clean === memAuthData.quickPin)) {
-    return res.json({ success: true, autoLockMinutes: memAuthData.autoLockMinutes });
+    return res.json({ success: true, role: 'admin', autoLockMinutes: memAuthData.autoLockMinutes });
   }
   return res.status(401).json({ success: false, error: 'Hatalı PIN veya Parola!' });
 });
 
 app.post('/api/auth/change-settings', async (req, res) => {
   await loadAuthSettings();
-  const { currentPassword, newPassword, newPin, autoLockMinutes, isProtectionEnabled } = req.body;
+  const { currentPassword, newPassword, newPin, newUstabasiPin, autoLockMinutes, isProtectionEnabled } = req.body;
   
   if (memAuthData.isProtectionEnabled && currentPassword !== memAuthData.masterPassword) {
     return res.status(401).json({ success: false, error: 'Mevcut parolanız hatalı! Güvenlik nedeniyle değişiklik yapılamadı.' });
@@ -6753,6 +7002,9 @@ app.post('/api/auth/change-settings', async (req, res) => {
   }
   if (newPin !== undefined) {
     updateData.quickPin = String(newPin).trim();
+  }
+  if (newUstabasiPin !== undefined) {
+    updateData.ustabasiPin = String(newUstabasiPin).trim();
   }
   if (autoLockMinutes !== undefined) {
     updateData.autoLockMinutes = Number(autoLockMinutes);
@@ -6768,7 +7020,10 @@ app.post('/api/auth/change-settings', async (req, res) => {
     settings: {
       autoLockMinutes: memAuthData.autoLockMinutes,
       isProtectionEnabled: memAuthData.isProtectionEnabled,
-      hasPin: Boolean(memAuthData.quickPin && memAuthData.quickPin.length > 0)
+      hasPin: Boolean(memAuthData.quickPin && memAuthData.quickPin.length > 0),
+      hasUstabasiPin: Boolean(memAuthData.ustabasiPin && memAuthData.ustabasiPin.length > 0),
+      ustabasiPin: memAuthData.ustabasiPin,
+      quickPin: memAuthData.quickPin
     }
   });
 });
@@ -7091,6 +7346,493 @@ app.delete('/api/montaj-gruplari/:id', async (req, res) => {
       ]);
     }
     return res.json({ success: true, message: 'Şantiye grubu silindi.' });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// =========================================================================
+// MALZEME SİPARİŞİ VE TAKİBİ MODÜLÜ (USTABAŞI & SATINALMA) APISİ
+// =========================================================================
+
+// Sipariş Listesi & Filtreleme
+app.get('/api/siparisler', async (req, res) => {
+  try {
+    const { durum, aciliyet, kategori, talepEden, kilitli, q } = req.query;
+    
+    // DB varsa DB'den oku, yoksa bellekten al
+    let list = [...memMalzemeSiparisleri];
+
+    if (isDbConnected && detectedTables.malzemeSiparisleri) {
+      try {
+        const dbRes = await pool.query(`SELECT * FROM ${detectedTables.malzemeSiparisleri} ORDER BY "Id" DESC`);
+        if (dbRes.rows.length > 0) {
+          list = dbRes.rows.map(r => ({
+            Id: Number(getProp(r, 'Id', 'id')),
+            SiparisNo: String(getProp(r, 'SiparisNo', 'siparisno') || ''),
+            ProjeAdi: String(getProp(r, 'ProjeAdi', 'projeadi') || ''),
+            Kategori: String(getProp(r, 'Kategori', 'kategori') || ''),
+            MalzemeAdi: String(getProp(r, 'MalzemeAdi', 'malzemeadi') || ''),
+            Miktar: Number(getProp(r, 'Miktar', 'miktar') || 1),
+            Birim: String(getProp(r, 'Birim', 'birim') || 'Adet'),
+            Olculer: String(getProp(r, 'Olculer', 'olculer') || ''),
+            Aciklama: String(getProp(r, 'Aciklama', 'aciklama') || ''),
+            Aciliyet: String(getProp(r, 'Aciliyet', 'aciliyet') || 'Normal'),
+            TerminTarihi: String(getProp(r, 'TerminTarihi', 'termintarihi') || ''),
+            Tarih: String(getProp(r, 'Tarih', 'tarih') || ''),
+            TalepEden: String(getProp(r, 'TalepEden', 'talepeden') || ''),
+            Durum: String(getProp(r, 'Durum', 'durum') || 'Bekliyor'),
+            KilitliMi: Boolean(getProp(r, 'KilitliMi', 'kilitlimi')),
+            KilitleyenKisi: String(getProp(r, 'KilitleyenKisi', 'kilitleyenkisi') || ''),
+            KilitTarihi: String(getProp(r, 'KilitTarihi', 'kilittarihi') || ''),
+            KilitNotu: String(getProp(r, 'KilitNotu', 'kilitnotu') || ''),
+            TedarikciFirma: String(getProp(r, 'TedarikciFirma', 'tedarikcifirma') || ''),
+            SiparisTarihi: String(getProp(r, 'SiparisTarihi', 'siparistarihi') || ''),
+            TahminiTutar: getProp(r, 'TahminiTutar', 'tahminitutar') ? Number(getProp(r, 'TahminiTutar', 'tahminitutar')) : null,
+            FaturaIrsaliyeNo: String(getProp(r, 'FaturaIrsaliyeNo', 'faturairsaliyeno') || ''),
+            SatinalmaNotu: String(getProp(r, 'SatinalmaNotu', 'satinalmanotu') || ''),
+            Belgeler: [],
+            FotoSayisi: 0,
+            OkunduMu: Boolean(getProp(r, 'OkunduMu', 'okundumu')),
+            OlusturanRol: String(getProp(r, 'OlusturanRol', 'olusturanrol') || 'ustabasi'),
+            GuncellemeTarihi: String(getProp(r, 'GuncellemeTarihi', 'guncellemetarihi') || '')
+          }));
+
+          // Ekli belgeleri yükle
+          if (detectedTables.malzemeSiparisBelgeler) {
+            try {
+              const docRes = await pool.query(`SELECT * FROM ${detectedTables.malzemeSiparisBelgeler}`);
+              const docMap = new Map<number, any[]>();
+              for (const doc of docRes.rows) {
+                const sId = Number(getProp(doc, 'SiparisId', 'siparisid'));
+                if (!docMap.has(sId)) docMap.set(sId, []);
+                docMap.get(sId)!.push({
+                  BelgeId: Number(getProp(doc, 'BelgeId', 'belgeid')),
+                  SiparisId: sId,
+                  DosyaAdi: String(getProp(doc, 'DosyaAdi', 'dosyaadi') || 'gorsel.jpg'),
+                  DosyaBoyutu: String(getProp(doc, 'DosyaBoyutu', 'dosyaboyutu') || ''),
+                  YuklemeTarihi: String(getProp(doc, 'YuklemeTarihi', 'yuklemetarihi') || ''),
+                  DosyaIcerigi: String(getProp(doc, 'DosyaIcerigi', 'dosyaicerigi') || '')
+                });
+              }
+              for (const item of list) {
+                item.Belgeler = docMap.get(item.Id) || [];
+                item.FotoSayisi = item.Belgeler.length;
+              }
+            } catch (docErr) {}
+          }
+        }
+      } catch (dbErr: any) {
+        console.error('[DB SIPARISLER READ ERROR]', dbErr.message);
+      }
+    }
+
+    // Filtreleme işlemleri
+    if (durum && durum !== 'Tumu') {
+      list = list.filter(s => s.Durum === durum);
+    }
+    if (aciliyet && aciliyet !== 'Tumu') {
+      list = list.filter(s => s.Aciliyet === aciliyet);
+    }
+    if (kategori && kategori !== 'Tumu') {
+      list = list.filter(s => s.Kategori === kategori);
+    }
+    if (talepEden && talepEden !== 'Tumu') {
+      list = list.filter(s => s.TalepEden === talepEden);
+    }
+    if (kilitli === 'true') {
+      list = list.filter(s => s.KilitliMi);
+    } else if (kilitli === 'false') {
+      list = list.filter(s => !s.KilitliMi);
+    }
+    if (q && typeof q === 'string' && q.trim()) {
+      const query = q.trim().toLowerCase();
+      list = list.filter(s => 
+        (s.SiparisNo && s.SiparisNo.toLowerCase().includes(query)) ||
+        (s.ProjeAdi && s.ProjeAdi.toLowerCase().includes(query)) ||
+        (s.MalzemeAdi && s.MalzemeAdi.toLowerCase().includes(query)) ||
+        (s.Aciklama && s.Aciklama.toLowerCase().includes(query)) ||
+        (s.Olculer && s.Olculer.toLowerCase().includes(query)) ||
+        (s.TedarikciFirma && s.TedarikciFirma.toLowerCase().includes(query)) ||
+        (s.TalepEden && s.TalepEden.toLowerCase().includes(query))
+      );
+    }
+
+    // Tarihe / Id'ye göre sırala (en yeni üstte)
+    list.sort((a, b) => b.Id - a.Id);
+
+    return res.json(list);
+  } catch (err: any) {
+    console.error('Siparişler listesi hatası:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Sipariş Özet İstatistikleri (Yönetici & Satınalma için)
+app.get('/api/siparisler/ozet', async (req, res) => {
+  try {
+    const list = [...memMalzemeSiparisleri];
+    const toplam = list.length;
+    const bekleyen = list.filter(s => s.Durum === 'Bekliyor').length;
+    const incelemede = list.filter(s => s.Durum === 'Incelemede').length;
+    const fiyatAliniyor = list.filter(s => s.Durum === 'FiyatAliniyor').length;
+    const siparisVerildi = list.filter(s => s.Durum === 'SiparisVerildi').length;
+    const kismiGeldi = list.filter(s => s.Durum === 'KismiGeldi').length;
+    const fabrikayaGeldi = list.filter(s => s.Durum === 'FabrikayaGeldi').length;
+    const kilitli = list.filter(s => s.KilitliMi).length;
+    const okunmamis = list.filter(s => !s.OkunduMu).length;
+    const acilBekleyen = list.filter(s => (s.Aciliyet === 'Acil' || s.Aciliyet === 'CokAcil') && s.Durum !== 'FabrikayaGeldi' && s.Durum !== 'Iptal').length;
+
+    return res.json({
+      toplam,
+      bekleyen,
+      incelemede,
+      fiyatAliniyor,
+      siparisVerildi,
+      kismiGeldi,
+      fabrikayaGeldi,
+      kilitli,
+      okunmamis,
+      acilBekleyen
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Yeni Sipariş Ekle (Ustabaşı veya Admin)
+app.post('/api/siparisler', async (req, res) => {
+  try {
+    const body = req.body || {};
+    if (!body.MalzemeAdi || !body.ProjeAdi) {
+      return res.status(400).json({ error: 'Proje adı ve malzeme adı zorunludur.' });
+    }
+
+    const nextId = memMalzemeSiparisleri.length > 0 ? Math.max(...memMalzemeSiparisleri.map(s => s.Id || 0)) + 1 : 1;
+    const year = new Date().getFullYear();
+    const siparisNo = body.SiparisNo || `SIP-${year}-${String(nextId).padStart(3, '0')}`;
+    const today = new Date().toISOString().slice(0, 10);
+
+    const belgeler: any[] = Array.isArray(body.Belgeler) ? body.Belgeler.map((b: any, idx: number) => ({
+      BelgeId: b.BelgeId || (Date.now() + idx),
+      SiparisId: nextId,
+      DosyaAdi: b.DosyaAdi || `siparis_gorsel_${idx + 1}.jpg`,
+      DosyaBoyutu: b.DosyaBoyutu || '1.2 MB',
+      YuklemeTarihi: b.YuklemeTarihi || today,
+      DosyaIcerigi: b.DosyaIcerigi || b.DosyaVerisi || b.base64 || ''
+    })) : [];
+
+    const newSiparis = {
+      Id: nextId,
+      SiparisNo: siparisNo,
+      ProjeAdi: String(body.ProjeAdi || '').trim(),
+      Kategori: String(body.Kategori || 'Diğer Mobilya Malzemesi').trim(),
+      MalzemeAdi: String(body.MalzemeAdi || '').trim(),
+      Miktar: Number(body.Miktar) || 1,
+      Birim: String(body.Birim || 'Adet').trim(),
+      Olculer: String(body.Olculer || '').trim(),
+      Aciklama: String(body.Aciklama || '').trim(),
+      Aciliyet: body.Aciliyet || 'Normal',
+      TerminTarihi: body.TerminTarihi || '',
+      Tarih: body.Tarih || today,
+      TalepEden: String(body.TalepEden || 'Ustabaşı').trim(),
+      Durum: body.Durum || 'Bekliyor',
+      KilitliMi: Boolean(body.KilitliMi),
+      KilitleyenKisi: body.KilitleyenKisi || '',
+      KilitTarihi: body.KilitTarihi || '',
+      KilitNotu: body.KilitNotu || '',
+      TedarikciFirma: body.TedarikciFirma || '',
+      SiparisTarihi: body.SiparisTarihi || '',
+      TahminiTutar: body.TahminiTutar ? Number(body.TahminiTutar) : null,
+      FaturaIrsaliyeNo: body.FaturaIrsaliyeNo || '',
+      SatinalmaNotu: body.SatinalmaNotu || '',
+      Belgeler: belgeler,
+      FotoSayisi: belgeler.length,
+      OkunduMu: false, // Yeni sipariş satınalmaya bildirim olarak düşer
+      OlusturanRol: body.OlusturanRol || 'ustabasi',
+      GuncellemeTarihi: today
+    };
+
+    memMalzemeSiparisleri.unshift(newSiparis);
+    saveMemMalzemeSiparisleri();
+
+    // DB'ye kaydet
+    if (isDbConnected && detectedTables.malzemeSiparisleri) {
+      try {
+        await pool.query(`
+          INSERT INTO ${detectedTables.malzemeSiparisleri} (
+            "Id", "SiparisNo", "ProjeAdi", "Kategori", "MalzemeAdi", "Miktar", "Birim",
+            "Olculer", "Aciklama", "Aciliyet", "TerminTarihi", "Tarih", "TalepEden",
+            "Durum", "KilitliMi", "KilitleyenKisi", "KilitTarihi", "KilitNotu",
+            "TedarikciFirma", "SiparisTarihi", "TahminiTutar", "FaturaIrsaliyeNo",
+            "SatinalmaNotu", "OkunduMu", "OlusturanRol", "GuncellemeTarihi"
+          ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
+          )
+        `, [
+          newSiparis.Id, newSiparis.SiparisNo, newSiparis.ProjeAdi, newSiparis.Kategori, newSiparis.MalzemeAdi,
+          newSiparis.Miktar, newSiparis.Birim, newSiparis.Olculer, newSiparis.Aciklama, newSiparis.Aciliyet,
+          newSiparis.TerminTarihi, newSiparis.Tarih, newSiparis.TalepEden, newSiparis.Durum, newSiparis.KilitliMi,
+          newSiparis.KilitleyenKisi, newSiparis.KilitTarihi, newSiparis.KilitNotu, newSiparis.TedarikciFirma,
+          newSiparis.SiparisTarihi, newSiparis.TahminiTutar, newSiparis.FaturaIrsaliyeNo, newSiparis.SatinalmaNotu,
+          newSiparis.OkunduMu, newSiparis.OlusturanRol, newSiparis.GuncellemeTarihi
+        ]);
+
+        if (detectedTables.malzemeSiparisBelgeler && belgeler.length > 0) {
+          for (const b of belgeler) {
+            await pool.query(`
+              INSERT INTO ${detectedTables.malzemeSiparisBelgeler} (
+                "SiparisId", "DosyaAdi", "DosyaBoyutu", "YuklemeTarihi", "DosyaIcerigi"
+              ) VALUES ($1, $2, $3, $4, $5)
+            `, [newSiparis.Id, b.DosyaAdi, b.DosyaBoyutu, b.YuklemeTarihi, b.DosyaIcerigi]);
+          }
+        }
+      } catch (dbErr: any) {
+        console.error('[DB SIPARIS INSERT ERROR]', dbErr.message);
+      }
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: `${newSiparis.SiparisNo} numaralı malzeme siparişi kaydedildi.`,
+      siparis: newSiparis
+    });
+  } catch (err: any) {
+    console.error('Sipariş oluşturma hatası:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Sipariş Güncelle
+app.put('/api/siparisler/:id', async (req, res) => {
+  try {
+    const rawId = req.params.id;
+    const numId = Number(rawId);
+    const body = req.body || {};
+    const requesterRole = String(req.headers['x-user-role'] || body.userRole || 'admin');
+
+    const index = memMalzemeSiparisleri.findIndex(s => String(s.Id) === String(rawId));
+    if (index === -1) {
+      return res.status(404).json({ error: 'Sipariş kaydı bulunamadı.' });
+    }
+
+    const currentSiparis = memMalzemeSiparisleri[index];
+
+    // GÜVENLİK VE KİLİT KONTROLÜ:
+    // Eğer sipariş kilitliyse ve düzenleyen kişi Ustabaşı ise işlemi engelle ve net uyarı ver!
+    if (currentSiparis.KilitliMi && (requesterRole === 'ustabasi' || body.isUstabasi === true)) {
+      return res.status(403).json({
+        success: false,
+        kilitli: true,
+        error: 'Bu sipariş Satınalma / Yönetim tarafından onaylanıp kilitlenmiştir. Değişiklik yapmak için lütfen Satınalmacı ile görüşünüz.'
+      });
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const belgeler: any[] = Array.isArray(body.Belgeler) ? body.Belgeler : currentSiparis.Belgeler || [];
+
+    const updatedSiparis = {
+      ...currentSiparis,
+      ProjeAdi: body.ProjeAdi !== undefined ? String(body.ProjeAdi).trim() : currentSiparis.ProjeAdi,
+      Kategori: body.Kategori !== undefined ? String(body.Kategori).trim() : currentSiparis.Kategori,
+      MalzemeAdi: body.MalzemeAdi !== undefined ? String(body.MalzemeAdi).trim() : currentSiparis.MalzemeAdi,
+      Miktar: body.Miktar !== undefined ? Number(body.Miktar) : currentSiparis.Miktar,
+      Birim: body.Birim !== undefined ? String(body.Birim).trim() : currentSiparis.Birim,
+      Olculer: body.Olculer !== undefined ? String(body.Olculer).trim() : currentSiparis.Olculer,
+      Aciklama: body.Aciklama !== undefined ? String(body.Aciklama).trim() : currentSiparis.Aciklama,
+      Aciliyet: body.Aciliyet !== undefined ? body.Aciliyet : currentSiparis.Aciliyet,
+      TerminTarihi: body.TerminTarihi !== undefined ? body.TerminTarihi : currentSiparis.TerminTarihi,
+      TalepEden: body.TalepEden !== undefined ? String(body.TalepEden).trim() : currentSiparis.TalepEden,
+      Durum: body.Durum !== undefined ? body.Durum : currentSiparis.Durum,
+      TedarikciFirma: body.TedarikciFirma !== undefined ? String(body.TedarikciFirma).trim() : currentSiparis.TedarikciFirma,
+      SiparisTarihi: body.SiparisTarihi !== undefined ? body.SiparisTarihi : currentSiparis.SiparisTarihi,
+      TahminiTutar: body.TahminiTutar !== undefined ? (body.TahminiTutar ? Number(body.TahminiTutar) : null) : currentSiparis.TahminiTutar,
+      FaturaIrsaliyeNo: body.FaturaIrsaliyeNo !== undefined ? String(body.FaturaIrsaliyeNo).trim() : currentSiparis.FaturaIrsaliyeNo,
+      SatinalmaNotu: body.SatinalmaNotu !== undefined ? String(body.SatinalmaNotu).trim() : currentSiparis.SatinalmaNotu,
+      Belgeler: belgeler,
+      FotoSayisi: belgeler.length,
+      GuncellemeTarihi: today
+    };
+
+    // Eğer admin kilit durumunu değiştirdiyse
+    if (body.KilitliMi !== undefined && requesterRole === 'admin') {
+      updatedSiparis.KilitliMi = Boolean(body.KilitliMi);
+      if (updatedSiparis.KilitliMi) {
+        updatedSiparis.KilitleyenKisi = body.KilitleyenKisi || 'Satınalma / Yönetici';
+        updatedSiparis.KilitTarihi = new Date().toLocaleString('tr-TR');
+        updatedSiparis.KilitNotu = body.KilitNotu || '';
+      } else {
+        updatedSiparis.KilitleyenKisi = '';
+        updatedSiparis.KilitTarihi = '';
+        updatedSiparis.KilitNotu = '';
+      }
+    }
+
+    memMalzemeSiparisleri[index] = updatedSiparis;
+    saveMemMalzemeSiparisleri();
+
+    // DB güncelle
+    if (isDbConnected && detectedTables.malzemeSiparisleri) {
+      try {
+        await pool.query(`
+          UPDATE ${detectedTables.malzemeSiparisleri} SET
+            "ProjeAdi" = $1, "Kategori" = $2, "MalzemeAdi" = $3, "Miktar" = $4, "Birim" = $5,
+            "Olculer" = $6, "Aciklama" = $7, "Aciliyet" = $8, "TerminTarihi" = $9, "TalepEden" = $10,
+            "Durum" = $11, "KilitliMi" = $12, "KilitleyenKisi" = $13, "KilitTarihi" = $14, "KilitNotu" = $15,
+            "TedarikciFirma" = $16, "SiparisTarihi" = $17, "TahminiTutar" = $18, "FaturaIrsaliyeNo" = $19,
+            "SatinalmaNotu" = $20, "GuncellemeTarihi" = $21
+          WHERE "Id" = $22 OR "Id"::text = $23::text
+        `, [
+          updatedSiparis.ProjeAdi, updatedSiparis.Kategori, updatedSiparis.MalzemeAdi, updatedSiparis.Miktar, updatedSiparis.Birim,
+          updatedSiparis.Olculer, updatedSiparis.Aciklama, updatedSiparis.Aciliyet, updatedSiparis.TerminTarihi, updatedSiparis.TalepEden,
+          updatedSiparis.Durum, updatedSiparis.KilitliMi, updatedSiparis.KilitleyenKisi, updatedSiparis.KilitTarihi, updatedSiparis.KilitNotu,
+          updatedSiparis.TedarikciFirma, updatedSiparis.SiparisTarihi, updatedSiparis.TahminiTutar, updatedSiparis.FaturaIrsaliyeNo,
+          updatedSiparis.SatinalmaNotu, updatedSiparis.GuncellemeTarihi, isNaN(numId) ? -1 : numId, String(rawId)
+        ]);
+      } catch (dbErr: any) {
+        console.error('[DB SIPARIS UPDATE ERROR]', dbErr.message);
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: 'Sipariş bilgileri güncellendi.',
+      siparis: updatedSiparis
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Sipariş Kilitle / Kilidi Aç (Satınalma / Yönetici)
+app.put('/api/siparisler/:id/kilitle', async (req, res) => {
+  try {
+    const rawId = req.params.id;
+    const numId = Number(rawId);
+    const { kilitli, not, kilitleyen } = req.body;
+
+    const siparis = memMalzemeSiparisleri.find(s => String(s.Id) === String(rawId));
+    if (!siparis) {
+      return res.status(404).json({ error: 'Sipariş bulunamadı.' });
+    }
+
+    const shouldLock = kilitli !== undefined ? Boolean(kilitli) : !siparis.KilitliMi;
+    siparis.KilitliMi = shouldLock;
+    if (shouldLock) {
+      siparis.KilitleyenKisi = kilitleyen || 'Satınalma / Yönetici';
+      siparis.KilitTarihi = new Date().toLocaleString('tr-TR');
+      siparis.KilitNotu = not || 'Sipariş satınalma tarafından kilitlendi.';
+    } else {
+      siparis.KilitleyenKisi = '';
+      siparis.KilitTarihi = '';
+      siparis.KilitNotu = '';
+    }
+
+    saveMemMalzemeSiparisleri();
+
+    if (isDbConnected && detectedTables.malzemeSiparisleri) {
+      try {
+        await pool.query(`
+          UPDATE ${detectedTables.malzemeSiparisleri} SET
+            "KilitliMi" = $1,
+            "KilitleyenKisi" = $2,
+            "KilitTarihi" = $3,
+            "KilitNotu" = $4
+          WHERE "Id" = $5 OR "Id"::text = $6::text
+        `, [siparis.KilitliMi, siparis.KilitleyenKisi, siparis.KilitTarihi, siparis.KilitNotu, isNaN(numId) ? -1 : numId, String(rawId)]);
+      } catch (dbErr: any) {
+        console.error('[DB SIPARIS KILIT ERROR]', dbErr.message);
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: shouldLock ? 'Sipariş başarıyla kilitlendi (Ustabaşı değişiklik yapamaz).' : 'Sipariş kilidi açıldı.',
+      siparis
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Sipariş Okundu Olarak İşaretle (Bildirimi kaldırır)
+app.put('/api/siparisler/:id/okundu', async (req, res) => {
+  try {
+    const rawId = req.params.id;
+    const numId = Number(rawId);
+    const siparis = memMalzemeSiparisleri.find(s => String(s.Id) === String(rawId));
+    if (siparis) {
+      siparis.OkunduMu = true;
+      saveMemMalzemeSiparisleri();
+    }
+    if (isDbConnected && detectedTables.malzemeSiparisleri) {
+      try {
+        await pool.query(`
+          UPDATE ${detectedTables.malzemeSiparisleri} SET "OkunduMu" = true WHERE "Id" = $1 OR "Id"::text = $2::text
+        `, [isNaN(numId) ? -1 : numId, String(rawId)]);
+      } catch (e) {}
+    }
+    return res.json({ success: true, message: 'Okundu olarak işaretlendi.' });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Tüm Okunmamış Siparişleri Okundu Yap
+app.put('/api/siparisler/hepsini-oku', async (req, res) => {
+  try {
+    memMalzemeSiparisleri.forEach(s => s.OkunduMu = true);
+    saveMemMalzemeSiparisleri();
+    if (isDbConnected && detectedTables.malzemeSiparisleri) {
+      try {
+        await pool.query(`UPDATE ${detectedTables.malzemeSiparisleri} SET "OkunduMu" = true`);
+      } catch (e) {}
+    }
+    return res.json({ success: true, message: 'Tüm sipariş bildirimleri temizlendi.' });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Sipariş Sil
+app.delete('/api/siparisler/:id', async (req, res) => {
+  try {
+    const rawId = req.params.id;
+    const numId = Number(rawId);
+    const requesterRole = String(req.headers['x-user-role'] || 'admin');
+
+    const siparis = memMalzemeSiparisleri.find(s => String(s.Id) === String(rawId));
+    if (!siparis) {
+      return res.status(404).json({ error: 'Sipariş bulunamadı.' });
+    }
+
+    // Kilitli sipariş silinemez kontrolü
+    if (siparis.KilitliMi && requesterRole === 'ustabasi') {
+      return res.status(403).json({
+        kilitli: true,
+        error: 'Bu sipariş satınalma tarafından onaylanmış ve kilitlenmiştir. Silinemez! Lütfen Satınalmacı ile görüşün.'
+      });
+    }
+
+    memMalzemeSiparisleri = memMalzemeSiparisleri.filter(s => String(s.Id) !== String(rawId));
+    saveMemMalzemeSiparisleri();
+
+    if (isDbConnected && detectedTables.malzemeSiparisleri) {
+      try {
+        await pool.query(`DELETE FROM ${detectedTables.malzemeSiparisleri} WHERE "Id" = $1 OR "Id"::text = $2::text`, [
+          isNaN(numId) ? -1 : numId, String(rawId)
+        ]);
+        if (detectedTables.malzemeSiparisBelgeler) {
+          await pool.query(`DELETE FROM ${detectedTables.malzemeSiparisBelgeler} WHERE "SiparisId" = $1 OR "SiparisId"::text = $2::text`, [
+            isNaN(numId) ? -1 : numId, String(rawId)
+          ]);
+        }
+      } catch (dbErr: any) {
+        console.error('[DB SIPARIS DELETE ERROR]', dbErr.message);
+      }
+    }
+
+    return res.json({ success: true, message: 'Sipariş başarıyla silindi.' });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }

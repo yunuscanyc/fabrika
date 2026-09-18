@@ -1,25 +1,33 @@
 import React from 'react';
-import { LayoutDashboard, Users, Cog, FolderGit2, Truck, Bell } from 'lucide-react';
+import { LayoutDashboard, Users, Cog, FolderGit2, Truck, Bell, ShoppingCart } from 'lucide-react';
+import { TabType } from './Navbar';
 
 interface BadgeCounts {
   bakim?: number;
   hatirlatici?: number;
+  siparis?: number;
 }
 
 interface BottomNavProps {
-  activeTab: 'dashboard' | 'personel' | 'makineler' | 'projeler' | 'araclar' | 'hatirlaticilar';
-  setActiveTab: (tab: 'dashboard' | 'personel' | 'makineler' | 'projeler' | 'araclar' | 'hatirlaticilar') => void;
+  activeTab: TabType;
+  setActiveTab: (tab: TabType) => void;
   badgeCounts?: BadgeCounts;
+  userRole?: 'admin' | 'ustabasi';
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({
   activeTab,
   setActiveTab,
-  badgeCounts = {} as BadgeCounts
+  badgeCounts = {} as BadgeCounts,
+  userRole = 'admin'
 }) => {
+  if (userRole === 'ustabasi') {
+    return null; // Ustabaşı için tek modül olduğundan alt bar karmaşasına gerek yok
+  }
+
   return (
     <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur border-t border-slate-800 px-1 py-1 shadow-2xl safe-area-bottom">
-      <div className="grid grid-cols-6 gap-0.5 text-center">
+      <div className="grid grid-cols-7 gap-0.5 text-center">
         <button
           onClick={() => setActiveTab('dashboard')}
           className={`flex flex-col items-center justify-center py-1 rounded-lg transition-all ${
@@ -30,6 +38,23 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         >
           <LayoutDashboard className="w-4 h-4 mb-0.5" />
           <span className="text-[9px] tracking-tight">Panel</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('siparisler')}
+          className={`relative flex flex-col items-center justify-center py-1 rounded-lg transition-all ${
+            activeTab === 'siparisler'
+              ? 'text-blue-400 font-bold bg-blue-950/50'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <ShoppingCart className="w-4 h-4 mb-0.5" />
+          <span className="text-[9px] tracking-tight">Sipariş</span>
+          {Boolean(badgeCounts.siparis && badgeCounts.siparis > 0) && (
+            <span className="absolute top-0.5 right-1 w-3.5 h-3.5 rounded-full bg-amber-500 text-white text-[8px] font-bold flex items-center justify-center animate-bounce">
+              {badgeCounts.siparis}
+            </span>
+          )}
         </button>
 
         <button

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Navbar } from './components/Navbar';
+import { Navbar, TabType } from './components/Navbar';
 import { BottomNav } from './components/BottomNav';
 import { DashboardView } from './components/DashboardView';
 import { ProjelerView } from './components/ProjelerView';
@@ -7,6 +7,8 @@ import { AraclarView } from './components/AraclarView';
 import { HatirlaticilarView } from './components/HatirlaticilarView';
 import { PersonelHubView } from './components/PersonelHubView';
 import { MakineView } from './components/MakineView';
+import { SiparislerView } from './components/SiparislerView';
+import { UstabasiSiparisBildirim } from './components/UstabasiSiparisBildirim';
 import { ServerSetupModal } from './components/ServerSetupModal';
 import { DatabaseStatusModal, DbStatusData } from './components/DatabaseStatusModal';
 import { OfflineIndicator } from './components/OfflineIndicator';
@@ -16,7 +18,9 @@ import { SecuritySettingsModal } from './components/SecuritySettingsModal';
 import { Proje, Arac, BakimKaydi, Hatirlatici, OzetIstatistikler, Personel, IzinKaydi, Makine, Departman, Gorev } from './types';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'personel' | 'makineler' | 'projeler' | 'araclar' | 'hatirlaticilar'>('dashboard');
+  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  const [userRole, setUserRole] = useState<'admin' | 'ustabasi'>('admin');
+  const [unreadOrdersCount, setUnreadOrdersCount] = useState<number>(0);
   const [personelSubTab, setPersonelSubTab] = useState<'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci'>('liste');
   const [selectedPersonelId, setSelectedPersonelId] = useState<number | undefined>(undefined);
   const [isgSekme, setIsgSekme] = useState<'kkd' | 'saglik' | 'egitim' | undefined>(undefined);
@@ -63,6 +67,13 @@ export default function App() {
         // Eski localStorage token kalıntılarını temizle (sekme kapanınca oturum kesin kapansın)
         localStorage.removeItem('rende_auth_token');
         const token = sessionStorage.getItem('rende_auth_token');
+        const savedRole = sessionStorage.getItem('rende_user_role') as 'admin' | 'ustabasi' | null;
+        if (savedRole === 'ustabasi') {
+          setUserRole('ustabasi');
+          setActiveTab('siparisler');
+        } else {
+          setUserRole('admin');
+        }
         const savedAutoLock = localStorage.getItem('rende_autolock_min');
         const autoLockVal = savedAutoLock ? parseInt(savedAutoLock, 10) : 15;
         setAutoLockMinutes(autoLockVal);
@@ -89,6 +100,11 @@ export default function App() {
         const data = await res.json();
         if (res.ok && data.valid) {
           setIsAuthenticated(true);
+          const currentRole: 'admin' | 'ustabasi' = data.role === 'ustabasi' ? 'ustabasi' : 'admin';
+          setUserRole(currentRole);
+          if (currentRole === 'ustabasi') {
+            setActiveTab('siparisler');
+          }
           if (data.autoLockMinutes !== undefined) {
             setAutoLockMinutes(data.autoLockMinutes);
           }
@@ -174,16 +190,29 @@ export default function App() {
     };
   }, [isAuthenticated, isLocked, autoLockMinutes, updateActivity]);
 
-  const handleLoginSuccess = (token: string, lockMin: number) => {
+  const handleLoginSuccess = (token: string, lockMin: number, role?: 'admin' | 'ustabasi') => {
     setIsAuthenticated(true);
     setIsLocked(false);
     setAutoLockMinutes(lockMin);
+    const resolvedRole: 'admin' | 'ustabasi' = role === 'ustabasi' ? 'ustabasi' : 'admin';
+    setUserRole(resolvedRole);
+    if (resolvedRole === 'ustabasi') {
+      setActiveTab('siparisler');
+    } else {
+      setActiveTab('dashboard');
+    }
     lastActiveRef.current = Date.now();
     verileriYukle();
   };
 
-  const handleUnlock = () => {
+  const handleUnlock = (role?: 'admin' | 'ustabasi') => {
     setIsLocked(false);
+    if (role) {
+      setUserRole(role);
+      if (role === 'ustabasi') {
+        setActiveTab('siparisler');
+      }
+    }
     lastActiveRef.current = Date.now();
     sessionStorage.setItem('rende_last_active', Date.now().toString());
   };
@@ -214,7 +243,8 @@ export default function App() {
         resIzinler,
         resMakineler,
         resDepartmanlar,
-        resGorevler
+        resGorevler,
+        resSiparisOzet
       ] = await Promise.all([
         fetch('/api/ozet').then(r => r.json()).catch(() => null),
         fetch('/api/projeler').then(r => r.json()).catch(() => []),
@@ -226,9 +256,18 @@ export default function App() {
         fetch('/api/makineler').then(r => r.json()).catch(() => []),
         fetch('/api/departmanlar').then(r => r.json()).catch(() => []),
         fetch('/api/gorevler').then(r => r.json()).catch(() => []),
+        fetch('/api/siparisler/ozet').then(r => r.json()).catch(() => null),
       ]);
 
-      if (resOzet) setOzet(resOzet);
+      if (resOzet) {
+        if (resSiparisOzet && resSiparisOzet.bekleyen !== undefined) {
+          resOzet.bekleyenSiparisSayisi = resSiparisOzet.bekleyen;
+        }
+        setOzet(resOzet);
+      }
+      if (resSiparisOzet && resSiparisOzet.okunmamisUstabasi !== undefined) {
+        setUnreadOrdersCount(resSiparisOzet.okunmamisUstabasi);
+      }
       if (Array.isArray(resProjeler)) setProjeler(resProjeler);
       if (Array.isArray(resAraclar)) setAraclar(resAraclar);
       if (Array.isArray(resHatirlaticilar) && resHatirlaticilar.length > 0) {
@@ -606,7 +645,28 @@ export default function App() {
         onLock={handleManualLock}
         onOpenSecuritySettings={() => setSecurityModalOpen(true)}
         onLogout={handleLogout}
+        userRole={userRole}
+        unreadOrdersCount={unreadOrdersCount}
       />
+
+      {/* Admin için Ustabaşı Yeni Sipariş Canlı Bildirimi */}
+      {userRole === 'admin' && (
+        <UstabasiSiparisBildirim
+          userRole={userRole}
+          onNavigateToSiparisler={() => {
+            setActiveTab('siparisler');
+            setUnreadOrdersCount(0);
+          }}
+          onNewOrderDetected={() => {
+            setUnreadOrdersCount(prev => prev + 1);
+            fetch('/api/siparisler/ozet').then(r => r.json()).then(o => {
+              if (o && o.bekleyen !== undefined && ozet) {
+                setOzet({ ...ozet, bekleyenSiparisSayisi: o.bekleyen });
+              }
+            });
+          }}
+        />
+      )}
 
       {/* Ana İçerik Alanı */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-4 sm:pt-6">
@@ -617,98 +677,127 @@ export default function App() {
           </div>
         )}
 
-        {activeTab === 'dashboard' && (
-          <DashboardView
-            ozet={ozet}
-            onNavigateTab={handleNavigateTab}
-            dbStatus={dbStatus}
-            onOpenDbModal={() => setDbModalOpen(true)}
-            onToggleTamamlandi={handleToggleTamamlandi}
+        {/* Ustabaşı Modunda Doğrudan ve Yalnızca Sipariş Modülü Açılır */}
+        {userRole === 'ustabasi' ? (
+          <SiparislerView
+            userRole="ustabasi"
+            onOrderAdded={() => {
+              verileriYukle();
+            }}
           />
-        )}
+        ) : (
+          <>
+            {activeTab === 'dashboard' && (
+              <DashboardView
+                ozet={ozet}
+                onNavigateTab={handleNavigateTab}
+                dbStatus={dbStatus}
+                onOpenDbModal={() => setDbModalOpen(true)}
+                onToggleTamamlandi={handleToggleTamamlandi}
+              />
+            )}
 
-        {activeTab === 'personel' && (
-          <PersonelHubView
-            personeller={personeller}
-            izinler={izinler}
-            projeler={projeler}
-            departmanlar={departmanlar}
-            gorevler={gorevler}
-            onRefresh={verileriYukle}
-            initialAltSekme={personelSubTab}
-            initialPersonelId={selectedPersonelId}
-            initialIsgSekme={isgSekme}
-          />
-        )}
+            {activeTab === 'siparisler' && (
+              <SiparislerView
+                userRole="admin"
+                onOrderAdded={() => {
+                  verileriYukle();
+                }}
+              />
+            )}
 
-        {activeTab === 'makineler' && (
-          <MakineView
-            makineler={makineler}
-            personeller={personeller}
-            onRefresh={verileriYukle}
-          />
-        )}
+            {activeTab === 'personel' && (
+              <PersonelHubView
+                personeller={personeller}
+                izinler={izinler}
+                projeler={projeler}
+                departmanlar={departmanlar}
+                gorevler={gorevler}
+                onRefresh={verileriYukle}
+                initialAltSekme={personelSubTab}
+                initialPersonelId={selectedPersonelId}
+                initialIsgSekme={isgSekme}
+              />
+            )}
 
-        {activeTab === 'projeler' && (
-          <ProjelerView
-            projeler={projeler}
-            personeller={personeller}
-            onSaveProje={handleSaveProje}
-            onDeleteProje={handleDeleteProje}
-          />
-        )}
+            {activeTab === 'makineler' && (
+              <MakineView
+                makineler={makineler}
+                personeller={personeller}
+                onRefresh={verileriYukle}
+              />
+            )}
 
-        {activeTab === 'araclar' && (
-          <AraclarView
-            araclar={araclar}
-            personeller={personeller}
-            onSaveArac={handleSaveArac}
-            onAddBakim={handleAddBakim}
-            onUpdateBakim={handleUpdateBakim}
-            onDeleteBakim={handleDeleteBakim}
-          />
-        )}
+            {activeTab === 'projeler' && (
+              <ProjelerView
+                projeler={projeler}
+                personeller={personeller}
+                onSaveProje={handleSaveProje}
+                onDeleteProje={handleDeleteProje}
+              />
+            )}
 
-        {activeTab === 'hatirlaticilar' && (
-          <HatirlaticilarView
-            hatirlaticilar={hatirlaticilar}
-            personeller={personeller}
-            onAddHatirlatici={handleAddHatirlatici}
-            onToggleTamamlandi={handleToggleTamamlandi}
-            onUpdateHatirlatici={handleUpdateHatirlatici}
-            onDeleteHatirlatici={handleDeleteHatirlatici}
-          />
+            {activeTab === 'araclar' && (
+              <AraclarView
+                araclar={araclar}
+                personeller={personeller}
+                onSaveArac={handleSaveArac}
+                onAddBakim={handleAddBakim}
+                onUpdateBakim={handleUpdateBakim}
+                onDeleteBakim={handleDeleteBakim}
+              />
+            )}
+
+            {activeTab === 'hatirlaticilar' && (
+              <HatirlaticilarView
+                hatirlaticilar={hatirlaticilar}
+                personeller={personeller}
+                onAddHatirlatici={handleAddHatirlatici}
+                onToggleTamamlandi={handleToggleTamamlandi}
+                onUpdateHatirlatici={handleUpdateHatirlatici}
+                onDeleteHatirlatici={handleDeleteHatirlatici}
+              />
+            )}
+          </>
         )}
       </main>
 
       {/* Güvenlik & Parola Ayarları Modalı */}
-      <SecuritySettingsModal
-        isOpen={securityModalOpen}
-        onClose={() => setSecurityModalOpen(false)}
-        onSettingsUpdated={(newMin) => setAutoLockMinutes(newMin)}
-      />
+      {userRole === 'admin' && (
+        <SecuritySettingsModal
+          isOpen={securityModalOpen}
+          onClose={() => setSecurityModalOpen(false)}
+          onSettingsUpdated={(newMin) => setAutoLockMinutes(newMin)}
+        />
+      )}
 
       {/* Telefondan Bağlanma Rehberi Modalı */}
-      <ServerSetupModal
-        isOpen={serverGuideOpen}
-        onClose={() => setServerGuideOpen(false)}
-      />
+      {userRole === 'admin' && (
+        <ServerSetupModal
+          isOpen={serverGuideOpen}
+          onClose={() => setServerGuideOpen(false)}
+        />
+      )}
 
       {/* PostgreSQL Veritabanı Durumu & Teşhis Modalı */}
-      <DatabaseStatusModal
-        isOpen={dbModalOpen}
-        onClose={() => setDbModalOpen(false)}
-        dbStatus={dbStatus}
-        onRefresh={handleRefreshDb}
-      />
+      {userRole === 'admin' && (
+        <DatabaseStatusModal
+          isOpen={dbModalOpen}
+          onClose={() => setDbModalOpen(false)}
+          dbStatus={dbStatus}
+          onRefresh={handleRefreshDb}
+        />
+      )}
 
       {/* Mobil Cihazlar İçin Dokunmatik Alt Çubuk */}
       <BottomNav
         activeTab={activeTab}
         setActiveTab={setActiveTab}
+        userRole={userRole}
         badgeCounts={{
           bakim: ozet?.bakimBekleyenArac,
           hatirlatici: ozet?.bugunBitenGorevler,
+          siparis: unreadOrdersCount,
         }}
       />
 

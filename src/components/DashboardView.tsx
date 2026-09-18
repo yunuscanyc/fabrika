@@ -19,7 +19,8 @@ import {
   Calendar,
   CheckCircle2,
   Circle,
-  Plus
+  Plus,
+  ShoppingCart
 } from 'lucide-react';
 
 interface DashboardViewProps {
@@ -141,8 +142,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* PWA Uygulama Kurulum Kartı */}
       <PWAInstallPrompt variant="card" />
 
-      {/* Ana Metrik Kartları (6 Odaklı Modül) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      {/* Ana Metrik Kartları (7 Odaklı Modül) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
         {/* 1. Aktif Projeler */}
         <div 
           onClick={() => onNavigateTab('projeler')}
@@ -159,6 +160,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <span className="text-[10px] text-slate-400">/ {ozet?.toplamProje ?? 0} Aktif</span>
           </div>
           <p className="text-[10px] text-slate-500 mt-0.5 truncate">İmalat &amp; Şantiye</p>
+        </div>
+
+        {/* 2. Dış Sipariş & Satınalma */}
+        <div 
+          onClick={() => onNavigateTab('siparisler')}
+          className="bg-white rounded-xl p-4 border border-slate-200/80 shadow-sm hover:shadow-md transition-all cursor-pointer group"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-500">Dış Sipariş</span>
+            <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center group-hover:scale-105 transition-transform">
+              <ShoppingCart className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-2xl font-black text-amber-600">
+              {ozet?.bekleyenSiparisSayisi ?? 0}
+            </span>
+            <span className="text-[10px] text-slate-400">Bekleyen</span>
+          </div>
+          <p className="text-[10px] text-slate-500 mt-0.5 truncate">Cam, Ray, Karkas vb.</p>
         </div>
 
         {/* 2. Aktif Personel & İK */}
