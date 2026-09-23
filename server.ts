@@ -815,9 +815,14 @@ async function isTableColumnBytea(tableName: string, colCandidates: string[]): P
 }
 
 const ensuredTablesSet = new Set<string>();
+let canAlterTable: (tblName?: string) => boolean = () => true;
 
 async function ensureDocumentTableColumnsText(tableName: string) {
   if (!tableName || ensuredTablesSet.has(tableName)) return;
+  if (!canAlterTable(tableName)) {
+    ensuredTablesSet.add(tableName);
+    return;
+  }
   try {
     const cleanName = tableName.replace(/"/g, '');
     const colInfoRes = await pool.query(`
@@ -1831,6 +1836,34 @@ async function checkDbConnection() {
       FROM information_schema.tables 
       WHERE table_schema = 'public'
     `);
+
+    const ownerRes = await client.query(`
+      SELECT tablename, tableowner 
+      FROM pg_tables 
+      WHERE schemaname = 'public'
+    `);
+    const tableOwnerMap = new Map<string, string>();
+    for (const row of ownerRes.rows) {
+      tableOwnerMap.set(String(row.tablename).toLowerCase(), String(row.tableowner).toLowerCase());
+    }
+
+    let isSuperOrMember = false;
+    let currentUser = 'rende_user';
+    try {
+      const userRes = await client.query(`SELECT current_user, pg_has_role(current_user, 'postgres', 'MEMBER') as is_postgres_member`);
+      currentUser = String(userRes.rows[0]?.current_user || 'rende_user').toLowerCase();
+      isSuperOrMember = Boolean(userRes.rows[0]?.is_postgres_member);
+    } catch (e) {}
+
+    canAlterTable = (tblName?: string): boolean => {
+      if (!tblName) return false;
+      if (isSuperOrMember) return true;
+      const clean = tblName.replace(/"/g, '').toLowerCase();
+      const owner = tableOwnerMap.get(clean);
+      if (!owner) return true;
+      return owner === currentUser;
+    };
+
     client.release();
 
     const tables: string[] = res.rows.map(r => r.table_name);
@@ -1940,6 +1973,7 @@ async function checkDbConnection() {
     ].filter(Boolean);
 
     for (const tbl of docTables) {
+      if (!tbl || !canAlterTable(tbl)) continue;
       try {
         const cols = await getTableColumns(tbl!);
         for (const col of cols) {
@@ -2081,14 +2115,16 @@ async function checkDbConnection() {
       try {
         const cols = await getTableColumns(detectedTables.hatirlaticilar);
         const hasCol = (name: string) => cols.some(c => c.toLowerCase() === name.toLowerCase());
-        if (!hasCol('SorumluPersonelId')) {
-          await pool.query(`ALTER TABLE ${detectedTables.hatirlaticilar} ADD COLUMN IF NOT EXISTS "SorumluPersonelId" INT`);
-        }
-        if (!hasCol('OnemDerecesi') && !hasCol('Oncelik')) {
-          await pool.query(`ALTER TABLE ${detectedTables.hatirlaticilar} ADD COLUMN IF NOT EXISTS "OnemDerecesi" VARCHAR(50) DEFAULT 'Normal'`);
-        }
-        if (!hasCol('TamamlandiMi') && !hasCol('Durum')) {
-          await pool.query(`ALTER TABLE ${detectedTables.hatirlaticilar} ADD COLUMN IF NOT EXISTS "TamamlandiMi" BOOLEAN DEFAULT false`);
+        if (canAlterTable(detectedTables.hatirlaticilar)) {
+          if (!hasCol('SorumluPersonelId')) {
+            await pool.query(`ALTER TABLE ${detectedTables.hatirlaticilar} ADD COLUMN IF NOT EXISTS "SorumluPersonelId" INT`);
+          }
+          if (!hasCol('OnemDerecesi') && !hasCol('Oncelik')) {
+            await pool.query(`ALTER TABLE ${detectedTables.hatirlaticilar} ADD COLUMN IF NOT EXISTS "OnemDerecesi" VARCHAR(50) DEFAULT 'Normal'`);
+          }
+          if (!hasCol('TamamlandiMi') && !hasCol('Durum')) {
+            await pool.query(`ALTER TABLE ${detectedTables.hatirlaticilar} ADD COLUMN IF NOT EXISTS "TamamlandiMi" BOOLEAN DEFAULT false`);
+          }
         }
 
         // OTOMATİK VERİ KURTARMA (Veri tabanında başlığı boşalan hatırlatıcıları onar)
@@ -2177,7 +2213,7 @@ async function checkDbConnection() {
       }
     }
 
-    if (detectedTables.personeller) {
+    if (detectedTables.personeller && canAlterTable(detectedTables.personeller)) {
       try {
         const cols = await getTableColumns(detectedTables.personeller);
         const hasCol = (name: string) => cols.some(c => c.toLowerCase() === name.toLowerCase());
@@ -2268,7 +2304,7 @@ async function checkDbConnection() {
       }
     }
 
-    if (detectedTables.izinler) {
+    if (detectedTables.izinler && canAlterTable(detectedTables.izinler)) {
       try {
         const cols = await getTableColumns(detectedTables.izinler);
         const hasCol = (name: string) => cols.some(c => c.toLowerCase() === name.toLowerCase());
@@ -2339,7 +2375,7 @@ async function checkDbConnection() {
       }
     }
 
-    if (detectedTables.puantajlar) {
+    if (detectedTables.puantajlar && canAlterTable(detectedTables.puantajlar)) {
       try {
         const cols = await getTableColumns(detectedTables.puantajlar);
         const hasCol = (name: string) => cols.some(c => c.toLowerCase() === name.toLowerCase());
@@ -2364,7 +2400,7 @@ async function checkDbConnection() {
       } catch (alterErr: any) {
         console.error('[DB PUANTAJ ALTER COLUMNS ERROR]', alterErr.message);
       }
-    } else {
+    } else if (!detectedTables.puantajlar) {
       try {
         await pool.query(`
           CREATE TABLE IF NOT EXISTS "GunlukPuantajlar" (
@@ -2389,7 +2425,7 @@ async function checkDbConnection() {
       }
     }
 
-    if (detectedTables.makineler) {
+    if (detectedTables.makineler && canAlterTable(detectedTables.makineler)) {
       try {
         const cols = await getTableColumns(detectedTables.makineler);
         const hasCol = (name: string) => cols.some(c => c.toLowerCase() === name.toLowerCase());
@@ -2417,7 +2453,7 @@ async function checkDbConnection() {
       }
     }
 
-    if (detectedTables.araclar) {
+    if (detectedTables.araclar && canAlterTable(detectedTables.araclar)) {
       try {
         const cols = await getTableColumns(detectedTables.araclar);
         const hasCol = (name: string) => cols.some(c => c.toLowerCase() === name.toLowerCase());
@@ -2459,7 +2495,7 @@ async function checkDbConnection() {
       } catch (alterErr: any) {
         console.error('[DB ARAC ALTER COLUMNS ERROR]', alterErr.message);
       }
-    } else {
+    } else if (!detectedTables.araclar) {
       try {
         await pool.query(`
           CREATE TABLE IF NOT EXISTS "Araclar" (
@@ -2520,7 +2556,7 @@ async function checkDbConnection() {
       }
     }
 
-    if (detectedTables.aracBakimlar) {
+    if (detectedTables.aracBakimlar && canAlterTable(detectedTables.aracBakimlar)) {
       try {
         const cols = await getTableColumns(detectedTables.aracBakimlar);
         for (const c of cols) {
@@ -4730,7 +4766,9 @@ app.post('/api/araclar', async (req, res) => {
             const match = err.message.match(/column "([^"]+)"/);
             if (match && match[1]) {
               const colToFix = match[1];
-              await pool.query(`ALTER TABLE ${detectedTables.araclar} ALTER COLUMN "${colToFix}" DROP NOT NULL`);
+              if (canAlterTable(detectedTables.araclar)) {
+                await pool.query(`ALTER TABLE ${detectedTables.araclar} ALTER COLUMN "${colToFix}" DROP NOT NULL`);
+              }
               const retryCols = await getTableColumns(detectedTables.araclar);
               const pCol = retryCols.find(c => ['plakaveyakod', 'plaka', 'kod'].includes(c.toLowerCase())) || 'PlakaVeyaKod';
               const reRes = await pool.query(`
@@ -7067,10 +7105,12 @@ async function loadAuthSettings(): Promise<AuthData> {
   if (isDbConnected && detectedTables.sistemGuvenlik) {
     try {
       // Sütunun var olduğundan emin ol
-      try {
-        await pool.query(`ALTER TABLE ${detectedTables.sistemGuvenlik} ADD COLUMN IF NOT EXISTS "UstabasiPin" VARCHAR(50) DEFAULT '1923'`);
-        await pool.query(`UPDATE ${detectedTables.sistemGuvenlik} SET "UstabasiPin" = '1923' WHERE "UstabasiPin" IS NULL OR "UstabasiPin" = ''`);
-      } catch (e) {}
+      if (canAlterTable(detectedTables.sistemGuvenlik)) {
+        try {
+          await pool.query(`ALTER TABLE ${detectedTables.sistemGuvenlik} ADD COLUMN IF NOT EXISTS "UstabasiPin" VARCHAR(50) DEFAULT '1923'`);
+          await pool.query(`UPDATE ${detectedTables.sistemGuvenlik} SET "UstabasiPin" = '1923' WHERE "UstabasiPin" IS NULL OR "UstabasiPin" = ''`);
+        } catch (e) {}
+      }
 
       const res = await pool.query(`SELECT * FROM ${detectedTables.sistemGuvenlik} LIMIT 1`);
       if (res.rows.length > 0) {
@@ -7086,10 +7126,19 @@ async function loadAuthSettings(): Promise<AuthData> {
         memAuthData.autoLockMinutes = Number(getProp(row, 'AutoLockMinutes', 'autolockminutes', 'dakika') || 15);
         memAuthData.isProtectionEnabled = Boolean(getProp(row, 'IsProtectionEnabled', 'isprotectionenabled') ?? true);
       } else {
-        await pool.query(`
-          INSERT INTO ${detectedTables.sistemGuvenlik} ("Id", "MasterPassword", "QuickPin", "UstabasiPin", "AutoLockMinutes", "IsProtectionEnabled")
-          VALUES (1, $1, $2, $3, $4, $5)
-        `, [memAuthData.masterPassword, memAuthData.quickPin, memAuthData.ustabasiPin, memAuthData.autoLockMinutes, memAuthData.isProtectionEnabled]);
+        const sCols = await getTableColumns(detectedTables.sistemGuvenlik);
+        const hasUst = sCols.some(c => c.toLowerCase() === 'ustabasipin');
+        if (hasUst) {
+          await pool.query(`
+            INSERT INTO ${detectedTables.sistemGuvenlik} ("Id", "MasterPassword", "QuickPin", "UstabasiPin", "AutoLockMinutes", "IsProtectionEnabled")
+            VALUES (1, $1, $2, $3, $4, $5)
+          `, [memAuthData.masterPassword, memAuthData.quickPin, memAuthData.ustabasiPin, memAuthData.autoLockMinutes, memAuthData.isProtectionEnabled]);
+        } else {
+          await pool.query(`
+            INSERT INTO ${detectedTables.sistemGuvenlik} ("Id", "MasterPassword", "QuickPin", "AutoLockMinutes", "IsProtectionEnabled")
+            VALUES (1, $1, $2, $3, $4)
+          `, [memAuthData.masterPassword, memAuthData.quickPin, memAuthData.autoLockMinutes, memAuthData.isProtectionEnabled]);
+        }
       }
     } catch (e: any) {
       console.log('[DB] Sistem güvenlik tablosu okuma hatası:', e.message);
@@ -7102,20 +7151,37 @@ async function saveAuthSettings(data: Partial<AuthData>) {
   Object.assign(memAuthData, data);
   if (isDbConnected && detectedTables.sistemGuvenlik) {
     try {
-      try {
-        await pool.query(`ALTER TABLE ${detectedTables.sistemGuvenlik} ADD COLUMN IF NOT EXISTS "UstabasiPin" VARCHAR(50) DEFAULT '1923'`);
-      } catch (e) {}
+      if (canAlterTable(detectedTables.sistemGuvenlik)) {
+        try {
+          await pool.query(`ALTER TABLE ${detectedTables.sistemGuvenlik} ADD COLUMN IF NOT EXISTS "UstabasiPin" VARCHAR(50) DEFAULT '1923'`);
+        } catch (e) {}
+      }
 
-      await pool.query(`
-        INSERT INTO ${detectedTables.sistemGuvenlik} ("Id", "MasterPassword", "QuickPin", "UstabasiPin", "AutoLockMinutes", "IsProtectionEnabled")
-        VALUES (1, $1, $2, $3, $4, $5)
-        ON CONFLICT ("Id") DO UPDATE 
-        SET "MasterPassword" = EXCLUDED."MasterPassword",
-            "QuickPin" = EXCLUDED."QuickPin",
-            "UstabasiPin" = EXCLUDED."UstabasiPin",
-            "AutoLockMinutes" = EXCLUDED."AutoLockMinutes",
-            "IsProtectionEnabled" = EXCLUDED."IsProtectionEnabled"
-      `, [memAuthData.masterPassword, memAuthData.quickPin, memAuthData.ustabasiPin, memAuthData.autoLockMinutes, memAuthData.isProtectionEnabled]);
+      const sCols = await getTableColumns(detectedTables.sistemGuvenlik);
+      const hasUst = sCols.some(c => c.toLowerCase() === 'ustabasipin');
+
+      if (hasUst) {
+        await pool.query(`
+          INSERT INTO ${detectedTables.sistemGuvenlik} ("Id", "MasterPassword", "QuickPin", "UstabasiPin", "AutoLockMinutes", "IsProtectionEnabled")
+          VALUES (1, $1, $2, $3, $4, $5)
+          ON CONFLICT ("Id") DO UPDATE 
+          SET "MasterPassword" = EXCLUDED."MasterPassword",
+              "QuickPin" = EXCLUDED."QuickPin",
+              "UstabasiPin" = EXCLUDED."UstabasiPin",
+              "AutoLockMinutes" = EXCLUDED."AutoLockMinutes",
+              "IsProtectionEnabled" = EXCLUDED."IsProtectionEnabled"
+        `, [memAuthData.masterPassword, memAuthData.quickPin, memAuthData.ustabasiPin, memAuthData.autoLockMinutes, memAuthData.isProtectionEnabled]);
+      } else {
+        await pool.query(`
+          INSERT INTO ${detectedTables.sistemGuvenlik} ("Id", "MasterPassword", "QuickPin", "AutoLockMinutes", "IsProtectionEnabled")
+          VALUES (1, $1, $2, $3, $4)
+          ON CONFLICT ("Id") DO UPDATE 
+          SET "MasterPassword" = EXCLUDED."MasterPassword",
+              "QuickPin" = EXCLUDED."QuickPin",
+              "AutoLockMinutes" = EXCLUDED."AutoLockMinutes",
+              "IsProtectionEnabled" = EXCLUDED."IsProtectionEnabled"
+        `, [memAuthData.masterPassword, memAuthData.quickPin, memAuthData.autoLockMinutes, memAuthData.isProtectionEnabled]);
+      }
     } catch (e: any) {
       console.error('[DB] Sistem güvenlik kaydetme hatası:', e.message);
     }
@@ -8584,10 +8650,15 @@ app.put('/api/sehir-disi-gorevler/:id', async (req, res) => {
     const body = req.body;
 
     const idx = memSehirDisiGorevler.findIndex(g => String(g.GorevId) === String(rawId));
+    let updatedItem: any;
     if (idx !== -1) {
-      memSehirDisiGorevler[idx] = { ...memSehirDisiGorevler[idx], ...body };
-      saveMemSehirDisiGorevler();
+      memSehirDisiGorevler[idx] = { ...memSehirDisiGorevler[idx], ...body, GorevId: String(rawId) };
+      updatedItem = memSehirDisiGorevler[idx];
+    } else {
+      updatedItem = { ...body, GorevId: String(rawId) };
+      memSehirDisiGorevler.unshift(updatedItem);
     }
+    saveMemSehirDisiGorevler();
 
     if (isDbConnected && detectedTables.sehirDisiGorevler) {
       try {
@@ -8619,13 +8690,58 @@ app.put('/api/sehir-disi-gorevler/:id', async (req, res) => {
           }
         }
 
+        let didUpdate = false;
         if (updateFields.length > 0) {
           params.push(rawId);
-          await pool.query(`
+          const updateRes = await pool.query(`
             UPDATE ${detectedTables.sehirDisiGorevler}
             SET ${updateFields.join(', ')}
             WHERE "GorevId" = $${i}
           `, params);
+          if (updateRes.rowCount && updateRes.rowCount > 0) {
+            didUpdate = true;
+          }
+        }
+
+        if (!didUpdate) {
+          // Eğer UPDATE eşleşmediyse (yeni kayıtsa) doğrudan INSERT et
+          await pool.query(`
+            INSERT INTO ${detectedTables.sehirDisiGorevler} (
+              "GorevId", "FormNo", "ProjeId", "ProjeAdi", "GidilecekIlIlce", "SantiyeAdresi", "GorevAmaci",
+              "BaslangicTarihi", "BitisTarihi", "TahminiGunSayisi", "UlasimSekli", "AracPlakaVeyaBiletInfo",
+              "KonaklamaTuru", "KonaklamaAdresiInfo", "GunlukHarcirahTutar", "YemekKarsilamaTuru",
+              "Personeller", "IsgUyariKabul", "GenelNotlar", "DuzenleyenKisi", "OlusturmaTarihi", "Durum"
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+            ON CONFLICT ("GorevId") DO UPDATE SET
+              "FormNo" = EXCLUDED."FormNo",
+              "ProjeId" = EXCLUDED."ProjeId",
+              "ProjeAdi" = EXCLUDED."ProjeAdi",
+              "GidilecekIlIlce" = EXCLUDED."GidilecekIlIlce",
+              "SantiyeAdresi" = EXCLUDED."SantiyeAdresi",
+              "GorevAmaci" = EXCLUDED."GorevAmaci",
+              "BaslangicTarihi" = EXCLUDED."BaslangicTarihi",
+              "BitisTarihi" = EXCLUDED."BitisTarihi",
+              "TahminiGunSayisi" = EXCLUDED."TahminiGunSayisi",
+              "UlasimSekli" = EXCLUDED."UlasimSekli",
+              "AracPlakaVeyaBiletInfo" = EXCLUDED."AracPlakaVeyaBiletInfo",
+              "KonaklamaTuru" = EXCLUDED."KonaklamaTuru",
+              "KonaklamaAdresiInfo" = EXCLUDED."KonaklamaAdresiInfo",
+              "GunlukHarcirahTutar" = EXCLUDED."GunlukHarcirahTutar",
+              "YemekKarsilamaTuru" = EXCLUDED."YemekKarsilamaTuru",
+              "Personeller" = EXCLUDED."Personeller",
+              "IsgUyariKabul" = EXCLUDED."IsgUyariKabul",
+              "GenelNotlar" = EXCLUDED."GenelNotlar",
+              "DuzenleyenKisi" = EXCLUDED."DuzenleyenKisi",
+              "Durum" = EXCLUDED."Durum"
+          `, [
+            String(rawId), body.FormNo || `GRV-2026-001`, parseSafeInt(body.ProjeId, null), body.ProjeAdi || null,
+            body.GidilecekIlIlce || '', body.SantiyeAdresi || '', body.GorevAmaci || '',
+            body.BaslangicTarihi || getBugunStr(), body.BitisTarihi || getBugunStr(), parseSafeInt(body.TahminiGunSayisi, 1) || 1,
+            body.UlasimSekli || 'Şirket Aracı', body.AracPlakaVeyaBiletInfo || '', body.KonaklamaTuru || 'Otel',
+            body.KonaklamaAdresiInfo || '', parseSafeFloat(body.GunlukHarcirahTutar, 0), body.YemekKarsilamaTuru || 'Şirket Tarafından Karşılanır',
+            JSON.stringify(body.Personeller || []), body.IsgUyariKabul !== false, body.GenelNotlar || '',
+            body.DuzenleyenKisi || '', body.OlusturmaTarihi || getBugunStr(), body.Durum || 'Aktif'
+          ]);
         }
       } catch (dbErr: any) {
         console.error('[DB GOREVLENDIRME UPDATE ERROR]', dbErr.message);
@@ -8638,7 +8754,7 @@ app.put('/api/sehir-disi-gorevler/:id', async (req, res) => {
       }
     }
 
-    return res.json({ success: true, message: 'Görevlendirme yazısı güncellendi.' });
+    return res.json({ success: true, message: 'Görevlendirme yazısı kaydedildi.', item: updatedItem });
   } catch (err: any) {
     recordDbError(`PUT /api/sehir-disi-gorevler/${req.params.id} (SERVER)`, err);
     return res.status(500).json({ success: false, error: err.message });

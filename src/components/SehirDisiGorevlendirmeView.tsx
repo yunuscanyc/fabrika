@@ -20,22 +20,24 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
   projeler = []
 }) => {
   const [gorevler, setGorevler] = useState<SehirDisiGorevlendirme[]>([]);
+  const [isEditing, setIsEditing] = useState(false);
 
   // Veritabanından Görevleri Yükle
-  useEffect(() => {
-    const fetchGorevler = async () => {
-      try {
-        const res = await fetch('/api/sehir-disi-gorevler');
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data)) {
-            setGorevler(data);
-          }
+  const fetchGorevler = async () => {
+    try {
+      const res = await fetch('/api/sehir-disi-gorevler');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setGorevler(data);
         }
-      } catch (e) {
-        console.error('Fetch error:', e);
       }
-    };
+    } catch (e) {
+      console.error('Fetch error:', e);
+    }
+  };
+
+  useEffect(() => {
     fetchGorevler();
   }, []);
 
@@ -101,6 +103,7 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
 
   // Form Sıfırla & Yeni Aç
   const handleYeniFormAc = () => {
+    setIsEditing(false);
     setFormData({
       GorevId: `GRV-${Date.now()}`,
       FormNo: `GRV-2026-00${gorevler.length + 1}`,
@@ -129,6 +132,7 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
 
   // Düzenleme İçin Aç
   const handleDuzenleAc = (g: SehirDisiGorevlendirme) => {
+    setIsEditing(true);
     setFormData({ ...g });
     setFormModalOpen(true);
   };
@@ -220,7 +224,7 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
       return;
     }
 
-    const isEdit = !!formData.GorevId;
+    const isEdit = isEditing && !!formData.GorevId && gorevler.some(g => g.GorevId === formData.GorevId);
     const gId = formData.GorevId || `GRV-${Date.now()}`;
     const kayitGorev: SehirDisiGorevlendirme = {
       GorevId: gId,
@@ -262,11 +266,13 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
       if (res.ok && resData?.success !== false) {
         const savedItem = resData?.item || kayitGorev;
         if (isEdit) {
-          setGorevler(gorevler.map(g => g.GorevId === gId ? savedItem : g));
+          setGorevler(prev => prev.map(g => g.GorevId === gId ? savedItem : g));
         } else {
-          setGorevler([savedItem, ...gorevler]);
+          setGorevler(prev => [savedItem, ...prev.filter(g => g.GorevId !== savedItem.GorevId)]);
         }
         setFormModalOpen(false);
+        setIsEditing(false);
+        fetchGorevler();
         alert('Şehir dışı görevlendirme yazısı veritabanına başarıyla kaydedildi.');
       } else {
         const errorMsg = resData?.error || resData?.message || 'Bilinmeyen bir hata oluştu.';
@@ -288,7 +294,8 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
         });
         const resData = await res.json().catch(() => null);
         if (res.ok && resData?.success !== false) {
-          setGorevler(gorevler.filter(g => g.GorevId !== id));
+          setGorevler(prev => prev.filter(g => g.GorevId !== id));
+          fetchGorevler();
           alert('Görevlendirme yazısı başarıyla silindi.');
         } else {
           const errorMsg = resData?.error || resData?.message || 'Silme işlemi sırasında hata oluştu.';
