@@ -94,7 +94,7 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
     AracPlakaVeyaBiletInfo: '',
     KonaklamaTuru: 'Otel',
     KonaklamaAdresiInfo: '',
-    GunlukHarcirahTutar: 350,
+    GunlukHarcirahTutar: 0,
     YemekKarsilamaTuru: 'Şirket Tarafından Karşılanır',
     Personeller: [],
     IsgUyariKabul: true,
@@ -145,7 +145,7 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
       AracPlakaVeyaBiletInfo: '',
       KonaklamaTuru: 'Otel',
       KonaklamaAdresiInfo: '',
-      GunlukHarcirahTutar: 350,
+      GunlukHarcirahTutar: 0,
       YemekKarsilamaTuru: 'Şirket Tarafından Karşılanır',
       Personeller: [],
       IsgUyariKabul: true,
@@ -178,7 +178,7 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
       PersonelId: p.PersonelId,
       TCKimlikNo: p.TCKimlikNo || '',
       AdSoyad: p.AdSoyad,
-      GorevUnvan: p.GorevVeyaUnvan || p.Gorev || 'Montaj Ustası',
+      GorevUnvan: p.Gorev || p.GorevVeyaUnvan || 'Görevli',
       Telefon: p.Telefon || '',
       AcilDurumKisiVeTel: p.AcilDurumKisisi ? `${p.AcilDurumKisisi} (${p.AcilDurumTelefonu || ''})` : ''
     };
@@ -423,7 +423,7 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
                 <div className="flex flex-wrap gap-1">
                   {g.Personeller.map((p, idx) => (
                     <span key={idx} className="text-[11px] px-2 py-0.5 bg-slate-800 border border-slate-700 text-slate-200 rounded-lg font-semibold">
-                      👤 {p.AdSoyad} ({p.GorevUnvan || 'Usta'})
+                      👤 {p.AdSoyad} ({p.GorevUnvan || 'Görevli'})
                     </span>
                   ))}
                 </div>
@@ -962,7 +962,7 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
                       <td className="p-2 border text-center font-bold">{idx + 1}</td>
                       <td className="p-2 border font-mono font-bold">{p.TCKimlikNo}</td>
                       <td className="p-2 border font-bold">{p.AdSoyad}</td>
-                      <td className="p-2 border">{p.GorevUnvan || 'Usta'}</td>
+                      <td className="p-2 border">{p.GorevUnvan || 'Görevli'}</td>
                       <td className="p-2 border">{p.Telefon}</td>
                       <td className="p-2 border">{p.AcilDurumKisiVeTel || '-'}</td>
                     </tr>
