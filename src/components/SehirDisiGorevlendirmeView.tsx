@@ -257,20 +257,25 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
         body: JSON.stringify(kayitGorev)
       });
 
-      if (res.ok) {
+      const resData = await res.json().catch(() => null);
+
+      if (res.ok && resData?.success !== false) {
+        const savedItem = resData?.item || kayitGorev;
         if (isEdit) {
-          setGorevler(gorevler.map(g => g.GorevId === gId ? kayitGorev : g));
+          setGorevler(gorevler.map(g => g.GorevId === gId ? savedItem : g));
         } else {
-          setGorevler([kayitGorev, ...gorevler]);
+          setGorevler([savedItem, ...gorevler]);
         }
         setFormModalOpen(false);
-        alert('Şehir dışı görevlendirme yazısı başarıyla kaydedildi.');
+        alert('Şehir dışı görevlendirme yazısı veritabanına başarıyla kaydedildi.');
       } else {
-        alert('Kaydetme sırasında bir hata oluştu.');
+        const errorMsg = resData?.error || resData?.message || 'Bilinmeyen bir hata oluştu.';
+        const detailMsg = resData?.detail ? `\nDetay: ${resData.detail}` : '';
+        alert(`Kayıt veritabanına eklenemedi!\n\nHata: ${errorMsg}${detailMsg}`);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('Save error:', e);
-      alert('Sunucuya bağlanırken bir hata oluştu.');
+      alert(`Sunucuya bağlanırken bir hata oluştu: ${e?.message || e}`);
     }
   };
 
@@ -281,15 +286,17 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
         const res = await fetch(`/api/sehir-disi-gorevler/${id}`, {
           method: 'DELETE'
         });
-        if (res.ok) {
+        const resData = await res.json().catch(() => null);
+        if (res.ok && resData?.success !== false) {
           setGorevler(gorevler.filter(g => g.GorevId !== id));
           alert('Görevlendirme yazısı başarıyla silindi.');
         } else {
-          alert('Silme işlemi sırasında bir hata oluştu.');
+          const errorMsg = resData?.error || resData?.message || 'Silme işlemi sırasında hata oluştu.';
+          alert(`Silme başarısız: ${errorMsg}`);
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error('Delete error:', e);
-        alert('Sunucuya bağlanırken bir hata oluştu.');
+        alert(`Sunucuya bağlanırken bir hata oluştu: ${e?.message || e}`);
       }
     }
   };
