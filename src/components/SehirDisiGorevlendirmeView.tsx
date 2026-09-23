@@ -28,60 +28,8 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
         const res = await fetch('/api/sehir-disi-gorevler');
         if (res.ok) {
           const data = await res.json();
-          if (Array.isArray(data) && data.length > 0) {
+          if (Array.isArray(data)) {
             setGorevler(data);
-          } else {
-            // Eğer veritabanı tamamen boşsa varsayılan 1 tane mock veri ekleyelim
-            const varsayilanGorev: SehirDisiGorevlendirme = {
-              GorevId: 'GRV-01',
-              FormNo: 'GRV-2026-001',
-              ProjeId: projeler[0]?.ProjeId || null,
-              ProjeAdi: projeler[0]?.ProjeAdi || 'Çamlıca Villa Ahşap Montajı',
-              GidilecekIlIlce: 'İzmir / Bornova',
-              SantiyeAdresi: 'Ege Üniversitesi Hastanesi Ek Hizmet Binası Şantiyesi B-Blok',
-              GorevAmaci: 'Ahşap duvar kaplama, lambri ve süpürgelik montaj işlerinin yürütülmesi ve teslimi',
-              BaslangicTarihi: '2026-09-25',
-              BitisTarihi: '2026-10-05',
-              TahminiGunSayisi: 10,
-              UlasimSekli: 'Şirket Aracı',
-              AracPlakaVeyaBiletInfo: '34 XYZ 88 (Transit Kamyonet)',
-              KonaklamaTuru: 'Otel',
-              KonaklamaAdresiInfo: 'Bornova Grand Otel / İzmir',
-              GunlukHarcirahTutar: 400,
-              YemekKarsilamaTuru: 'Şirket Tarafından Karşılanır',
-              Personeller: [
-                {
-                  PersonelId: personeller[0]?.PersonelId || 1,
-                  TCKimlikNo: personeller[0]?.TCKimlikNo || '12345678901',
-                  AdSoyad: personeller[0]?.AdSoyad || 'Ahmet Yılmaz',
-                  GorevUnvan: personeller[0]?.Gorev || personeller[0]?.GorevVeyaUnvan || 'Montaj Ustası',
-                  Telefon: personeller[0]?.Telefon || '0532 100 20 30',
-                  AcilDurumKisiVeTel: personeller[0]?.AcilDurumKisisi ? `${personeller[0]?.AcilDurumKisisi} (${personeller[0]?.AcilDurumTelefonu || ''})` : 'Eşi: 0533 222 33 44'
-                },
-                {
-                  PersonelId: personeller[1]?.PersonelId || 2,
-                  TCKimlikNo: personeller[1]?.TCKimlikNo || '98765432109',
-                  AdSoyad: personeller[1]?.AdSoyad || 'Mehmet Demir',
-                  GorevUnvan: personeller[1]?.Gorev || personeller[1]?.GorevVeyaUnvan || 'Mobilya Ustası',
-                  Telefon: personeller[1]?.Telefon || '0535 300 40 50',
-                  AcilDurumKisiVeTel: 'Babası: 0536 777 88 99'
-                }
-              ],
-              IsgUyariKabul: true,
-              GenelNotlar: 'Saha girişinde baret, çelik burunlu ayakkabı ve koruyucu yelek zorunludur.',
-              DuzenleyenKisi: 'İnsan Kaynakları Departmanı',
-              OlusturmaTarihi: '2026-09-22',
-              Durum: 'Aktif'
-            };
-
-            // DB'ye kaydetmeyi dene
-            await fetch('/api/sehir-disi-gorevler', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(varsayilanGorev)
-            }).catch(() => {});
-
-            setGorevler([varsayilanGorev]);
           }
         }
       } catch (e) {
@@ -89,7 +37,7 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
       }
     };
     fetchGorevler();
-  }, [personeller, projeler]);
+  }, []);
 
   // Arama & Filtre
   const [aramaMetni, setAramaMetni] = useState('');

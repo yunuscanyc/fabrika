@@ -8,8 +8,6 @@ import dotenv from 'dotenv';
 // .env veya .env.example dosyasını güvenle yükle
 if (fs.existsSync(path.join(process.cwd(), '.env'))) {
   dotenv.config({ path: path.join(process.cwd(), '.env') });
-} else if (fs.existsSync(path.join(process.cwd(), '.env.example'))) {
-  dotenv.config({ path: path.join(process.cwd(), '.env.example') });
 } else {
   dotenv.config();
 }
@@ -40,14 +38,15 @@ function createPgPool() {
     });
   }
 
-  const host = process.env.PGHOST || '87.121.104.184';
+  const envHost = process.env.PGHOST;
+  const host = (envHost && envHost !== 'localhost') ? envHost : '87.121.104.184';
   const isLocalHost = host === 'localhost' || host === '127.0.0.1';
   return new Pool({
     host: host,
     port: parseInt(process.env.PGPORT || '5432'),
-    database: process.env.PGDATABASE || 'rende_portal',
-    user: (process.env.PGUSER || 'rende_user').replace(/[{}]/g, '').trim(),
-    password: process.env.PGPASSWORD || 'Elifesma12345',
+    database: (process.env.PGDATABASE && process.env.PGDATABASE !== 'FabrikaYonetimDB') ? process.env.PGDATABASE : 'rende_portal',
+    user: (process.env.PGUSER && process.env.PGUSER !== 'postgres' ? process.env.PGUSER : 'rende_user').replace(/[{}]/g, '').trim(),
+    password: process.env.PGPASSWORD && process.env.PGPASSWORD !== '1' ? process.env.PGPASSWORD : 'Elifesma12345',
     ssl: !isLocalHost || process.env.PGSSL === 'true' ? { rejectUnauthorized: false } : false,
     connectionTimeoutMillis: 7000,
   });
@@ -8351,7 +8350,38 @@ app.post('/api/malzeme-katalog/reset-varsayilan', async (req, res) => {
 // =========================================================================
 // ŞEHİR DIŞI GÖREVLENDİRME (4857 s. Kanun Uyumlu) APİLERİ
 // =========================================================================
+const SEHIR_DISI_GOREV_FILE = path.join(DATA_DIR, 'mem_sehir_disi_gorevler.json');
+
 let memSehirDisiGorevler: any[] = [];
+
+function saveMemSehirDisiGorevler() {
+  try {
+    ensureDataDir();
+    fs.writeFileSync(SEHIR_DISI_GOREV_FILE, JSON.stringify(memSehirDisiGorevler, null, 2), 'utf-8');
+  } catch (e: any) {
+    console.error('[SAVE SEHIR DISI GOREVLER FILE ERROR]', e.message);
+  }
+}
+
+function loadMemSehirDisiGorevler(): any[] | null {
+  try {
+    if (fs.existsSync(SEHIR_DISI_GOREV_FILE)) {
+      const raw = fs.readFileSync(SEHIR_DISI_GOREV_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    }
+  } catch (e: any) {
+    console.error('[LOAD SEHIR DISI GOREVLER FILE ERROR]', e.message);
+  }
+  return null;
+}
+
+const loadedGorevler = loadMemSehirDisiGorevler();
+if (loadedGorevler) {
+  memSehirDisiGorevler = loadedGorevler;
+}
 
 function normalizeSehirDisiGorev(row: any) {
   let pers: any[] = [];
@@ -8444,6 +8474,7 @@ app.post('/api/sehir-disi-gorevler', async (req, res) => {
     };
 
     memSehirDisiGorevler.unshift(yeniGorev);
+    saveMemSehirDisiGorevler();
 
     if (isDbConnected && detectedTables.sehirDisiGorevler) {
       try {
@@ -8454,6 +8485,27 @@ app.post('/api/sehir-disi-gorevler', async (req, res) => {
             "KonaklamaTuru", "KonaklamaAdresiInfo", "GunlukHarcirahTutar", "YemekKarsilamaTuru",
             "Personeller", "IsgUyariKabul", "GenelNotlar", "DuzenleyenKisi", "OlusturmaTarihi", "Durum"
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+          ON CONFLICT ("GorevId") DO UPDATE SET
+            "FormNo" = EXCLUDED."FormNo",
+            "ProjeId" = EXCLUDED."ProjeId",
+            "ProjeAdi" = EXCLUDED."ProjeAdi",
+            "GidilecekIlIlce" = EXCLUDED."GidilecekIlIlce",
+            "SantiyeAdresi" = EXCLUDED."SantiyeAdresi",
+            "GorevAmaci" = EXCLUDED."GorevAmaci",
+            "BaslangicTarihi" = EXCLUDED."BaslangicTarihi",
+            "BitisTarihi" = EXCLUDED."BitisTarihi",
+            "TahminiGunSayisi" = EXCLUDED."TahminiGunSayisi",
+            "UlasimSekli" = EXCLUDED."UlasimSekli",
+            "AracPlakaVeyaBiletInfo" = EXCLUDED."AracPlakaVeyaBiletInfo",
+            "KonaklamaTuru" = EXCLUDED."KonaklamaTuru",
+            "KonaklamaAdresiInfo" = EXCLUDED."KonaklamaAdresiInfo",
+            "GunlukHarcirahTutar" = EXCLUDED."GunlukHarcirahTutar",
+            "YemekKarsilamaTuru" = EXCLUDED."YemekKarsilamaTuru",
+            "Personeller" = EXCLUDED."Personeller",
+            "IsgUyariKabul" = EXCLUDED."IsgUyariKabul",
+            "GenelNotlar" = EXCLUDED."GenelNotlar",
+            "DuzenleyenKisi" = EXCLUDED."DuzenleyenKisi",
+            "Durum" = EXCLUDED."Durum"
         `, [
           yeniGorev.GorevId, yeniGorev.FormNo, yeniGorev.ProjeId, yeniGorev.ProjeAdi, yeniGorev.GidilecekIlIlce, yeniGorev.SantiyeAdresi, yeniGorev.GorevAmaci,
           yeniGorev.BaslangicTarihi, yeniGorev.BitisTarihi, yeniGorev.TahminiGunSayisi, yeniGorev.UlasimSekli, yeniGorev.AracPlakaVeyaBiletInfo,
@@ -8480,6 +8532,7 @@ app.put('/api/sehir-disi-gorevler/:id', async (req, res) => {
     const idx = memSehirDisiGorevler.findIndex(g => String(g.GorevId) === String(rawId));
     if (idx !== -1) {
       memSehirDisiGorevler[idx] = { ...memSehirDisiGorevler[idx], ...body };
+      saveMemSehirDisiGorevler();
     }
 
     if (isDbConnected && detectedTables.sehirDisiGorevler) {
@@ -8536,6 +8589,7 @@ app.delete('/api/sehir-disi-gorevler/:id', async (req, res) => {
   try {
     const rawId = req.params.id;
     memSehirDisiGorevler = memSehirDisiGorevler.filter(g => String(g.GorevId) !== String(rawId));
+    saveMemSehirDisiGorevler();
 
     if (isDbConnected && detectedTables.sehirDisiGorevler) {
       try {
