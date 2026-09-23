@@ -674,7 +674,7 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
                       <option value="">-- Kadrolu Personel Seç --</option>
                       {personeller.filter(p => p.DurumAktifMi).map(p => (
                         <option key={p.PersonelId} value={p.PersonelId.toString()}>
-                          👤 {p.AdSoyad} ({p.GorevVeyaUnvan || 'Usta'})
+                          👤 {p.AdSoyad} ({p.Gorev || p.GorevVeyaUnvan || 'Görevli'})
                         </option>
                       ))}
                     </select>
