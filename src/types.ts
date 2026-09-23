@@ -633,6 +633,51 @@ export interface TaseronAnlasma {
   OlusturmaTarihi: string;
 }
 
+// ============================================================================
+// ŞEHİR DIŞI GÖREVLENDİRME YAZISI MODELİ (4857 s. Kanun Uyumlu)
+// ============================================================================
+
+export interface SehirDisiGorevliPersonel {
+  PersonelId?: number;
+  TCKimlikNo: string;
+  AdSoyad: string;
+  GorevUnvan?: string;
+  Telefon?: string;
+  AcilDurumKisiVeTel?: string;
+}
+
+export interface SehirDisiGorevlendirme {
+  GorevId: string;
+  FormNo: string; // örn. "GRV-2026-001"
+  ProjeId?: number | null; // İlişkili fabrika/şantiye projesi (null olabilir)
+  ProjeAdi?: string | null;
+  GidilecekIlIlce: string; // örn. "İzmir / Bornova"
+  SantiyeAdresi: string; // Açık şantiye / işyeri adresi
+  GorevAmaci: string; // örn. "Ege Bölge Hastanesi Ahşap Kaplama & Lambri Montajı"
+  BaslangicTarihi: string; // YYYY-MM-DD
+  BitisTarihi: string; // YYYY-MM-DD
+  TahminiGunSayisi: number;
+  
+  // Ulaşım, Konaklama & Harcırah Şartları (4857 s. Kanun m.32 & BK m.414)
+  UlasimSekli: 'Şirket Aracı' | 'Otobüs' | 'Uçak' | 'Özel Araç' | 'Diğer';
+  AracPlakaVeyaBiletInfo?: string;
+  KonaklamaTuru: 'Otel' | 'Şantiye Koğuşu' | 'Kiralanan Daire' | 'Yatılı Şantiye' | 'Diğer';
+  KonaklamaAdresiInfo?: string;
+  GunlukHarcirahTutar?: number; // ₺ / Gün
+  YemekKarsilamaTuru: 'Şirket Tarafından Karşılanır' | 'Harcıraha Dahil' | 'Şantiye Tabldot';
+  
+  // Görevlendirilen İşçi Listesi
+  Personeller: SehirDisiGorevliPersonel[];
+  
+  // Yasal Şartlar & İSG Bildirimi
+  IsgUyariKabul: boolean;
+  GenelNotlar?: string;
+  DuzenleyenKisi: string; // İK Yetkilisi / Şantiye Şefi
+  OlusturmaTarihi: string;
+  Durum: 'Aktif' | 'Tamamlandı' | 'İptal';
+}
+
+
 
 
 

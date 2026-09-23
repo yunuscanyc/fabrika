@@ -7,7 +7,8 @@ import { SantiyeMontajView } from './SantiyeMontajView';
 import { IsgView } from './IsgView';
 import { YevmiyeciView } from './YevmiyeciView';
 import { TaseronHakedisView } from './TaseronHakedisView';
-import { Users, Calendar, Clock, ShieldCheck, Briefcase, HardHat, Calculator } from 'lucide-react';
+import { SehirDisiGorevlendirmeView } from './SehirDisiGorevlendirmeView';
+import { Users, Calendar, Clock, ShieldCheck, Briefcase, HardHat, Calculator, Send } from 'lucide-react';
 
 interface PersonelHubViewProps {
   personeller: Personel[];
@@ -16,7 +17,7 @@ interface PersonelHubViewProps {
   departmanlar: Departman[];
   gorevler: Gorev[];
   onRefresh: () => void;
-  initialAltSekme?: 'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci' | 'taseron';
+  initialAltSekme?: 'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci' | 'taseron' | 'gorevlendirme';
   initialPersonelId?: number;
   initialIsgSekme?: 'kkd' | 'saglik' | 'egitim';
 }
@@ -32,7 +33,7 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
   initialPersonelId,
   initialIsgSekme,
 }) => {
-  const [altSekme, setAltSekme] = useState<'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci' | 'taseron'>(initialAltSekme);
+  const [altSekme, setAltSekme] = useState<'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci' | 'taseron' | 'gorevlendirme'>(initialAltSekme);
 
   useEffect(() => {
     if (initialAltSekme) {
@@ -47,7 +48,7 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
         <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
           <button
             onClick={() => setAltSekme('liste')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
               altSekme === 'liste'
                 ? 'bg-blue-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800'
@@ -58,8 +59,20 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
           </button>
 
           <button
+            onClick={() => setAltSekme('gorevlendirme')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
+              altSekme === 'gorevlendirme'
+                ? 'bg-indigo-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Send className="w-4 h-4" />
+            ✈️ Şehir Dışı Görev
+          </button>
+
+          <button
             onClick={() => setAltSekme('taseron')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
               altSekme === 'taseron'
                 ? 'bg-amber-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800'
@@ -71,9 +84,9 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
 
           <button
             onClick={() => setAltSekme('yevmiyeci')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
               altSekme === 'yevmiyeci'
-                ? 'bg-indigo-600 text-white shadow-md'
+                ? 'bg-purple-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800'
             }`}
           >
@@ -83,7 +96,7 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
 
           <button
             onClick={() => setAltSekme('izin')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
               altSekme === 'izin'
                 ? 'bg-emerald-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800'
@@ -95,7 +108,7 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
 
           <button
             onClick={() => setAltSekme('puantaj')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
               altSekme === 'puantaj'
                 ? 'bg-sky-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800'
@@ -107,7 +120,7 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
 
           <button
             onClick={() => setAltSekme('montaj')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
               altSekme === 'montaj'
                 ? 'bg-orange-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800'
@@ -119,7 +132,7 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
 
           <button
             onClick={() => setAltSekme('isg')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
               altSekme === 'isg'
                 ? 'bg-rose-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800'
@@ -144,6 +157,13 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
           departmanlar={departmanlar}
           gorevler={gorevler}
           onRefresh={onRefresh}
+        />
+      )}
+
+      {altSekme === 'gorevlendirme' && (
+        <SehirDisiGorevlendirmeView
+          personeller={personeller}
+          projeler={projeler}
         />
       )}
 
@@ -197,4 +217,5 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
     </div>
   );
 };
+
 
