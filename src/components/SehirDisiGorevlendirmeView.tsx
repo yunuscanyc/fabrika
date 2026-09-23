@@ -19,56 +19,77 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
   personeller,
   projeler = []
 }) => {
-  // LocalStorage Kalıcılığı
-  const [gorevler, setGorevler] = useState<SehirDisiGorevlendirme[]>(() => {
-    try {
-      const kayit = localStorage.getItem('rende_sehir_disi_gorevler');
-      if (kayit) return JSON.parse(kayit);
-    } catch (e) {}
-    return [
-      {
-        GorevId: 'GRV-01',
-        FormNo: 'GRV-2026-001',
-        ProjeId: projeler[0]?.ProjeId || null,
-        ProjeAdi: projeler[0]?.ProjeAdi || 'Çamlıca Villa Ahşap Montajı',
-        GidilecekIlIlce: 'İzmir / Bornova',
-        SantiyeAdresi: 'Ege Üniversitesi Hastanesi Ek Hizmet Binası Şantiyesi B-Blok',
-        GorevAmaci: 'Ahşap duvar kaplama, lambri ve süpürgelik montaj işlerinin yürütülmesi ve teslimi',
-        BaslangicTarihi: '2026-09-25',
-        BitisTarihi: '2026-10-05',
-        TahminiGunSayisi: 10,
-        UlasimSekli: 'Şirket Aracı',
-        AracPlakaVeyaBiletInfo: '34 XYZ 88 (Transit Kamyonet)',
-        KonaklamaTuru: 'Otel',
-        KonaklamaAdresiInfo: 'Bornova Grand Otel / İzmir',
-        GunlukHarcirahTutar: 400,
-        YemekKarsilamaTuru: 'Şirket Tarafından Karşılanır',
-        Personeller: [
-          {
-            PersonelId: personeller[0]?.PersonelId || 1,
-            TCKimlikNo: personeller[0]?.TCKimlikNo || '12345678901',
-            AdSoyad: personeller[0]?.AdSoyad || 'Ahmet Yılmaz',
-            GorevUnvan: personeller[0]?.GorevVeyaUnvan || 'Montaj Ustası',
-            Telefon: personeller[0]?.Telefon || '0532 100 20 30',
-            AcilDurumKisiVeTel: personeller[0]?.AcilDurumKisisi ? `${personeller[0]?.AcilDurumKisisi} (${personeller[0]?.AcilDurumTelefonu || ''})` : 'Eşi: 0533 222 33 44'
-          },
-          {
-            PersonelId: personeller[1]?.PersonelId || 2,
-            TCKimlikNo: personeller[1]?.TCKimlikNo || '98765432109',
-            AdSoyad: personeller[1]?.AdSoyad || 'Mehmet Demir',
-            GorevUnvan: personeller[1]?.GorevVeyaUnvan || 'Mobilya Ustası',
-            Telefon: personeller[1]?.Telefon || '0535 300 40 50',
-            AcilDurumKisiVeTel: 'Babası: 0536 777 88 99'
+  const [gorevler, setGorevler] = useState<SehirDisiGorevlendirme[]>([]);
+
+  // Veritabanından Görevleri Yükle
+  useEffect(() => {
+    const fetchGorevler = async () => {
+      try {
+        const res = await fetch('/api/sehir-disi-gorevler');
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setGorevler(data);
+          } else {
+            // Eğer veritabanı tamamen boşsa varsayılan 1 tane mock veri ekleyelim
+            const varsayilanGorev: SehirDisiGorevlendirme = {
+              GorevId: 'GRV-01',
+              FormNo: 'GRV-2026-001',
+              ProjeId: projeler[0]?.ProjeId || null,
+              ProjeAdi: projeler[0]?.ProjeAdi || 'Çamlıca Villa Ahşap Montajı',
+              GidilecekIlIlce: 'İzmir / Bornova',
+              SantiyeAdresi: 'Ege Üniversitesi Hastanesi Ek Hizmet Binası Şantiyesi B-Blok',
+              GorevAmaci: 'Ahşap duvar kaplama, lambri ve süpürgelik montaj işlerinin yürütülmesi ve teslimi',
+              BaslangicTarihi: '2026-09-25',
+              BitisTarihi: '2026-10-05',
+              TahminiGunSayisi: 10,
+              UlasimSekli: 'Şirket Aracı',
+              AracPlakaVeyaBiletInfo: '34 XYZ 88 (Transit Kamyonet)',
+              KonaklamaTuru: 'Otel',
+              KonaklamaAdresiInfo: 'Bornova Grand Otel / İzmir',
+              GunlukHarcirahTutar: 400,
+              YemekKarsilamaTuru: 'Şirket Tarafından Karşılanır',
+              Personeller: [
+                {
+                  PersonelId: personeller[0]?.PersonelId || 1,
+                  TCKimlikNo: personeller[0]?.TCKimlikNo || '12345678901',
+                  AdSoyad: personeller[0]?.AdSoyad || 'Ahmet Yılmaz',
+                  GorevUnvan: personeller[0]?.Gorev || personeller[0]?.GorevVeyaUnvan || 'Montaj Ustası',
+                  Telefon: personeller[0]?.Telefon || '0532 100 20 30',
+                  AcilDurumKisiVeTel: personeller[0]?.AcilDurumKisisi ? `${personeller[0]?.AcilDurumKisisi} (${personeller[0]?.AcilDurumTelefonu || ''})` : 'Eşi: 0533 222 33 44'
+                },
+                {
+                  PersonelId: personeller[1]?.PersonelId || 2,
+                  TCKimlikNo: personeller[1]?.TCKimlikNo || '98765432109',
+                  AdSoyad: personeller[1]?.AdSoyad || 'Mehmet Demir',
+                  GorevUnvan: personeller[1]?.Gorev || personeller[1]?.GorevVeyaUnvan || 'Mobilya Ustası',
+                  Telefon: personeller[1]?.Telefon || '0535 300 40 50',
+                  AcilDurumKisiVeTel: 'Babası: 0536 777 88 99'
+                }
+              ],
+              IsgUyariKabul: true,
+              GenelNotlar: 'Saha girişinde baret, çelik burunlu ayakkabı ve koruyucu yelek zorunludur.',
+              DuzenleyenKisi: 'İnsan Kaynakları Departmanı',
+              OlusturmaTarihi: '2026-09-22',
+              Durum: 'Aktif'
+            };
+
+            // DB'ye kaydetmeyi dene
+            await fetch('/api/sehir-disi-gorevler', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(varsayilanGorev)
+            }).catch(() => {});
+
+            setGorevler([varsayilanGorev]);
           }
-        ],
-        IsgUyariKabul: true,
-        GenelNotlar: 'Saha girişinde baret, çelik burunlu ayakkabı ve koruyucu yelek zorunludur.',
-        DuzenleyenKisi: 'İnsan Kaynakları Departmanı',
-        OlusturmaTarihi: '2026-09-22',
-        Durum: 'Aktif'
+        }
+      } catch (e) {
+        console.error('Fetch error:', e);
       }
-    ];
-  });
+    };
+    fetchGorevler();
+  }, [personeller, projeler]);
 
   // Arama & Filtre
   const [aramaMetni, setAramaMetni] = useState('');
@@ -81,7 +102,7 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
 
   // Form Düzenleme State'i
   const [formData, setFormData] = useState<Partial<SehirDisiGorevlendirme>>({
-    FormNo: `GRV-2026-00${gorevler.length + 1}`,
+    FormNo: '',
     ProjeId: null,
     ProjeAdi: null,
     GidilecekIlIlce: '',
@@ -106,12 +127,14 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
   // Hızlı Personel Ekleme Seçim Alanı
   const [secilenPersonelId, setSecilenPersonelId] = useState<string>('');
 
-  // LocalStorage Senkronizasyonu
   useEffect(() => {
-    try {
-      localStorage.setItem('rende_sehir_disi_gorevler', JSON.stringify(gorevler));
-    } catch (e) {}
-  }, [gorevler]);
+    if (!formData.FormNo && formModalOpen) {
+      setFormData(prev => ({
+        ...prev,
+        FormNo: `GRV-2026-00${gorevler.length + 1}`
+      }));
+    }
+  }, [formModalOpen, gorevler.length, formData.FormNo]);
 
   // Filtrelenmiş Liste
   const filtrelenmisGorevler = useMemo(() => {
@@ -238,7 +261,7 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
   };
 
   // Formu Kaydet
-  const handleFormKaydet = () => {
+  const handleFormKaydet = async () => {
     if (!formData.GidilecekIlIlce || !formData.SantiyeAdresi) {
       alert('Lütfen Gidilecek İl/İlçe ve Şantiye Adresi alanlarını doldurunuz.');
       return;
@@ -249,8 +272,10 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
       return;
     }
 
+    const isEdit = !!formData.GorevId;
+    const gId = formData.GorevId || `GRV-${Date.now()}`;
     const kayitGorev: SehirDisiGorevlendirme = {
-      GorevId: formData.GorevId || `GRV-${Date.now()}`,
+      GorevId: gId,
       FormNo: formData.FormNo || `GRV-2026-00${gorevler.length + 1}`,
       ProjeId: formData.ProjeId || null,
       ProjeAdi: formData.ProjeAdi || null,
@@ -270,26 +295,54 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
       IsgUyariKabul: formData.IsgUyariKabul ?? true,
       GenelNotlar: formData.GenelNotlar || '',
       DuzenleyenKisi: formData.DuzenleyenKisi || 'İnsan Kaynakları',
-      OlusturmaTarihi: getBugunIso(),
+      OlusturmaTarihi: formData.OlusturmaTarihi || getBugunIso(),
       Durum: formData.Durum || 'Aktif'
     };
 
-    // Var olanı güncelle mi, yeni ekle mi?
-    const varMi = gorevler.some(g => g.GorevId === kayitGorev.GorevId);
-    if (varMi) {
-      setGorevler(gorevler.map(g => g.GorevId === kayitGorev.GorevId ? kayitGorev : g));
-    } else {
-      setGorevler([kayitGorev, ...gorevler]);
-    }
+    try {
+      const url = isEdit ? `/api/sehir-disi-gorevler/${gId}` : '/api/sehir-disi-gorevler';
+      const method = isEdit ? 'PUT' : 'POST';
 
-    setFormModalOpen(false);
-    alert('Şehir dışı görevlendirme yazısı başarıyla kaydedildi.');
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(kayitGorev)
+      });
+
+      if (res.ok) {
+        if (isEdit) {
+          setGorevler(gorevler.map(g => g.GorevId === gId ? kayitGorev : g));
+        } else {
+          setGorevler([kayitGorev, ...gorevler]);
+        }
+        setFormModalOpen(false);
+        alert('Şehir dışı görevlendirme yazısı başarıyla kaydedildi.');
+      } else {
+        alert('Kaydetme sırasında bir hata oluştu.');
+      }
+    } catch (e) {
+      console.error('Save error:', e);
+      alert('Sunucuya bağlanırken bir hata oluştu.');
+    }
   };
 
   // Sil
-  const handleSil = (id: string) => {
+  const handleSil = async (id: string) => {
     if (confirm('Bu görevlendirme yazısını silmek istediğinize emin misiniz?')) {
-      setGorevler(gorevler.filter(g => g.GorevId !== id));
+      try {
+        const res = await fetch(`/api/sehir-disi-gorevler/${id}`, {
+          method: 'DELETE'
+        });
+        if (res.ok) {
+          setGorevler(gorevler.filter(g => g.GorevId !== id));
+          alert('Görevlendirme yazısı başarıyla silindi.');
+        } else {
+          alert('Silme işlemi sırasında bir hata oluştu.');
+        }
+      } catch (e) {
+        console.error('Delete error:', e);
+        alert('Sunucuya bağlanırken bir hata oluştu.');
+      }
     }
   };
 

@@ -93,6 +93,7 @@ let detectedTables: {
   malzemeSiparisleri?: string;
   malzemeSiparisBelgeler?: string;
   malzemeKatalog?: string;
+  sehirDisiGorevler?: string;
 } = {};
 
 // Nesnelerden büyük/küçük harf duyarsız ve alternatif alan isimlerini okuma
@@ -1888,7 +1889,8 @@ async function checkDbConnection() {
       projePersoneller: matchTable(['ProjePersonelleri', 'proje_personelleri', 'ProjePersoneller', 'proje_personeller', 'ProjeKadrosu', 'proje_kadrosu']),
       malzemeSiparisleri: matchTable(['MalzemeSiparisleri', 'malzeme_siparisleri', 'Siparisler', 'siparisler']),
       malzemeSiparisBelgeler: matchTable(['MalzemeSiparisBelgeleri', 'malzeme_siparis_belgeleri', 'SiparisBelgeleri', 'siparis_belgeleri']),
-      malzemeKatalog: matchTable(['MalzemeKatalog', 'malzeme_katalog', 'MalzemeKatalogu', 'malzeme_katalogu', 'MalzemeKataloglari'])
+      malzemeKatalog: matchTable(['MalzemeKatalog', 'malzeme_katalog', 'MalzemeKatalogu', 'malzeme_katalogu', 'MalzemeKataloglari']),
+      sehirDisiGorevler: matchTable(['SehirDisiGorevler', 'sehir_disi_gorevler', 'SehirDisiGorevlendirme', 'sehir_disi_gorevlendirme'])
     };
 
     if (!detectedTables.projeBelgeler) {
@@ -2642,6 +2644,41 @@ async function checkDbConnection() {
         detectedTables.malzemeKatalog = '"MalzemeKatalog"';
       } catch (createErr: any) {
         console.error('[DB] "MalzemeKatalog" tablosu oluşturulamadı:', createErr.message);
+      }
+    }
+
+    if (!detectedTables.sehirDisiGorevler) {
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS "SehirDisiGorevler" (
+            "GorevId" VARCHAR(100) PRIMARY KEY,
+            "FormNo" VARCHAR(100) NOT NULL,
+            "ProjeId" INT,
+            "ProjeAdi" VARCHAR(255),
+            "GidilecekIlIlce" VARCHAR(255) NOT NULL,
+            "SantiyeAdresi" TEXT NOT NULL,
+            "GorevAmaci" TEXT NOT NULL,
+            "BaslangicTarihi" VARCHAR(50) NOT NULL,
+            "BitisTarihi" VARCHAR(50) NOT NULL,
+            "TahminiGunSayisi" INT NOT NULL,
+            "UlasimSekli" VARCHAR(100) NOT NULL,
+            "AracPlakaVeyaBiletInfo" VARCHAR(255),
+            "KonaklamaTuru" VARCHAR(100) NOT NULL,
+            "KonaklamaAdresiInfo" TEXT,
+            "GunlukHarcirahTutar" NUMERIC DEFAULT 0,
+            "YemekKarsilamaTuru" VARCHAR(100) NOT NULL,
+            "Personeller" TEXT NOT NULL,
+            "IsgUyariKabul" BOOLEAN DEFAULT true,
+            "GenelNotlar" TEXT,
+            "DuzenleyenKisi" VARCHAR(255),
+            "OlusturmaTarihi" VARCHAR(50) NOT NULL,
+            "Durum" VARCHAR(50) DEFAULT 'Aktif'
+          )
+        `);
+        console.log('[DB] "SehirDisiGorevler" tablosu hazırlandı.');
+        detectedTables.sehirDisiGorevler = '"SehirDisiGorevler"';
+      } catch (createErr: any) {
+        console.error('[DB] "SehirDisiGorevler" tablosu oluşturulamadı:', createErr.message);
       }
     }
 
@@ -8306,6 +8343,209 @@ app.post('/api/malzeme-katalog/reset-varsayilan', async (req, res) => {
     }
 
     return res.json({ success: true, message: 'Malzeme kataloğu varsayılan fabrika ayarlarına yüklendi.', count: VARSAYILAN_MALZEME_KATALOG.length });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// =========================================================================
+// ŞEHİR DIŞI GÖREVLENDİRME (4857 s. Kanun Uyumlu) APİLERİ
+// =========================================================================
+let memSehirDisiGorevler: any[] = [];
+
+function normalizeSehirDisiGorev(row: any) {
+  let pers: any[] = [];
+  try {
+    const rawPers = getProp(row, 'Personeller', 'personeller');
+    if (Array.isArray(rawPers)) pers = rawPers;
+    else if (typeof rawPers === 'string' && rawPers.trim()) pers = JSON.parse(rawPers);
+  } catch (e) {}
+
+  return {
+    GorevId: String(getProp(row, 'GorevId', 'gorevid', 'id', 'Id')),
+    FormNo: String(getProp(row, 'FormNo', 'formno', 'FormNo', 'form_no') || ''),
+    ProjeId: getProp(row, 'ProjeId', 'projeid') ? Number(getProp(row, 'ProjeId', 'projeid')) : null,
+    ProjeAdi: getProp(row, 'ProjeAdi', 'projeadi') ? String(getProp(row, 'ProjeAdi', 'projeadi')) : null,
+    GidilecekIlIlce: String(getProp(row, 'GidilecekIlIlce', 'gidilecekililce') || ''),
+    SantiyeAdresi: String(getProp(row, 'SantiyeAdresi', 'santiyeadresi') || ''),
+    GorevAmaci: String(getProp(row, 'GorevAmaci', 'gorevamaci') || ''),
+    BaslangicTarihi: formatDate(getProp(row, 'BaslangicTarihi', 'baslangictarihi')) || getBugunStr(),
+    BitisTarihi: formatDate(getProp(row, 'BitisTarihi', 'bitistarihi')) || getBugunStr(),
+    TahminiGunSayisi: Number(getProp(row, 'TahminiGunSayisi', 'tahminigunsayisi') || 1),
+    UlasimSekli: String(getProp(row, 'UlasimSekli', 'ulasimsekli') || 'Şirket Aracı'),
+    AracPlakaVeyaBiletInfo: String(getProp(row, 'AracPlakaVeyaBiletInfo', 'aracplakaveyabiletinfo') || ''),
+    KonaklamaTuru: String(getProp(row, 'KonaklamaTuru', 'konaklamaturu') || 'Otel'),
+    KonaklamaAdresiInfo: String(getProp(row, 'KonaklamaAdresiInfo', 'konaklamaadresiiinfo') || ''),
+    GunlukHarcirahTutar: Number(getProp(row, 'GunlukHarcirahTutar', 'gunlukharcirahtutar') || 0),
+    YemekKarsilamaTuru: String(getProp(row, 'YemekKarsilamaTuru', 'yemekkarsilamaturu') || 'Şirket Tarafından Karşılanır'),
+    Personeller: pers,
+    IsgUyariKabul: Boolean(getProp(row, 'IsgUyariKabul', 'isguyarikabul') ?? true),
+    GenelNotlar: String(getProp(row, 'GenelNotlar', 'genelnotlar') || ''),
+    DuzenleyenKisi: String(getProp(row, 'DuzenleyenKisi', 'duzenleyenkisi') || ''),
+    OlusturmaTarihi: formatDate(getProp(row, 'OlusturmaTarihi', 'olusturmatarihi')) || getBugunStr(),
+    Durum: String(getProp(row, 'Durum', 'durum') || 'Aktif')
+  };
+}
+
+// Tüm şehir dışı görevler
+app.get('/api/sehir-disi-gorevler', async (req, res) => {
+  try {
+    let list = [...memSehirDisiGorevler];
+
+    if (isDbConnected && detectedTables.sehirDisiGorevler) {
+      try {
+        const dbRes = await pool.query(`SELECT * FROM ${detectedTables.sehirDisiGorevler} ORDER BY "OlusturmaTarihi" DESC, "GorevId" DESC`);
+        list = dbRes.rows.map(r => normalizeSehirDisiGorev(r));
+      } catch (dbErr: any) {
+        console.error('[DB GOREVLENDIRME GET ERROR]', dbErr.message);
+      }
+    }
+
+    return res.json(list);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Yeni şehir dışı görevlendirme ekle
+app.post('/api/sehir-disi-gorevler', async (req, res) => {
+  try {
+    const {
+      GorevId, FormNo, ProjeId, ProjeAdi, GidilecekIlIlce, SantiyeAdresi, GorevAmaci,
+      BaslangicTarihi, BitisTarihi, TahminiGunSayisi, UlasimSekli, AracPlakaVeyaBiletInfo,
+      KonaklamaTuru, KonaklamaAdresiInfo, GunlukHarcirahTutar, YemekKarsilamaTuru,
+      Personeller, IsgUyariKabul, GenelNotlar, DuzenleyenKisi, OlusturmaTarihi, Durum
+    } = req.body;
+
+    const gId = GorevId || `GRV-${Date.now()}`;
+    const yeniGorev = {
+      GorevId: gId,
+      FormNo: FormNo || `GRV-2026-00${memSehirDisiGorevler.length + 1}`,
+      ProjeId: ProjeId ? Number(ProjeId) : null,
+      ProjeAdi: ProjeAdi || null,
+      GidilecekIlIlce: GidilecekIlIlce || '',
+      SantiyeAdresi: SantiyeAdresi || '',
+      GorevAmaci: GorevAmaci || '',
+      BaslangicTarihi: BaslangicTarihi || getBugunStr(),
+      BitisTarihi: BitisTarihi || getBugunStr(),
+      TahminiGunSayisi: Number(TahminiGunSayisi || 1),
+      UlasimSekli: UlasimSekli || 'Şirket Aracı',
+      AracPlakaVeyaBiletInfo: AracPlakaVeyaBiletInfo || '',
+      KonaklamaTuru: KonaklamaTuru || 'Otel',
+      KonaklamaAdresiInfo: KonaklamaAdresiInfo || '',
+      GunlukHarcirahTutar: Number(GunlukHarcirahTutar || 0),
+      YemekKarsilamaTuru: YemekKarsilamaTuru || 'Şirket Tarafından Karşılanır',
+      Personeller: Array.isArray(Personeller) ? Personeller : [],
+      IsgUyariKabul: IsgUyariKabul !== false,
+      GenelNotlar: GenelNotlar || '',
+      DuzenleyenKisi: DuzenleyenKisi || '',
+      OlusturmaTarihi: OlusturmaTarihi || getBugunStr(),
+      Durum: Durum || 'Aktif'
+    };
+
+    memSehirDisiGorevler.unshift(yeniGorev);
+
+    if (isDbConnected && detectedTables.sehirDisiGorevler) {
+      try {
+        await pool.query(`
+          INSERT INTO ${detectedTables.sehirDisiGorevler} (
+            "GorevId", "FormNo", "ProjeId", "ProjeAdi", "GidilecekIlIlce", "SantiyeAdresi", "GorevAmaci",
+            "BaslangicTarihi", "BitisTarihi", "TahminiGunSayisi", "UlasimSekli", "AracPlakaVeyaBiletInfo",
+            "KonaklamaTuru", "KonaklamaAdresiInfo", "GunlukHarcirahTutar", "YemekKarsilamaTuru",
+            "Personeller", "IsgUyariKabul", "GenelNotlar", "DuzenleyenKisi", "OlusturmaTarihi", "Durum"
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+        `, [
+          yeniGorev.GorevId, yeniGorev.FormNo, yeniGorev.ProjeId, yeniGorev.ProjeAdi, yeniGorev.GidilecekIlIlce, yeniGorev.SantiyeAdresi, yeniGorev.GorevAmaci,
+          yeniGorev.BaslangicTarihi, yeniGorev.BitisTarihi, yeniGorev.TahminiGunSayisi, yeniGorev.UlasimSekli, yeniGorev.AracPlakaVeyaBiletInfo,
+          yeniGorev.KonaklamaTuru, yeniGorev.KonaklamaAdresiInfo, yeniGorev.GunlukHarcirahTutar, yeniGorev.YemekKarsilamaTuru,
+          JSON.stringify(yeniGorev.Personeller), yeniGorev.IsgUyariKabul, yeniGorev.GenelNotlar, yeniGorev.DuzenleyenKisi, yeniGorev.OlusturmaTarihi, yeniGorev.Durum
+        ]);
+      } catch (dbErr: any) {
+        console.error('[DB GOREVLENDIRME INSERT ERROR]', dbErr.message);
+      }
+    }
+
+    return res.json({ success: true, item: yeniGorev });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Güncelle
+app.put('/api/sehir-disi-gorevler/:id', async (req, res) => {
+  try {
+    const rawId = req.params.id;
+    const body = req.body;
+
+    const idx = memSehirDisiGorevler.findIndex(g => String(g.GorevId) === String(rawId));
+    if (idx !== -1) {
+      memSehirDisiGorevler[idx] = { ...memSehirDisiGorevler[idx], ...body };
+    }
+
+    if (isDbConnected && detectedTables.sehirDisiGorevler) {
+      try {
+        const updateFields: string[] = [];
+        const params: any[] = [];
+        let i = 1;
+
+        const allowed = [
+          'FormNo', 'ProjeId', 'ProjeAdi', 'GidilecekIlIlce', 'SantiyeAdresi', 'GorevAmaci',
+          'BaslangicTarihi', 'BitisTarihi', 'TahminiGunSayisi', 'UlasimSekli', 'AracPlakaVeyaBiletInfo',
+          'KonaklamaTuru', 'KonaklamaAdresiInfo', 'GunlukHarcirahTutar', 'YemekKarsilamaTuru',
+          'Personeller', 'IsgUyariKabul', 'GenelNotlar', 'DuzenleyenKisi', 'Durum'
+        ];
+
+        for (const key of allowed) {
+          if (body[key] !== undefined) {
+            updateFields.push(`"${key}" = $${i++}`);
+            if (key === 'Personeller') {
+              params.push(JSON.stringify(body[key]));
+            } else if (key === 'ProjeId') {
+              params.push(body[key] ? Number(body[key]) : null);
+            } else if (key === 'GunlukHarcirahTutar') {
+              params.push(Number(body[key]));
+            } else if (key === 'TahminiGunSayisi') {
+              params.push(Number(body[key]));
+            } else {
+              params.push(body[key]);
+            }
+          }
+        }
+
+        if (updateFields.length > 0) {
+          params.push(rawId);
+          await pool.query(`
+            UPDATE ${detectedTables.sehirDisiGorevler}
+            SET ${updateFields.join(', ')}
+            WHERE "GorevId" = $${i}
+          `, params);
+        }
+      } catch (dbErr: any) {
+        console.error('[DB GOREVLENDIRME UPDATE ERROR]', dbErr.message);
+      }
+    }
+
+    return res.json({ success: true, message: 'Görevlendirme yazısı güncellendi.' });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Sil
+app.delete('/api/sehir-disi-gorevler/:id', async (req, res) => {
+  try {
+    const rawId = req.params.id;
+    memSehirDisiGorevler = memSehirDisiGorevler.filter(g => String(g.GorevId) !== String(rawId));
+
+    if (isDbConnected && detectedTables.sehirDisiGorevler) {
+      try {
+        await pool.query(`DELETE FROM ${detectedTables.sehirDisiGorevler} WHERE "GorevId" = $1`, [rawId]);
+      } catch (dbErr: any) {
+        console.error('[DB GOREVLENDIRME DELETE ERROR]', dbErr.message);
+      }
+    }
+
+    return res.json({ success: true, message: 'Görevlendirme yazısı silindi.' });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
