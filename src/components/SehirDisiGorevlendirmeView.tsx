@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { 
   Send, Plus, Trash2, Edit3, Save, Printer, Search, X, MapPin, 
   Calendar, Users, Building2, Truck, Home, DollarSign, ShieldCheck, 
-  FileText, CheckCircle2, AlertCircle, Info, ChevronRight, UserPlus
+  FileText, CheckCircle2, AlertCircle, Info, ChevronRight, UserPlus, RotateCcw
 } from 'lucide-react';
 import { 
   SehirDisiGorevlendirme, SehirDisiGorevliPersonel, Personel, Proje 
@@ -41,9 +41,9 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
     fetchGorevler();
   }, []);
 
-  // Arama & Filtre
+  // Arama & Filtre (Varsayılan olarak sadece Aktif olanları göster)
   const [aramaMetni, setAramaMetni] = useState('');
-  const [durumFiltre, setDurumFiltre] = useState<'Tümü' | 'Aktif' | 'Tamamlandı' | 'İptal'>('Tümü');
+  const [durumFiltre, setDurumFiltre] = useState<'Tümü' | 'Aktif' | 'Tamamlandı' | 'İptal'>('Aktif');
 
   // Modal State'leri
   const [formModalOpen, setFormModalOpen] = useState(false);
@@ -308,6 +308,29 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
     }
   };
 
+  // Durum Değiştir (Tamamlandı / Aktif Toggle)
+  const handleDurumDegistir = async (g: SehirDisiGorevlendirme, yeniDurum: 'Aktif' | 'Tamamlandı' | 'İptal') => {
+    try {
+      // İyimser arayüz güncellemesi
+      setGorevler(prev => prev.map(item => item.GorevId === g.GorevId ? { ...item, Durum: yeniDurum } : item));
+
+      const res = await fetch(`/api/sehir-disi-gorevler/${g.GorevId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...g, Durum: yeniDurum })
+      });
+
+      if (!res.ok) {
+        throw new Error('Sunucu durum güncellemesini onaylamadı.');
+      }
+      fetchGorevler();
+    } catch (e: any) {
+      console.error('Durum değiştirme hatası:', e);
+      alert('Durum güncellenirken bir hata oluştu: ' + (e?.message || e));
+      fetchGorevler();
+    }
+  };
+
   // Yazdır Aç
   const handleYazdirAc = (g: SehirDisiGorevlendirme) => {
     setSeciliGorev(g);
@@ -355,21 +378,29 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <span className="text-xs text-slate-400 font-semibold hidden sm:inline">Durum:</span>
-          {(['Tümü', 'Aktif', 'Tamamlandı', 'İptal'] as const).map((d) => (
-            <button
-              key={d}
-              onClick={() => setDurumFiltre(d)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                durumFiltre === d
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'bg-slate-800 text-slate-400 hover:text-white'
-              }`}
-            >
-              {d}
-            </button>
-          ))}
+        <div className="flex items-center gap-1.5 w-full sm:w-auto flex-wrap">
+          <span className="text-xs text-slate-400 font-semibold hidden sm:inline mr-1">Durum:</span>
+          {(['Aktif', 'Tamamlandı', 'Tümü', 'İptal'] as const).map((d) => {
+            const count = d === 'Tümü' ? gorevler.length : gorevler.filter(g => g.Durum === d).length;
+            return (
+              <button
+                key={d}
+                onClick={() => setDurumFiltre(d)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                  durumFiltre === d
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-slate-800 text-slate-400 hover:text-white'
+                }`}
+              >
+                <span>{d === 'Aktif' ? '🟢 Aktif Görevler' : d === 'Tamamlandı' ? '🔵 Tamamlananlar' : d}</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                  durumFiltre === d ? 'bg-blue-800 text-white' : 'bg-slate-700 text-slate-300'
+                }`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -380,8 +411,16 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
         {filtrelenmisGorevler.length === 0 ? (
           <div className="col-span-full bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center space-y-3">
             <FileText className="w-12 h-12 text-slate-600 mx-auto" />
-            <p className="text-sm font-bold text-slate-300">Kayıtlı şehir dışı görevlendirme bulunamadı.</p>
-            <p className="text-xs text-slate-500">Yukarıdaki butonu kullanarak yeni bir görev belgesi oluşturabilirsiniz.</p>
+            <p className="text-sm font-bold text-slate-300">
+              {durumFiltre === 'Aktif'
+                ? 'Şu anda aktif durumda şehir dışı görevlendirme bulunmuyor.'
+                : 'Kayıtlı şehir dışı görevlendirme bulunamadı.'}
+            </p>
+            <p className="text-xs text-slate-500">
+              {durumFiltre === 'Aktif'
+                ? 'Tamamlanan görevleri görmek için yukarıdan "Tamamlananlar" veya "Tümü" filtresini seçebilirsiniz.'
+                : 'Yukarıdaki butonu kullanarak yeni bir görev belgesi oluşturabilirsiniz.'}
+            </p>
           </div>
         ) : (
           filtrelenmisGorevler.map((g) => (
@@ -401,13 +440,30 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
                   <p className="text-xs text-slate-400 block mt-0.5 line-clamp-1">{g.SantiyeAdresi}</p>
                 </div>
 
-                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                  g.Durum === 'Aktif' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
-                  g.Durum === 'Tamamlandı' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' :
-                  'bg-rose-500/20 text-rose-300'
-                }`}>
-                  {g.Durum === 'Aktif' ? '🟢 Görevde' : g.Durum === 'Tamamlandı' ? '🔵 Tamamlandı' : '🔴 İptal'}
-                </span>
+                {/* Tıklanabilir Durum Rozeti (Toggle) */}
+                <button
+                  onClick={() => handleDurumDegistir(g, g.Durum === 'Aktif' ? 'Tamamlandı' : 'Aktif')}
+                  title={g.Durum === 'Aktif' ? "Görevi 'Tamamlandı' olarak işaretle" : "Görevi tekrar 'Aktif' yap"}
+                  className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1.5 transition cursor-pointer hover:scale-105 active:scale-95 ${
+                    g.Durum === 'Aktif' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30' :
+                    g.Durum === 'Tamamlandı' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30 hover:bg-blue-500/30' :
+                    'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                  }`}
+                >
+                  {g.Durum === 'Aktif' ? (
+                    <>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span>🟢 Görevde (Aktif)</span>
+                    </>
+                  ) : g.Durum === 'Tamamlandı' ? (
+                    <>
+                      <CheckCircle2 className="w-3 h-3 text-blue-400" />
+                      <span>🔵 Tamamlandı</span>
+                    </>
+                  ) : (
+                    <span>🔴 İptal</span>
+                  )}
+                </button>
               </div>
 
               {/* Bilgi Rozetleri */}
@@ -452,14 +508,39 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
               </div>
 
               {/* İŞLEM BUTONLARI */}
-              <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
-                <button
-                  onClick={() => handleYazdirAc(g)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-xs"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>A4 Yazdır / PDF</span>
-                </button>
+              <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleYazdirAc(g)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-xs"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>A4 Yazdır / PDF</span>
+                  </button>
+
+                  {/* Tamamlandı / Aktif Toggle Butonu */}
+                  <button
+                    onClick={() => handleDurumDegistir(g, g.Durum === 'Aktif' ? 'Tamamlandı' : 'Aktif')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                      g.Durum === 'Aktif'
+                        ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40'
+                        : 'bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40'
+                    }`}
+                    title={g.Durum === 'Aktif' ? "Görevi 'Tamamlandı' olarak işaretle" : "Görevi tekrar 'Aktif' yap"}
+                  >
+                    {g.Durum === 'Aktif' ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Tamamlandı Yap</span>
+                      </>
+                    ) : (
+                      <>
+                        <RotateCcw className="w-3.5 h-3.5 text-indigo-400" />
+                        <span>Yeniden Aktif Et</span>
+                      </>
+                    )}
+                  </button>
+                </div>
 
                 <div className="flex items-center gap-1">
                   <button
