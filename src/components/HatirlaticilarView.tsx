@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Hatirlatici } from '../types';
+import { Hatirlatici, AjandaBildirimi } from '../types';
 import { formatTarihTR } from '../utils/dateUtils';
 import { 
   Bell, 
@@ -19,7 +19,8 @@ import {
   FileText,
   AlertTriangle,
   FileCheck,
-  Loader2
+  Loader2,
+  Sparkles
 } from 'lucide-react';
 
 interface HatirlaticilarViewProps {
@@ -29,6 +30,13 @@ interface HatirlaticilarViewProps {
   onToggleTamamlandi: (id: number, tamamlandi: boolean) => void;
   onUpdateHatirlatici?: (id: number, fields: Partial<Hatirlatici>) => Promise<any> | void;
   onDeleteHatirlatici: (id: number) => Promise<any> | void;
+  unreadNotifHatirlaticiIds?: number[];
+  ajandaBildirimler?: AjandaBildirimi[];
+  currentUserName?: string;
+  onHatirlaticiInspected?: (id: number) => void;
+  onMarkNotificationRead?: (notificationId?: number, hatirlaticiId?: number) => void;
+  targetOpenHatirlaticiId?: number | null;
+  onClearTargetOpenHatirlaticiId?: () => void;
 }
 
 // Dosya/Görsel içeriğini (base64, data-uri, hex, url) her türlü formattan render edilebilir data-uri formatına çevirir
@@ -90,7 +98,14 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
   onAddHatirlatici,
   onToggleTamamlandi,
   onUpdateHatirlatici,
-  onDeleteHatirlatici
+  onDeleteHatirlatici,
+  unreadNotifHatirlaticiIds = [],
+  ajandaBildirimler = [],
+  currentUserName = '',
+  onHatirlaticiInspected,
+  onMarkNotificationRead,
+  targetOpenHatirlaticiId,
+  onClearTargetOpenHatirlaticiId
 }) => {
   const [modalAcik, setModalAcik] = useState(false);
   const [secilenHatirlatici, setSecilenHatirlatici] = useState<Hatirlatici | null>(null);
@@ -100,6 +115,29 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
   const [doubleClickHintId, setDoubleClickHintId] = useState<number | null>(null);
   const clickTrackerRef = useRef<{ id: number; time: number } | null>(null);
   const lastToggleRef = useRef<{ id: number; time: number } | null>(null);
+
+  // Dışarıdan veya bildirim çubuğundan belirli bir hatırlatıcı açılması istendiğinde
+  useEffect(() => {
+    if (targetOpenHatirlaticiId) {
+      const target = hatirlaticilar.find(h => Number(h.Id) === Number(targetOpenHatirlaticiId));
+      if (target) {
+        setSecilenHatirlatici(target);
+        if (onHatirlaticiInspected) {
+          onHatirlaticiInspected(target.Id);
+        }
+      }
+      if (onClearTargetOpenHatirlaticiId) {
+        onClearTargetOpenHatirlaticiId();
+      }
+    }
+  }, [targetOpenHatirlaticiId, hatirlaticilar]);
+
+  const handleOpenCard = (h: Hatirlatici) => {
+    setSecilenHatirlatici(h);
+    if (onHatirlaticiInspected) {
+      onHatirlaticiInspected(h.Id);
+    }
+  };
 
   const executeToggle = (h: Hatirlatici) => {
     if (!onToggleTamamlandi) return;
@@ -432,6 +470,29 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
         </button>
       </div>
 
+      {/* Silinen Hatırlatıcılar İçin Bekleyen Bildirimler */}
+      {ajandaBildirimler && ajandaBildirimler.filter(b => !b.Okundu && b.IslemTuru === 'silindi' && b.YapanKisi !== currentUserName).length > 0 && (
+        <div className="space-y-2">
+          {ajandaBildirimler.filter(b => !b.Okundu && b.IslemTuru === 'silindi' && b.YapanKisi !== currentUserName).map(delNotif => (
+            <div key={delNotif.Id} className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between text-xs text-red-900 shadow-xs animate-pulse">
+              <div className="flex items-center gap-2">
+                <Trash2 className="w-4 h-4 text-red-600 shrink-0" />
+                <div>
+                  <span className="font-bold">{delNotif.YapanKisi}</span> tarafından <strong className="font-extrabold">"{delNotif.Baslik}"</strong> başlıklı hatırlatma silindi.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => onMarkNotificationRead && onMarkNotificationRead(delNotif.Id)}
+                className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg text-[11px] shrink-0 cursor-pointer shadow-xs transition-colors"
+              >
+                Gördüm / Kapat
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Hatırlatıcı Kartları */}
       <div className="space-y-2.5">
         {siralananlar.length === 0 ? (
@@ -443,11 +504,15 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
           siralananlar.map((h) => {
             const d = durumBelirle(h);
             const belgeSayisi = h.Belgeler?.length || h.FotoSayisi || 0;
+            const hasUnreadChange = unreadNotifHatirlaticiIds.includes(Number(h.Id));
+
             return (
               <div
                 key={h.Id}
-                onClick={() => setSecilenHatirlatici(h)}
-                className={`p-4 rounded-2xl border cursor-pointer hover:shadow-md transition-all flex items-start justify-between gap-3 ${d.renk}`}
+                onClick={() => handleOpenCard(h)}
+                className={`p-4 rounded-2xl border cursor-pointer hover:shadow-md transition-all flex items-start justify-between gap-3 ${d.renk} ${
+                  hasUnreadChange ? 'ring-2 ring-amber-500 shadow-md animate-glow' : ''
+                }`}
               >
                 <div className="flex items-start gap-3 flex-1 min-w-0 relative">
                   <div className="relative shrink-0 flex flex-col items-center">
@@ -475,6 +540,12 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
 
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
+                      {hasUnreadChange && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-gradient-to-r from-amber-500 to-red-500 text-white shadow-xs animate-pulse">
+                          <Sparkles className="w-3 h-3 text-white" />
+                          <span>YENİ DEĞİŞİKLİK</span>
+                        </span>
+                      )}
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${d.badge}`}>
                         {d.etiket}
                       </span>

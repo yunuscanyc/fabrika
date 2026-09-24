@@ -290,6 +290,18 @@ export interface Hatirlatici {
   Belgeler?: any[];
 }
 
+export interface AjandaBildirimi {
+  Id: number;
+  HatirlaticiId?: number | null;
+  Baslik: string;
+  IslemTuru: 'eklendi' | 'duzenlendi' | 'silindi' | 'tamamlandi' | 'devam_ediyor';
+  YapanKisi: string;
+  Detay: string;
+  Tarih: string;
+  OkuyanKisiler?: string[];
+  Okundu?: boolean;
+}
+
 export interface BakimUyarisi {
   id: string;
   tur: 'arac' | 'makine' | 'muayene' | 'sigorta' | 'kasko';
@@ -527,110 +539,6 @@ export interface SantiyeMontajGrubu {
   GunlukDurumlar?: Record<string, SantiyeGunlukDurum>;
   OlusturmaTarihi?: string;
   ArsivlenmeTarihi?: string;
-}
-
-// ============================================================================
-// TAŞERON & YAN GİDER PAZARLIK VE HAKEDİŞ MODELİ
-// ============================================================================
-
-export type TaseronBirimType = 'm²' | 'Metre' | 'Metretül (mt)' | 'Adet' | 'Kg' | 'Gün' | 'Plaka' | 'Set';
-
-export interface TaseronFirma {
-  Id: string;
-  FirmaAdi: string;
-  YetkiliKisi: string;
-  Telefon: string;
-  UzmanlikAlani: string; // "Lambri, Çıta, Süpürgelik", "Dolap & Mutfak Montajı", "Cila & Boya" vb.
-  TcVeyaVergiNo?: string;
-  IbanNo?: string;
-  Sehir?: string;
-  Puan?: number; // 1 - 5 yıldız
-  Notlar?: string;
-  AktifMi: boolean;
-}
-
-export interface TaseronIsKalemi {
-  Id: string;
-  PozKodu: string; // örn. "POZ-01", "LAMB-01"
-  IsKalemiAdi: string; // örn. "Lambri Yapımı / Ahşap Kaplama"
-  Birim: TaseronBirimType;
-  Miktar: number; // örn. 500
-  BazBirimFiyat: number; // Sadece işçilik birim fiyatı (₺)
-  Aciklama?: string;
-}
-
-export type TaseronYanGiderKategori = 
-  | 'Ulaşım & Lojistik'
-  | 'Konaklama & Barınma'
-  | 'Yemek & İkram'
-  | 'SGK & İSG Yasal'
-  | 'Sarf Malzeme & El Aletleri'
-  | 'Temizlik & Moloz Atımı'
-  | 'Risk & Fire Payı';
-
-export interface TaseronYanGiderItem {
-  Id: string;
-  Kategori: TaseronYanGiderKategori;
-  GiderAdI: string; // örn. "Günlük Tabldot Yemek", "SGK Prim & Stopaj"
-  HesapTuru: 'KisiGun' | 'Gunluk' | 'Aylik' | 'Toplu' | 'BirimBasi';
-  BirimMaliyet: number; // ₺
-  KisiSayisi?: number;
-  GunSayisi?: number;
-  ToplamTutar: number; // ₺
-  Sorumlu: 'Biz' | 'Taseron' | 'Muaf'; // Kimin üstlendiği
-  Aciklama?: string;
-}
-
-export interface TaseronHakedisKalemIlerleme {
-  PozId: string;
-  PozKodu: string;
-  IsKalemiAdi: string; // örn. Lambri
-  Birim: TaseronBirimType;
-  ToplamMiktar: number;
-  OncekiMiktar: number;
-  BuDonemMiktar: number;
-  KalanMiktar: number;
-  BirimFiyat: number;
-  BuDonemTutar: number;
-}
-
-export interface TaseronHakedisKaydi {
-  HakedisId: string;
-  HakedisNo: number; // 1, 2, 3...
-  Tarih: string;
-  Aciklama?: string;
-  KalemIlerlemeleri: TaseronHakedisKalemIlerleme[];
-  BrutTutar: number;
-  AvansKesintisi: number;
-  ZayiatKesintisi: number;
-  DiğerKesintiler: number;
-  NetOdenecek: number;
-  Durum: 'Taslak' | 'Onaylandi' | 'Odendi';
-  OdemeTarihi?: string;
-}
-
-export interface TaseronAnlasma {
-  Id: string;
-  AnlasmaKodu: string; // örn. "TAS-2026-001"
-  ProjeAdi: string;
-  ProjeId?: number | null;
-  TaseronFirmaId: string;
-  TaseronFirmaAd: string;
-  BaslangicTarihi: string;
-  BitisTarihi?: string;
-  Durum: 'TeklifAsamasi' | 'Anlasildi' | 'DevamEdiyor' | 'Tamamlandi' | 'Iptal';
-  AnlasmaTuru: 'SadeceIscilik' | 'HerSeyDahilPaket' | 'Karma';
-  IsKalemleri: TaseronIsKalemi[];
-  YanGiderler: TaseronYanGiderItem[];
-  // Anlaşılan Tutar Bilgileri
-  ToplamIscilikTutari: number;
-  BizimYanGiderTutarimiz: number;
-  TaseronaDevredilenYanGiderTutari: number;
-  AnlasilanToplamTutar: number;
-  HerSeyDahilBirimFiyatHedefi?: number;
-  Hakedisler: TaseronHakedisKaydi[];
-  Notlar?: string;
-  OlusturmaTarihi: string;
 }
 
 // ============================================================================

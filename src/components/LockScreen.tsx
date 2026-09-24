@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Lock, Key, Shield, LogOut, ArrowRight, AlertCircle, Clock, Eye, EyeOff, Delete } from 'lucide-react';
 
 interface LockScreenProps {
-  onUnlock: (role?: 'admin' | 'ustabasi') => void;
+  onUnlock: (role?: 'admin' | 'ustabasi', userName?: string, adminId?: string) => void;
   onLogout: () => void;
   autoLockMinutes: number;
 }
@@ -70,10 +70,14 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock, onLogout, auto
       const data = await res.json();
       if (res.ok && data.success) {
         const userRole: 'admin' | 'ustabasi' = data.role === 'ustabasi' ? 'ustabasi' : 'admin';
+        const userName: string = data.userName || (userRole === 'ustabasi' ? 'Ustabaşı' : '1. Yönetici');
+        const adminId: string = data.adminId || (userRole === 'ustabasi' ? 'ustabasi' : 'admin1');
         sessionStorage.setItem('rende_user_role', userRole);
+        sessionStorage.setItem('rende_user_name', userName);
+        sessionStorage.setItem('rende_admin_id', adminId);
         localStorage.setItem('rende_last_active', Date.now().toString());
         sessionStorage.setItem('rende_last_active', Date.now().toString());
-        onUnlock(userRole);
+        onUnlock(userRole, userName, adminId);
       } else {
         setError(data.error || 'Hatalı PIN veya Parola!');
         setCode('');

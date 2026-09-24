@@ -9,18 +9,23 @@ import { PersonelHubView } from './components/PersonelHubView';
 import { MakineView } from './components/MakineView';
 import { SiparislerView } from './components/SiparislerView';
 import { UstabasiSiparisBildirim } from './components/UstabasiSiparisBildirim';
+import { AjandaBildirimBari } from './components/AjandaBildirimBari';
 import { ServerSetupModal } from './components/ServerSetupModal';
 import { DatabaseStatusModal, DbStatusData } from './components/DatabaseStatusModal';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { LoginScreen } from './components/LoginScreen';
 import { LockScreen } from './components/LockScreen';
 import { SecuritySettingsModal } from './components/SecuritySettingsModal';
-import { Proje, Arac, BakimKaydi, Hatirlatici, OzetIstatistikler, Personel, IzinKaydi, Makine, Departman, Gorev } from './types';
+import { Proje, Arac, BakimKaydi, Hatirlatici, OzetIstatistikler, Personel, IzinKaydi, Makine, Departman, Gorev, AjandaBildirimi } from './types';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [userRole, setUserRole] = useState<'admin' | 'ustabasi'>('admin');
+  const [currentUserName, setCurrentUserName] = useState<string>(() => sessionStorage.getItem('rende_user_name') || '1. Yönetici');
+  const [currentAdminId, setCurrentAdminId] = useState<string>(() => sessionStorage.getItem('rende_admin_id') || 'admin1');
   const [unreadOrdersCount, setUnreadOrdersCount] = useState<number>(0);
+  const [ajandaBildirimler, setAjandaBildirimler] = useState<AjandaBildirimi[]>([]);
+  const [targetOpenHatirlaticiId, setTargetOpenHatirlaticiId] = useState<number | null>(null);
   const [personelSubTab, setPersonelSubTab] = useState<'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci'>('liste');
   const [selectedPersonelId, setSelectedPersonelId] = useState<number | undefined>(undefined);
   const [isgSekme, setIsgSekme] = useState<'kkd' | 'saglik' | 'egitim' | undefined>(undefined);
@@ -64,10 +69,14 @@ export default function App() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        // Eski localStorage token kalıntılarını temizle (sekme kapanınca oturum kesin kapansın)
         localStorage.removeItem('rende_auth_token');
         const token = sessionStorage.getItem('rende_auth_token');
         const savedRole = sessionStorage.getItem('rende_user_role') as 'admin' | 'ustabasi' | null;
+        const savedName = sessionStorage.getItem('rende_user_name');
+        const savedAdminId = sessionStorage.getItem('rende_admin_id');
+        if (savedName) setCurrentUserName(savedName);
+        if (savedAdminId) setCurrentAdminId(savedAdminId);
+
         if (savedRole === 'ustabasi') {
           setUserRole('ustabasi');
           setActiveTab('siparisler');
@@ -102,13 +111,20 @@ export default function App() {
           setIsAuthenticated(true);
           const currentRole: 'admin' | 'ustabasi' = data.role === 'ustabasi' ? 'ustabasi' : 'admin';
           setUserRole(currentRole);
+          if (data.userName) {
+            setCurrentUserName(data.userName);
+            sessionStorage.setItem('rende_user_name', data.userName);
+          }
+          if (data.adminId) {
+            setCurrentAdminId(data.adminId);
+            sessionStorage.setItem('rende_admin_id', data.adminId);
+          }
           if (currentRole === 'ustabasi') {
             setActiveTab('siparisler');
           }
           if (data.autoLockMinutes !== undefined) {
             setAutoLockMinutes(data.autoLockMinutes);
           }
-          // Son aktivite kontrolü (oturum süresi aşılmışsa kilit ekranı açılır)
           const lastActiveStr = sessionStorage.getItem('rende_last_active');
           if (lastActiveStr) {
             const lastActiveTime = parseInt(lastActiveStr, 10);
@@ -132,70 +148,79 @@ export default function App() {
     checkAuth();
   }, []);
 
-  // Kullanıcı Aktivitesi Takibi (Inactivity Auto-Lock)
-  const updateActivity = useCallback(() => {
-    const now = Date.now();
-    lastActiveRef.current = now;
-    sessionStorage.setItem('rende_last_active', now.toString());
-  }, []);
-
-  useEffect(() => {
-    if (!isAuthenticated || isLocked) return;
-
-    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
-    let throttleTimeout: any = null;
-
-    const handleUserActivity = () => {
-      if (!throttleTimeout) {
-        throttleTimeout = setTimeout(() => {
-          updateActivity();
-          throttleTimeout = null;
-        }, 3000);
-      }
-    };
-
-    events.forEach(ev => window.addEventListener(ev, handleUserActivity, { passive: true }));
-
-    // Periyodik kontrol
-    const inactivityInterval = setInterval(() => {
-      if (autoLockMinutes <= 0) return;
-      const lastActive = lastActiveRef.current || parseInt(sessionStorage.getItem('rende_last_active') || '0', 10);
-      const idleMs = Date.now() - lastActive;
-      const timeoutMs = autoLockMinutes * 60 * 1000;
-
-      if (idleMs >= timeoutMs) {
-        setIsLocked(true);
-      }
-    }, 10000);
-
-    // Sekme odağı değişimi kontrolü
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && autoLockMinutes > 0) {
-        const lastActive = parseInt(sessionStorage.getItem('rende_last_active') || Date.now().toString(), 10);
-        if (Date.now() - lastActive >= autoLockMinutes * 60 * 1000) {
-          setIsLocked(true);
-        } else {
-          updateActivity();
+  // Ajanda Bildirimlerini Getir
+  const yukleAjandaBildirimleri = useCallback(async () => {
+    if (userRole !== 'admin') return;
+    try {
+      const uName = sessionStorage.getItem('rende_user_name') || currentUserName || '1. Yönetici';
+      const res = await fetch(`/api/ajanda/bildirimler?user=${encodeURIComponent(uName)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.bildirimler)) {
+          setAjandaBildirimler(data.bildirimler);
         }
       }
-    };
+    } catch (e) {}
+  }, [userRole, currentUserName]);
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+  // Periyodik Ajanda Bildirim Polling (4 saniyede bir)
+  useEffect(() => {
+    if (!isAuthenticated || isLocked || userRole !== 'admin') return;
+    yukleAjandaBildirimleri();
+    const notifTimer = setInterval(() => {
+      yukleAjandaBildirimleri();
+    }, 4000);
+    return () => clearInterval(notifTimer);
+  }, [isAuthenticated, isLocked, userRole, yukleAjandaBildirimleri]);
 
-    return () => {
-      events.forEach(ev => window.removeEventListener(ev, handleUserActivity));
-      clearInterval(inactivityInterval);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      if (throttleTimeout) clearTimeout(throttleTimeout);
-    };
-  }, [isAuthenticated, isLocked, autoLockMinutes, updateActivity]);
+  const handleMarkAjandaRead = async (notificationId?: number, hatirlaticiId?: number) => {
+    const uName = currentUserName || sessionStorage.getItem('rende_user_name') || '1. Yönetici';
+    try {
+      await fetch('/api/ajanda/bildirimler/okundu', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notificationId, hatirlaticiId, userName: uName })
+      });
+      setAjandaBildirimler(prev => prev.map(b => {
+        const match = (notificationId && b.Id === notificationId) || (hatirlaticiId && b.HatirlaticiId === hatirlaticiId);
+        if (match) {
+          return { ...b, Okundu: true, OkuyanKisiler: [...(b.OkuyanKisiler || []), uName] };
+        }
+        return b;
+      }));
+    } catch (e) {}
+  };
 
-  const handleLoginSuccess = (token: string, lockMin: number, role?: 'admin' | 'ustabasi') => {
+  const handleMarkAllAjandaRead = async () => {
+    const uName = currentUserName || sessionStorage.getItem('rende_user_name') || '1. Yönetici';
+    try {
+      await fetch('/api/ajanda/bildirimler/hepsini-oku', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userName: uName })
+      });
+      setAjandaBildirimler(prev => prev.map(b => ({
+        ...b,
+        Okundu: true,
+        OkuyanKisiler: [...(b.OkuyanKisiler || []), uName]
+      })));
+    } catch (e) {}
+  };
+
+  const handleOpenHatirlaticiFromNotification = (hatirlaticiId: number) => {
+    setActiveTab('hatirlaticilar');
+    setTargetOpenHatirlaticiId(hatirlaticiId);
+    handleMarkAjandaRead(undefined, hatirlaticiId);
+  };
+
+  const handleLoginSuccess = (token: string, lockMin: number, role?: 'admin' | 'ustabasi', userName?: string, adminId?: string) => {
     setIsAuthenticated(true);
     setIsLocked(false);
     setAutoLockMinutes(lockMin);
     const resolvedRole: 'admin' | 'ustabasi' = role === 'ustabasi' ? 'ustabasi' : 'admin';
     setUserRole(resolvedRole);
+    if (userName) setCurrentUserName(userName);
+    if (adminId) setCurrentAdminId(adminId);
     if (resolvedRole === 'ustabasi') {
       setActiveTab('siparisler');
     } else {
@@ -203,9 +228,12 @@ export default function App() {
     }
     lastActiveRef.current = Date.now();
     verileriYukle();
+    if (resolvedRole === 'admin') {
+      yukleAjandaBildirimleri();
+    }
   };
 
-  const handleUnlock = (role?: 'admin' | 'ustabasi') => {
+  const handleUnlock = (role?: 'admin' | 'ustabasi', userName?: string, adminId?: string) => {
     setIsLocked(false);
     if (role) {
       setUserRole(role);
@@ -213,8 +241,13 @@ export default function App() {
         setActiveTab('siparisler');
       }
     }
+    if (userName) setCurrentUserName(userName);
+    if (adminId) setCurrentAdminId(adminId);
     lastActiveRef.current = Date.now();
     sessionStorage.setItem('rende_last_active', Date.now().toString());
+    if (role === 'admin' || userRole === 'admin') {
+      yukleAjandaBildirimleri();
+    }
   };
 
   const handleManualLock = () => {
@@ -486,8 +519,14 @@ export default function App() {
 
       const res = await fetch('/api/hatirlaticilar', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(h),
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-name': currentUserName
+        },
+        body: JSON.stringify({
+          ...h,
+          YapanKisi: currentUserName
+        }),
         signal: controller.signal
       });
       clearTimeout(timeoutId);
@@ -502,6 +541,7 @@ export default function App() {
       const yeni = await res.json();
       setHatirlaticilar(prev => [yeni, ...prev]);
       fetch('/api/ozet').then(r => r.json()).then(setOzet);
+      yukleAjandaBildirimleri();
       return true;
     } catch (err: any) {
       if (err.name === 'AbortError') {
@@ -534,11 +574,17 @@ export default function App() {
     });
 
     try {
-      const payload = { TamamlandiMi: tamamlandi };
+      const payload = { 
+        TamamlandiMi: tamamlandi,
+        YapanKisi: currentUserName
+      };
 
       const res = await fetch(`/api/hatirlaticilar/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-name': currentUserName
+        },
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
@@ -550,6 +596,7 @@ export default function App() {
         prev.map(h => (h.Id === id ? { ...h, ...guncel } : h))
       );
       fetch('/api/ozet').then(r => r.json()).then(setOzet);
+      yukleAjandaBildirimleri();
     } catch (err) {
       console.error('Hatırlatıcı güncelleme hatası:', err);
       verileriYukle();
@@ -564,8 +611,14 @@ export default function App() {
 
       const res = await fetch(`/api/hatirlaticilar/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(fields),
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-name': currentUserName
+        },
+        body: JSON.stringify({
+          ...fields,
+          YapanKisi: currentUserName
+        }),
         signal: controller.signal
       });
       clearTimeout(timeoutId);
@@ -582,6 +635,7 @@ export default function App() {
         prev.map(h => (h.Id === id ? guncellenen : h))
       );
       fetch('/api/ozet').then(r => r.json()).then(setOzet);
+      yukleAjandaBildirimleri();
       return guncellenen;
     } catch (err: any) {
       if (err.name === 'AbortError') {
@@ -595,19 +649,30 @@ export default function App() {
   // Hatırlatıcı Sil
   const handleDeleteHatirlatici = async (id: number) => {
     try {
-      const res = await fetch(`/api/hatirlaticilar/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/hatirlaticilar/${id}?yapan=${encodeURIComponent(currentUserName)}`, { 
+        method: 'DELETE',
+        headers: { 'x-user-name': currentUserName }
+      });
       if (!res.ok) {
         const txt = await res.text();
         throw new Error(`Sunucu Hatası (${res.status}): ${txt || res.statusText}`);
       }
       setHatirlaticilar(prev => prev.filter(h => h.Id !== id));
       fetch('/api/ozet').then(r => r.json()).then(setOzet);
+      yukleAjandaBildirimleri();
       return true;
     } catch (err) {
       console.error('Hatırlatıcı silme hatası:', err);
       throw err;
     }
   };
+
+  // Okunmamış Ajanda Bildirimleri ve Hatırlatıcı ID'leri
+  const unreadAjandaNotifs = ajandaBildirimler.filter(b => !b.Okundu && b.YapanKisi !== currentUserName);
+  const unreadNotifHatirlaticiIds = unreadAjandaNotifs
+    .map(b => b.HatirlaticiId)
+    .filter((id): id is number => typeof id === 'number' && id > 0);
+  const unreadAjandaCount = unreadAjandaNotifs.length;
 
   // Başlangıç Oturum Kontrolü Yükleniyor Ekranı
   if (authChecking) {
@@ -647,6 +712,8 @@ export default function App() {
         onLogout={handleLogout}
         userRole={userRole}
         unreadOrdersCount={unreadOrdersCount}
+        unreadAjandaCount={unreadAjandaCount}
+        currentUserName={currentUserName}
       />
 
       {/* Admin için Ustabaşı Yeni Sipariş Canlı Bildirimi */}
@@ -665,6 +732,17 @@ export default function App() {
               }
             });
           }}
+        />
+      )}
+
+      {/* Çoklu Yönetici Ajanda Değişiklik Bildirim Çubuğu (İlgili hatırlatma incelenene kadar kalkmaz) */}
+      {userRole === 'admin' && (
+        <AjandaBildirimBari
+          bildirimler={ajandaBildirimler}
+          currentUserName={currentUserName}
+          onOpenHatirlatici={handleOpenHatirlaticiFromNotification}
+          onMarkRead={handleMarkAjandaRead}
+          onMarkAllRead={handleMarkAllAjandaRead}
         />
       )}
 
@@ -756,6 +834,13 @@ export default function App() {
                 onToggleTamamlandi={handleToggleTamamlandi}
                 onUpdateHatirlatici={handleUpdateHatirlatici}
                 onDeleteHatirlatici={handleDeleteHatirlatici}
+                unreadNotifHatirlaticiIds={unreadNotifHatirlaticiIds}
+                ajandaBildirimler={ajandaBildirimler}
+                currentUserName={currentUserName}
+                onHatirlaticiInspected={(id) => handleMarkAjandaRead(undefined, id)}
+                onMarkNotificationRead={handleMarkAjandaRead}
+                targetOpenHatirlaticiId={targetOpenHatirlaticiId}
+                onClearTargetOpenHatirlaticiId={() => setTargetOpenHatirlaticiId(null)}
               />
             )}
           </>
@@ -798,6 +883,7 @@ export default function App() {
           bakim: ozet?.bakimBekleyenArac,
           hatirlatici: ozet?.bugunBitenGorevler,
           siparis: unreadOrdersCount,
+          ajandaBildirim: unreadAjandaCount,
         }}
       />
 

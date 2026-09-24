@@ -6,6 +6,7 @@ interface BadgeCounts {
   bakim?: number;
   hatirlatici?: number;
   siparis?: number;
+  ajandaBildirim?: number;
 }
 
 interface BottomNavProps {
@@ -120,11 +121,15 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         >
           <Bell className="w-4 h-4 mb-0.5" />
           <span className="text-[9px] tracking-tight">Ajanda</span>
-          {Boolean(badgeCounts.hatirlatici && badgeCounts.hatirlatici > 0) && (
+          {Boolean(badgeCounts.ajandaBildirim && badgeCounts.ajandaBildirim > 0) ? (
+            <span className="absolute top-0.5 right-1 w-3.5 h-3.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center animate-pulse shadow-sm">
+              {badgeCounts.ajandaBildirim}
+            </span>
+          ) : Boolean(badgeCounts.hatirlatici && badgeCounts.hatirlatici > 0) ? (
             <span className="absolute top-0.5 right-1 w-3.5 h-3.5 rounded-full bg-sky-500 text-white text-[8px] font-bold flex items-center justify-center">
               {badgeCounts.hatirlatici}
             </span>
-          )}
+          ) : null}
         </button>
       </div>
     </div>

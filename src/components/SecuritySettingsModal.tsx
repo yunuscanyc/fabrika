@@ -19,7 +19,10 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
 
   // Mevcut Ayarlar Bilgisi
   const [currentSavedAdminPin, setCurrentSavedAdminPin] = useState<string>('');
+  const [currentSavedAdminPin2, setCurrentSavedAdminPin2] = useState<string>('');
   const [currentSavedUstabasiPin, setCurrentSavedUstabasiPin] = useState<string>('');
+  const [yonetici1Ad, setYonetici1Ad] = useState<string>('1. Yönetici');
+  const [yonetici2Ad, setYonetici2Ad] = useState<string>('2. Yönetici');
 
   // Form Alanları
   const [currentPassword, setCurrentPassword] = useState('');
@@ -27,6 +30,8 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
+  const [newPin2, setNewPin2] = useState('');
+  const [confirmPin2, setConfirmPin2] = useState('');
   const [newUstabasiPin, setNewUstabasiPin] = useState('');
   const [confirmUstabasiPin, setConfirmUstabasiPin] = useState('');
   const [autoLockMinutes, setAutoLockMinutes] = useState<number>(15);
@@ -41,6 +46,8 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
       setConfirmPassword('');
       setNewPin('');
       setConfirmPin('');
+      setNewPin2('');
+      setConfirmPin2('');
       setNewUstabasiPin('');
       setConfirmUstabasiPin('');
       setFetching(true);
@@ -52,6 +59,9 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
             setAutoLockMinutes(data.autoLockMinutes ?? 15);
             setIsProtectionEnabled(data.isProtectionEnabled ?? true);
             if (data.quickPin) setCurrentSavedAdminPin(data.quickPin);
+            if (data.quickPin2) setCurrentSavedAdminPin2(data.quickPin2);
+            if (data.yonetici1Ad) setYonetici1Ad(data.yonetici1Ad);
+            if (data.yonetici2Ad) setYonetici2Ad(data.yonetici2Ad);
             if (data.ustabasiPin) setCurrentSavedUstabasiPin(data.ustabasiPin);
           }
         })
@@ -84,11 +94,22 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
 
     if (newPin) {
       if (!/^\d{4,8}$/.test(newPin.trim())) {
-        setError('Yönetici Hızlı PIN sadece 4 ile 8 hane arasındaki rakamlardan oluşmalıdır.');
+        setError('1. Yönetici Hızlı PIN sadece 4 ile 8 hane arasındaki rakamlardan oluşmalıdır.');
         return;
       }
       if (newPin !== confirmPin) {
-        setError('Belirlediğiniz yeni Yönetici PIN kodları birbiriyle eşleşmiyor.');
+        setError('Belirlediğiniz 1. Yönetici PIN kodları birbiriyle eşleşmiyor.');
+        return;
+      }
+    }
+
+    if (newPin2) {
+      if (!/^\d{4,8}$/.test(newPin2.trim())) {
+        setError('2. Yönetici Hızlı PIN sadece 4 ile 8 hane arasındaki rakamlardan oluşmalıdır.');
+        return;
+      }
+      if (newPin2 !== confirmPin2) {
+        setError('Belirlediğiniz 2. Yönetici PIN kodları birbiriyle eşleşmiyor.');
         return;
       }
     }
@@ -114,6 +135,9 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
           currentPassword: currentPassword.trim(),
           newPassword: newPassword.trim() || undefined,
           newPin: newPin.trim() || undefined,
+          newPin2: newPin2.trim() || undefined,
+          yonetici1Ad: yonetici1Ad.trim() || '1. Yönetici',
+          yonetici2Ad: yonetici2Ad.trim() || '2. Yönetici',
           newUstabasiPin: newUstabasiPin.trim() || undefined,
           autoLockMinutes: Number(autoLockMinutes),
           isProtectionEnabled
@@ -128,12 +152,15 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
           onSettingsUpdated(autoLockMinutes);
         }
         if (data.settings?.quickPin) setCurrentSavedAdminPin(data.settings.quickPin);
+        if (data.settings?.quickPin2 !== undefined) setCurrentSavedAdminPin2(data.settings.quickPin2);
         if (data.settings?.ustabasiPin) setCurrentSavedUstabasiPin(data.settings.ustabasiPin);
         setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
         setNewPin('');
         setConfirmPin('');
+        setNewPin2('');
+        setConfirmPin2('');
         setNewUstabasiPin('');
         setConfirmUstabasiPin('');
         setTimeout(() => {
@@ -229,16 +256,16 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                 </div>
               </div>
 
-              {/* 2. Yönetici Hızlı PIN Tanımlama (Tamamen Maskeli / Güvenli) */}
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+              {/* 2. 1. Yönetici Hızlı PIN Tanımlama */}
+              <div className="p-3.5 rounded-xl bg-blue-50/60 border border-blue-200 space-y-2.5">
                 <div className="flex items-start justify-between">
                   <div>
-                    <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <label className="text-xs font-bold text-blue-950 flex items-center gap-1.5">
                       <Hash className="w-4 h-4 text-blue-600" />
-                      Yönetici / Tam Yetkili Hızlı PIN (4-8 Hane)
+                      1. Yönetici Hızlı PIN (4-8 Hane)
                     </label>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      Tüm fabrikaya, şantiyelere, araçlara ve sipariş kilitleme işlemlerine tam erişim sağlar.
+                    <p className="text-[11px] text-blue-800/80 mt-0.5">
+                      1. Yönetici için giriş ve kilit açma PIN kodu.
                     </p>
                   </div>
                   {currentSavedAdminPin && (
@@ -248,10 +275,23 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                      Yeni Yönetici PIN
+                      1. Yönetici İsmi / Etiketi
+                    </label>
+                    <input
+                      type="text"
+                      value={yonetici1Ad}
+                      onChange={(e) => setYonetici1Ad(e.target.value)}
+                      placeholder="Örn: 1. Yönetici (Ahmet Bey)"
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      Yeni 1. Yönetici PIN
                     </label>
                     <input
                       type="password"
@@ -260,14 +300,14 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                       autoComplete="new-password"
                       value={newPin}
                       onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
-                      placeholder={currentSavedAdminPin ? `Mevcut: ${currentSavedAdminPin}` : 'Yönetici PIN girin (••••)'}
+                      placeholder={currentSavedAdminPin ? `Mevcut: ${currentSavedAdminPin}` : '1. PIN (••••)'}
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono tracking-widest text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
 
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                      Yönetici PIN Tekrar
+                      1. PIN Tekrar
                     </label>
                     <input
                       type="password"
@@ -276,8 +316,79 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                       autoComplete="new-password"
                       value={confirmPin}
                       onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
-                      placeholder="Yönetici PIN tekrar (••••)"
+                      placeholder="1. PIN tekrar (••••)"
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono tracking-widest text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. 2. Yönetici Hızlı PIN Tanımlama (Diğer Yönetici İçin) */}
+              <div className="p-3.5 rounded-xl bg-indigo-50/60 border border-indigo-200 space-y-2.5">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <label className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
+                      <Hash className="w-4 h-4 text-indigo-600" />
+                      2. Yönetici Hızlı PIN (4-8 Hane)
+                    </label>
+                    <p className="text-[11px] text-indigo-800/80 mt-0.5">
+                      Diğer yönetici bu PIN ile giriş yaptığında ekranında ajanda bildirimlerini görecektir.
+                    </p>
+                  </div>
+                  {currentSavedAdminPin2 ? (
+                    <span className="text-[10px] font-mono font-bold bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-md border border-indigo-200 shrink-0">
+                      Aktif: {currentSavedAdminPin2}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-semibold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md border border-slate-200 shrink-0">
+                      Tanımlı Değil
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      2. Yönetici İsmi / Etiketi
+                    </label>
+                    <input
+                      type="text"
+                      value={yonetici2Ad}
+                      onChange={(e) => setYonetici2Ad(e.target.value)}
+                      placeholder="Örn: 2. Yönetici (Mehmet Bey)"
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      Yeni 2. Yönetici PIN
+                    </label>
+                    <input
+                      type="password"
+                      inputMode="numeric"
+                      maxLength={8}
+                      autoComplete="new-password"
+                      value={newPin2}
+                      onChange={(e) => setNewPin2(e.target.value.replace(/\D/g, ''))}
+                      placeholder={currentSavedAdminPin2 ? `Mevcut: ${currentSavedAdminPin2}` : '2. PIN (••••)'}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono tracking-widest text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      2. PIN Tekrar
+                    </label>
+                    <input
+                      type="password"
+                      inputMode="numeric"
+                      maxLength={8}
+                      autoComplete="new-password"
+                      value={confirmPin2}
+                      onChange={(e) => setConfirmPin2(e.target.value.replace(/\D/g, ''))}
+                      placeholder="2. PIN tekrar (••••)"
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono tracking-widest text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
                 </div>

@@ -16,6 +16,8 @@ interface NavbarProps {
   onLogout?: () => void;
   userRole?: 'admin' | 'ustabasi';
   unreadOrdersCount?: number;
+  unreadAjandaCount?: number;
+  currentUserName?: string;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -29,6 +31,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLogout,
   userRole = 'admin',
   unreadOrdersCount = 0,
+  unreadAjandaCount = 0,
+  currentUserName = '',
 }) => {
   return (
     <header className="sticky top-0 z-30 bg-slate-900 text-white border-b border-slate-800 shadow-md">
@@ -49,7 +53,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
                     : 'bg-blue-500/20 text-blue-300 border-blue-500/30'
                 }`}>
-                  {userRole === 'ustabasi' ? '🔨 Ustabaşı Girişi' : 'Web & Mobil'}
+                  {userRole === 'ustabasi' ? '🔨 Ustabaşı Girişi' : (currentUserName ? `👤 ${currentUserName}` : 'Web & Mobil')}
                 </span>
               </div>
               <p className="text-xs text-slate-400 font-medium hidden sm:block">
@@ -137,13 +141,18 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
               <button
                 onClick={() => setActiveTab('hatirlaticilar')}
-                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+                className={`relative px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
                   activeTab === 'hatirlaticilar'
                     ? 'bg-blue-600 text-white shadow-sm'
                     : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
                 }`}
               >
-                🔔 Ajanda
+                <span>🔔 Ajanda</span>
+                {unreadAjandaCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-black animate-pulse shadow-md ring-2 ring-slate-900">
+                    {unreadAjandaCount}
+                  </span>
+                )}
               </button>
             </nav>
           )}

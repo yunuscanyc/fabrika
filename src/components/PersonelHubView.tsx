@@ -6,9 +6,8 @@ import { PuantajView } from './PuantajView';
 import { SantiyeMontajView } from './SantiyeMontajView';
 import { IsgView } from './IsgView';
 import { YevmiyeciView } from './YevmiyeciView';
-import { TaseronHakedisView } from './TaseronHakedisView';
 import { SehirDisiGorevlendirmeView } from './SehirDisiGorevlendirmeView';
-import { Users, Calendar, Clock, ShieldCheck, Briefcase, HardHat, Calculator, Send } from 'lucide-react';
+import { Users, Calendar, Clock, ShieldCheck, Briefcase, HardHat, Send } from 'lucide-react';
 
 interface PersonelHubViewProps {
   personeller: Personel[];
@@ -17,7 +16,7 @@ interface PersonelHubViewProps {
   departmanlar: Departman[];
   gorevler: Gorev[];
   onRefresh: () => void;
-  initialAltSekme?: 'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci' | 'taseron' | 'gorevlendirme';
+  initialAltSekme?: 'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci' | 'gorevlendirme';
   initialPersonelId?: number;
   initialIsgSekme?: 'kkd' | 'saglik' | 'egitim';
 }
@@ -33,7 +32,7 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
   initialPersonelId,
   initialIsgSekme,
 }) => {
-  const [altSekme, setAltSekme] = useState<'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci' | 'taseron' | 'gorevlendirme'>(initialAltSekme);
+  const [altSekme, setAltSekme] = useState<'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci' | 'gorevlendirme'>(initialAltSekme);
 
   useEffect(() => {
     if (initialAltSekme) {
@@ -68,18 +67,6 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
           >
             <Send className="w-4 h-4" />
             ✈️ Şehir Dışı Görev
-          </button>
-
-          <button
-            onClick={() => setAltSekme('taseron')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
-              altSekme === 'taseron'
-                ? 'bg-amber-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <Calculator className="w-4 h-4" />
-            🔨 Taşeron &amp; Birim Pazarlık
           </button>
 
           <button
@@ -165,10 +152,6 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
           personeller={personeller}
           projeler={projeler}
         />
-      )}
-
-      {altSekme === 'taseron' && (
-        <TaseronHakedisView projeler={projeler} />
       )}
 
       {altSekme === 'yevmiyeci' && (

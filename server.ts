@@ -5172,7 +5172,215 @@ app.delete('/api/araclar/:id/bakimlar/:bakimId', async (req, res) => {
   res.status(404).json({ error: 'Bakım kaydı bulunamadı' });
 });
 
-// 6. Hatırlatıcılar & Görevler CRUD
+// =========================================================================
+// 6. Hatırlatıcılar & Görevler CRUD & Çoklu Yönetici Ajanda Bildirimleri
+// =========================================================================
+
+interface AjandaNotification {
+  Id: number;
+  HatirlaticiId?: number | null;
+  Baslik: string;
+  IslemTuru: 'eklendi' | 'duzenlendi' | 'silindi' | 'tamamlandi' | 'devam_ediyor';
+  YapanKisi: string;
+  Detay: string;
+  Tarih: string;
+  OkuyanKisiler: string[];
+}
+
+let memAjandaBildirimler: AjandaNotification[] = [];
+
+async function recordAjandaNotification(notif: {
+  HatirlaticiId?: number | null;
+  Baslik: string;
+  IslemTuru: 'eklendi' | 'duzenlendi' | 'silindi' | 'tamamlandi' | 'devam_ediyor';
+  YapanKisi?: string;
+  Detay?: string;
+}) {
+  const yapan = notif.YapanKisi || '1. Yönetici';
+  const newNotif: AjandaNotification = {
+    Id: Date.now() + Math.floor(Math.random() * 1000),
+    HatirlaticiId: notif.HatirlaticiId !== undefined ? notif.HatirlaticiId : null,
+    Baslik: notif.Baslik || 'Hatırlatma',
+    IslemTuru: notif.IslemTuru,
+    YapanKisi: yapan,
+    Detay: notif.Detay || `${yapan} ajandada işlem yaptı.`,
+    Tarih: new Date().toISOString(),
+    OkuyanKisiler: [yapan]
+  };
+
+  memAjandaBildirimler.unshift(newNotif);
+  if (memAjandaBildirimler.length > 200) memAjandaBildirimler = memAjandaBildirimler.slice(0, 200);
+
+  if (isDbConnected) {
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS "AjandaBildirimleri" (
+          "Id" SERIAL PRIMARY KEY,
+          "HatirlaticiId" INTEGER,
+          "Baslik" VARCHAR(255),
+          "IslemTuru" VARCHAR(50),
+          "YapanKisi" VARCHAR(100),
+          "Detay" TEXT,
+          "Tarih" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          "OkuyanKisiler" TEXT DEFAULT '[]'
+        )
+      `);
+      await pool.query(`
+        INSERT INTO "AjandaBildirimleri" ("HatirlaticiId", "Baslik", "IslemTuru", "YapanKisi", "Detay", "Tarih", "OkuyanKisiler")
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `, [
+        newNotif.HatirlaticiId,
+        newNotif.Baslik,
+        newNotif.IslemTuru,
+        newNotif.YapanKisi,
+        newNotif.Detay,
+        newNotif.Tarih,
+        JSON.stringify(newNotif.OkuyanKisiler)
+      ]);
+    } catch (e: any) {
+      console.error('[DB AJANDA BILDIRIM INSERT ERROR]', e.message);
+    }
+  }
+}
+
+async function getAjandaNotificationsList(): Promise<AjandaNotification[]> {
+  if (isDbConnected) {
+    try {
+      const res = await pool.query(`SELECT * FROM "AjandaBildirimleri" ORDER BY "Id" DESC LIMIT 100`);
+      if (res.rows.length > 0) {
+        return res.rows.map(r => {
+          let okuyan: string[] = [];
+          try {
+            okuyan = typeof r.OkuyanKisiler === 'string' ? JSON.parse(r.OkuyanKisiler) : (r.OkuyanKisiler || []);
+          } catch {
+            okuyan = [];
+          }
+          return {
+            Id: r.Id,
+            HatirlaticiId: r.HatirlaticiId,
+            Baslik: r.Baslik,
+            IslemTuru: r.IslemTuru,
+            YapanKisi: r.YapanKisi,
+            Detay: r.Detay,
+            Tarih: r.Tarih ? new Date(r.Tarih).toISOString() : new Date().toISOString(),
+            OkuyanKisiler: okuyan
+          };
+        });
+      }
+    } catch (e: any) {
+      console.error('[DB AJANDA BILDIRIM GET ERROR]', e.message);
+    }
+  }
+  return memAjandaBildirimler;
+}
+
+app.get('/api/ajanda/bildirimler', async (req, res) => {
+  try {
+    const list = await getAjandaNotificationsList();
+    const currentUser = String(req.query.user || '').trim();
+    
+    const formatted = list.map(item => ({
+      ...item,
+      Okundu: currentUser ? item.OkuyanKisiler.includes(currentUser) : false
+    }));
+
+    const unreadCount = currentUser 
+      ? formatted.filter(item => !item.Okundu).length 
+      : formatted.filter(item => item.OkuyanKisiler.length <= 1).length;
+
+    res.json({
+      success: true,
+      bildirimler: formatted,
+      unreadCount
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/ajanda/bildirimler/okundu', async (req, res) => {
+  try {
+    const { notificationId, hatirlaticiId, userName } = req.body;
+    const user = String(userName || '').trim();
+    if (!user) return res.status(400).json({ error: 'Kullanıcı adı gerekli' });
+
+    // Bellekte güncelle
+    memAjandaBildirimler.forEach(item => {
+      const match = (notificationId && item.Id === Number(notificationId)) || 
+                    (hatirlaticiId && item.HatirlaticiId === Number(hatirlaticiId));
+      if (match && !item.OkuyanKisiler.includes(user)) {
+        item.OkuyanKisiler.push(user);
+      }
+    });
+
+    if (isDbConnected) {
+      try {
+        if (notificationId) {
+          const rowRes = await pool.query(`SELECT "OkuyanKisiler" FROM "AjandaBildirimleri" WHERE "Id" = $1`, [notificationId]);
+          if (rowRes.rows.length > 0) {
+            let okuyan: string[] = [];
+            try { okuyan = JSON.parse(rowRes.rows[0].OkuyanKisiler || '[]'); } catch { okuyan = []; }
+            if (!okuyan.includes(user)) {
+              okuyan.push(user);
+              await pool.query(`UPDATE "AjandaBildirimleri" SET "OkuyanKisiler" = $1 WHERE "Id" = $2`, [JSON.stringify(okuyan), notificationId]);
+            }
+          }
+        } else if (hatirlaticiId) {
+          const rowsRes = await pool.query(`SELECT "Id", "OkuyanKisiler" FROM "AjandaBildirimleri" WHERE "HatirlaticiId" = $1`, [hatirlaticiId]);
+          for (const row of rowsRes.rows) {
+            let okuyan: string[] = [];
+            try { okuyan = JSON.parse(row.OkuyanKisiler || '[]'); } catch { okuyan = []; }
+            if (!okuyan.includes(user)) {
+              okuyan.push(user);
+              await pool.query(`UPDATE "AjandaBildirimleri" SET "OkuyanKisiler" = $1 WHERE "Id" = $2`, [JSON.stringify(okuyan), row.Id]);
+            }
+          }
+        }
+      } catch (e: any) {
+        console.error('[DB MARK OKUNDU ERROR]', e.message);
+      }
+    }
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/ajanda/bildirimler/hepsini-oku', async (req, res) => {
+  try {
+    const { userName } = req.body;
+    const user = String(userName || '').trim();
+    if (!user) return res.status(400).json({ error: 'Kullanıcı adı gerekli' });
+
+    memAjandaBildirimler.forEach(item => {
+      if (!item.OkuyanKisiler.includes(user)) {
+        item.OkuyanKisiler.push(user);
+      }
+    });
+
+    if (isDbConnected) {
+      try {
+        const rowsRes = await pool.query(`SELECT "Id", "OkuyanKisiler" FROM "AjandaBildirimleri" ORDER BY "Id" DESC LIMIT 100`);
+        for (const row of rowsRes.rows) {
+          let okuyan: string[] = [];
+          try { okuyan = JSON.parse(row.OkuyanKisiler || '[]'); } catch { okuyan = []; }
+          if (!okuyan.includes(user)) {
+            okuyan.push(user);
+            await pool.query(`UPDATE "AjandaBildirimleri" SET "OkuyanKisiler" = $1 WHERE "Id" = $2`, [JSON.stringify(okuyan), row.Id]);
+          }
+        }
+      } catch (e: any) {
+        console.error('[DB MARK ALL OKUNDU ERROR]', e.message);
+      }
+    }
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/hatirlaticilar', async (req, res) => {
   const list = await getHatirlaticilarList();
   res.json(list);
@@ -5181,6 +5389,7 @@ app.get('/api/hatirlaticilar', async (req, res) => {
 app.post('/api/hatirlaticilar', async (req, res) => {
   try {
     const belgelerList = (req.body.Belgeler && Array.isArray(req.body.Belgeler)) ? req.body.Belgeler : [];
+    const yapanKisi = req.body.YapanKisi || req.headers['x-user-name'] || '1. Yönetici';
     const yeni = {
       Id: req.body.Id || Date.now(),
       Baslik: req.body.Baslik,
@@ -5193,6 +5402,8 @@ app.post('/api/hatirlaticilar', async (req, res) => {
       Belgeler: belgelerList,
       FotoSayisi: belgelerList.length
     };
+
+    let insertedRecord: any = null;
 
     if (isDbConnected && detectedTables.hatirlaticilar) {
       try {
@@ -5207,17 +5418,30 @@ app.post('/api/hatirlaticilar', async (req, res) => {
           inserted.FotoSayisi = belgelerList.length;
           memHatirlaticilar.unshift(inserted);
           saveMemHatirlaticilar();
-          return res.status(201).json(inserted);
+          insertedRecord = inserted;
         }
       } catch (err: any) {
         console.error('[DB INSERT HATIRLATICI CRUD ERROR]', err.message);
       }
     }
 
-    const memYeni = { ...yeni };
-    memHatirlaticilar.unshift(memYeni);
-    saveMemHatirlaticilar();
-    res.status(201).json(memYeni);
+    if (!insertedRecord) {
+      const memYeni = { ...yeni };
+      memHatirlaticilar.unshift(memYeni);
+      saveMemHatirlaticilar();
+      insertedRecord = memYeni;
+    }
+
+    // Ajanda Bildirimi Kaydet
+    await recordAjandaNotification({
+      HatirlaticiId: insertedRecord.Id,
+      Baslik: insertedRecord.Baslik,
+      IslemTuru: 'eklendi',
+      YapanKisi: String(yapanKisi),
+      Detay: `${yapanKisi} yeni hatırlatma ekledi: "${insertedRecord.Baslik}"`
+    });
+
+    res.status(201).json(insertedRecord);
   } catch (err: any) {
     console.error('[POST HATIRLATICI ERROR]', err.message);
     res.status(500).json({ error: err.message });
@@ -5227,6 +5451,7 @@ app.post('/api/hatirlaticilar', async (req, res) => {
 app.put('/api/hatirlaticilar/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
+    const yapanKisi = req.body.YapanKisi || req.headers['x-user-name'] || '1. Yönetici';
     const patchData: any = {};
     if (req.body.Baslik !== undefined && req.body.Baslik !== null) patchData.Baslik = req.body.Baslik;
     if (req.body.Aciklama !== undefined) patchData.Aciklama = req.body.Aciklama;
@@ -5236,6 +5461,24 @@ app.put('/api/hatirlaticilar/:id', async (req, res) => {
     if (req.body.OnemDerecesi !== undefined && req.body.OnemDerecesi !== null) patchData.OnemDerecesi = req.body.OnemDerecesi;
     if (req.body.SorumluPersonelId !== undefined) patchData.SorumluPersonelId = req.body.SorumluPersonelId ? Number(req.body.SorumluPersonelId) : null;
     if (req.body.Belgeler !== undefined) patchData.Belgeler = req.body.Belgeler;
+
+    // Mevcut kaydı bul
+    const existing = memHatirlaticilar.find(h => h.Id === id);
+    const currentBaslik = patchData.Baslik || existing?.Baslik || 'Hatırlatma';
+
+    // İşlem türünü belirle
+    let islemTuru: 'tamamlandi' | 'devam_ediyor' | 'duzenlendi' = 'duzenlendi';
+    let detay = `${yapanKisi} "${currentBaslik}" hatırlatmasını güncelledi.`;
+
+    if (req.body.TamamlandiMi !== undefined) {
+      if (req.body.TamamlandiMi === true) {
+        islemTuru = 'tamamlandi';
+        detay = `${yapanKisi} "${currentBaslik}" hatırlatmasını tamamlandı olarak işaretledi.`;
+      } else {
+        islemTuru = 'devam_ediyor';
+        detay = `${yapanKisi} "${currentBaslik}" hatırlatmasını tekrar devam ediyor olarak açtı.`;
+      }
+    }
 
     if (isDbConnected && detectedTables.hatirlaticilar) {
       try {
@@ -5257,6 +5500,16 @@ app.put('/api/hatirlaticilar/:id', async (req, res) => {
             memHatirlaticilar.unshift(updated);
           }
           saveMemHatirlaticilar();
+
+          // Bildirim kaydet
+          await recordAjandaNotification({
+            HatirlaticiId: id,
+            Baslik: currentBaslik,
+            IslemTuru: islemTuru,
+            YapanKisi: String(yapanKisi),
+            Detay: detay
+          });
+
           return res.json(updated);
         }
       } catch (err: any) {
@@ -5266,15 +5519,25 @@ app.put('/api/hatirlaticilar/:id', async (req, res) => {
 
     const index = memHatirlaticilar.findIndex(h => h.Id === id);
     if (index !== -1) {
-      const existing = memHatirlaticilar[index] as any;
-      const newBelgeler = req.body.Belgeler !== undefined ? req.body.Belgeler : (existing.Belgeler || []);
+      const existingMem = memHatirlaticilar[index] as any;
+      const newBelgeler = req.body.Belgeler !== undefined ? req.body.Belgeler : (existingMem.Belgeler || []);
       memHatirlaticilar[index] = { 
-        ...existing, 
+        ...existingMem, 
         ...patchData, 
         Belgeler: newBelgeler,
         FotoSayisi: newBelgeler.length 
       } as any;
       saveMemHatirlaticilar();
+
+      // Bildirim kaydet
+      await recordAjandaNotification({
+        HatirlaticiId: id,
+        Baslik: currentBaslik,
+        IslemTuru: islemTuru,
+        YapanKisi: String(yapanKisi),
+        Detay: detay
+      });
+
       return res.json(memHatirlaticilar[index]);
     }
     res.status(404).json({ error: 'Hatırlatıcı bulunamadı' });
@@ -5286,6 +5549,9 @@ app.put('/api/hatirlaticilar/:id', async (req, res) => {
 app.delete('/api/hatirlaticilar/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
+    const yapanKisi = req.query.yapan || req.headers['x-user-name'] || '1. Yönetici';
+    const existing = memHatirlaticilar.find(h => h.Id === id);
+    const deletedTitle = existing?.Baslik || 'Hatırlatma';
 
     if (isDbConnected && detectedTables.hatirlaticilar) {
       try {
@@ -5303,6 +5569,16 @@ app.delete('/api/hatirlaticilar/:id', async (req, res) => {
         await pool.query(`DELETE FROM ${detectedTables.hatirlaticilar} WHERE "${idCol}" = $1`, [id]);
         memHatirlaticilar = memHatirlaticilar.filter(h => h.Id !== id);
         saveMemHatirlaticilar();
+
+        // Bildirim kaydet
+        await recordAjandaNotification({
+          HatirlaticiId: null,
+          Baslik: deletedTitle,
+          IslemTuru: 'silindi',
+          YapanKisi: String(yapanKisi),
+          Detay: `${yapanKisi} "${deletedTitle}" başlıklı hatırlatmayı sildi.`
+        });
+
         return res.json({ success: true });
       } catch (err: any) {
         console.error('[DB DELETE HATIRLATICI CRUD ERROR]', err.message);
@@ -5311,6 +5587,16 @@ app.delete('/api/hatirlaticilar/:id', async (req, res) => {
 
     memHatirlaticilar = memHatirlaticilar.filter(h => h.Id !== id);
     saveMemHatirlaticilar();
+
+    // Bildirim kaydet
+    await recordAjandaNotification({
+      HatirlaticiId: null,
+      Baslik: deletedTitle,
+      IslemTuru: 'silindi',
+      YapanKisi: String(yapanKisi),
+      Detay: `${yapanKisi} "${deletedTitle}" başlıklı hatırlatmayı sildi.`
+    });
+
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -7087,6 +7373,9 @@ interface AuthData {
   isProtectionEnabled: boolean;
   masterPassword: string;
   quickPin: string;
+  quickPin2: string;
+  yonetici1Ad: string;
+  yonetici2Ad: string;
   ustabasiPin: string;
   autoLockMinutes: number;
 }
@@ -7095,20 +7384,24 @@ let memAuthData: AuthData = {
   isProtectionEnabled: true,
   masterPassword: process.env.ADMIN_PASSWORD || 'rende2026',
   quickPin: '1234',
+  quickPin2: '',
+  yonetici1Ad: '1. Yönetici',
+  yonetici2Ad: '2. Yönetici',
   ustabasiPin: '1923',
   autoLockMinutes: 15
 };
 
-const activeSessions = new Map<string, { createdAt: number; expiresAt: number; lastActive: number; role: 'admin' | 'ustabasi' }>();
+const activeSessions = new Map<string, { createdAt: number; expiresAt: number; lastActive: number; role: 'admin' | 'ustabasi'; userName?: string; adminId?: string }>();
 
 async function loadAuthSettings(): Promise<AuthData> {
   if (isDbConnected && detectedTables.sistemGuvenlik) {
     try {
-      // Sütunun var olduğundan emin ol
       if (canAlterTable(detectedTables.sistemGuvenlik)) {
         try {
           await pool.query(`ALTER TABLE ${detectedTables.sistemGuvenlik} ADD COLUMN IF NOT EXISTS "UstabasiPin" VARCHAR(50) DEFAULT '1923'`);
-          await pool.query(`UPDATE ${detectedTables.sistemGuvenlik} SET "UstabasiPin" = '1923' WHERE "UstabasiPin" IS NULL OR "UstabasiPin" = ''`);
+          await pool.query(`ALTER TABLE ${detectedTables.sistemGuvenlik} ADD COLUMN IF NOT EXISTS "QuickPin2" VARCHAR(50) DEFAULT ''`);
+          await pool.query(`ALTER TABLE ${detectedTables.sistemGuvenlik} ADD COLUMN IF NOT EXISTS "Yonetici1Ad" VARCHAR(50) DEFAULT '1. Yönetici'`);
+          await pool.query(`ALTER TABLE ${detectedTables.sistemGuvenlik} ADD COLUMN IF NOT EXISTS "Yonetici2Ad" VARCHAR(50) DEFAULT '2. Yönetici'`);
         } catch (e) {}
       }
 
@@ -7117,6 +7410,9 @@ async function loadAuthSettings(): Promise<AuthData> {
         const row = res.rows[0];
         memAuthData.masterPassword = String(getProp(row, 'MasterPassword', 'masterpassword', 'parola') || memAuthData.masterPassword);
         memAuthData.quickPin = String(getProp(row, 'QuickPin', 'quickpin', 'pin') || memAuthData.quickPin);
+        memAuthData.quickPin2 = String(getProp(row, 'QuickPin2', 'quickpin2', 'pin2') || '');
+        memAuthData.yonetici1Ad = String(getProp(row, 'Yonetici1Ad', 'yonetici1ad') || '1. Yönetici');
+        memAuthData.yonetici2Ad = String(getProp(row, 'Yonetici2Ad', 'yonetici2ad') || '2. Yönetici');
         const ustPin = getProp(row, 'UstabasiPin', 'ustabasipin', 'ustabasi_pin');
         if (ustPin && String(ustPin).trim() !== '') {
           memAuthData.ustabasiPin = String(ustPin).trim();
@@ -7126,19 +7422,10 @@ async function loadAuthSettings(): Promise<AuthData> {
         memAuthData.autoLockMinutes = Number(getProp(row, 'AutoLockMinutes', 'autolockminutes', 'dakika') || 15);
         memAuthData.isProtectionEnabled = Boolean(getProp(row, 'IsProtectionEnabled', 'isprotectionenabled') ?? true);
       } else {
-        const sCols = await getTableColumns(detectedTables.sistemGuvenlik);
-        const hasUst = sCols.some(c => c.toLowerCase() === 'ustabasipin');
-        if (hasUst) {
-          await pool.query(`
-            INSERT INTO ${detectedTables.sistemGuvenlik} ("Id", "MasterPassword", "QuickPin", "UstabasiPin", "AutoLockMinutes", "IsProtectionEnabled")
-            VALUES (1, $1, $2, $3, $4, $5)
-          `, [memAuthData.masterPassword, memAuthData.quickPin, memAuthData.ustabasiPin, memAuthData.autoLockMinutes, memAuthData.isProtectionEnabled]);
-        } else {
-          await pool.query(`
-            INSERT INTO ${detectedTables.sistemGuvenlik} ("Id", "MasterPassword", "QuickPin", "AutoLockMinutes", "IsProtectionEnabled")
-            VALUES (1, $1, $2, $3, $4)
-          `, [memAuthData.masterPassword, memAuthData.quickPin, memAuthData.autoLockMinutes, memAuthData.isProtectionEnabled]);
-        }
+        await pool.query(`
+          INSERT INTO ${detectedTables.sistemGuvenlik} ("Id", "MasterPassword", "QuickPin", "QuickPin2", "Yonetici1Ad", "Yonetici2Ad", "UstabasiPin", "AutoLockMinutes", "IsProtectionEnabled")
+          VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8)
+        `, [memAuthData.masterPassword, memAuthData.quickPin, memAuthData.quickPin2, memAuthData.yonetici1Ad, memAuthData.yonetici2Ad, memAuthData.ustabasiPin, memAuthData.autoLockMinutes, memAuthData.isProtectionEnabled]);
       }
     } catch (e: any) {
       console.log('[DB] Sistem güvenlik tablosu okuma hatası:', e.message);
@@ -7154,34 +7441,25 @@ async function saveAuthSettings(data: Partial<AuthData>) {
       if (canAlterTable(detectedTables.sistemGuvenlik)) {
         try {
           await pool.query(`ALTER TABLE ${detectedTables.sistemGuvenlik} ADD COLUMN IF NOT EXISTS "UstabasiPin" VARCHAR(50) DEFAULT '1923'`);
+          await pool.query(`ALTER TABLE ${detectedTables.sistemGuvenlik} ADD COLUMN IF NOT EXISTS "QuickPin2" VARCHAR(50) DEFAULT ''`);
+          await pool.query(`ALTER TABLE ${detectedTables.sistemGuvenlik} ADD COLUMN IF NOT EXISTS "Yonetici1Ad" VARCHAR(50) DEFAULT '1. Yönetici'`);
+          await pool.query(`ALTER TABLE ${detectedTables.sistemGuvenlik} ADD COLUMN IF NOT EXISTS "Yonetici2Ad" VARCHAR(50) DEFAULT '2. Yönetici'`);
         } catch (e) {}
       }
 
-      const sCols = await getTableColumns(detectedTables.sistemGuvenlik);
-      const hasUst = sCols.some(c => c.toLowerCase() === 'ustabasipin');
-
-      if (hasUst) {
-        await pool.query(`
-          INSERT INTO ${detectedTables.sistemGuvenlik} ("Id", "MasterPassword", "QuickPin", "UstabasiPin", "AutoLockMinutes", "IsProtectionEnabled")
-          VALUES (1, $1, $2, $3, $4, $5)
-          ON CONFLICT ("Id") DO UPDATE 
-          SET "MasterPassword" = EXCLUDED."MasterPassword",
-              "QuickPin" = EXCLUDED."QuickPin",
-              "UstabasiPin" = EXCLUDED."UstabasiPin",
-              "AutoLockMinutes" = EXCLUDED."AutoLockMinutes",
-              "IsProtectionEnabled" = EXCLUDED."IsProtectionEnabled"
-        `, [memAuthData.masterPassword, memAuthData.quickPin, memAuthData.ustabasiPin, memAuthData.autoLockMinutes, memAuthData.isProtectionEnabled]);
-      } else {
-        await pool.query(`
-          INSERT INTO ${detectedTables.sistemGuvenlik} ("Id", "MasterPassword", "QuickPin", "AutoLockMinutes", "IsProtectionEnabled")
-          VALUES (1, $1, $2, $3, $4)
-          ON CONFLICT ("Id") DO UPDATE 
-          SET "MasterPassword" = EXCLUDED."MasterPassword",
-              "QuickPin" = EXCLUDED."QuickPin",
-              "AutoLockMinutes" = EXCLUDED."AutoLockMinutes",
-              "IsProtectionEnabled" = EXCLUDED."IsProtectionEnabled"
-        `, [memAuthData.masterPassword, memAuthData.quickPin, memAuthData.autoLockMinutes, memAuthData.isProtectionEnabled]);
-      }
+      await pool.query(`
+        INSERT INTO ${detectedTables.sistemGuvenlik} ("Id", "MasterPassword", "QuickPin", "QuickPin2", "Yonetici1Ad", "Yonetici2Ad", "UstabasiPin", "AutoLockMinutes", "IsProtectionEnabled")
+        VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8)
+        ON CONFLICT ("Id") DO UPDATE 
+        SET "MasterPassword" = EXCLUDED."MasterPassword",
+            "QuickPin" = EXCLUDED."QuickPin",
+            "QuickPin2" = EXCLUDED."QuickPin2",
+            "Yonetici1Ad" = EXCLUDED."Yonetici1Ad",
+            "Yonetici2Ad" = EXCLUDED."Yonetici2Ad",
+            "UstabasiPin" = EXCLUDED."UstabasiPin",
+            "AutoLockMinutes" = EXCLUDED."AutoLockMinutes",
+            "IsProtectionEnabled" = EXCLUDED."IsProtectionEnabled"
+      `, [memAuthData.masterPassword, memAuthData.quickPin, memAuthData.quickPin2, memAuthData.yonetici1Ad, memAuthData.yonetici2Ad, memAuthData.ustabasiPin, memAuthData.autoLockMinutes, memAuthData.isProtectionEnabled]);
     } catch (e: any) {
       console.error('[DB] Sistem güvenlik kaydetme hatası:', e.message);
     }
@@ -7194,9 +7472,13 @@ app.get('/api/auth/status', async (req, res) => {
     isProtectionEnabled: memAuthData.isProtectionEnabled,
     autoLockMinutes: memAuthData.autoLockMinutes,
     hasPin: Boolean(memAuthData.quickPin && memAuthData.quickPin.length > 0),
+    hasPin2: Boolean(memAuthData.quickPin2 && memAuthData.quickPin2.length > 0),
+    quickPin: memAuthData.quickPin || '1234',
+    quickPin2: memAuthData.quickPin2 || '',
+    yonetici1Ad: memAuthData.yonetici1Ad || '1. Yönetici',
+    yonetici2Ad: memAuthData.yonetici2Ad || '2. Yönetici',
     hasUstabasiPin: Boolean(memAuthData.ustabasiPin && memAuthData.ustabasiPin.length > 0),
     ustabasiPin: memAuthData.ustabasiPin || '1923',
-    quickPin: memAuthData.quickPin || '1234',
     hasCustomPassword: memAuthData.masterPassword !== 'rende2026'
   });
 });
@@ -7210,10 +7492,21 @@ app.post('/api/auth/login', async (req, res) => {
   const cleanPass = String(password).trim();
   
   let role: 'admin' | 'ustabasi' | null = null;
+  let userName: string = memAuthData.yonetici1Ad || '1. Yönetici';
+  let adminId: string = 'admin1';
+
   if (memAuthData.ustabasiPin && cleanPass === memAuthData.ustabasiPin) {
     role = 'ustabasi';
+    userName = 'Ustabaşı';
+    adminId = 'ustabasi';
+  } else if (memAuthData.quickPin2 && cleanPass === memAuthData.quickPin2) {
+    role = 'admin';
+    userName = memAuthData.yonetici2Ad || '2. Yönetici';
+    adminId = 'admin2';
   } else if (cleanPass === memAuthData.masterPassword || (memAuthData.quickPin && cleanPass === memAuthData.quickPin)) {
     role = 'admin';
+    userName = memAuthData.yonetici1Ad || '1. Yönetici';
+    adminId = 'admin1';
   }
 
   if (role) {
@@ -7223,12 +7516,16 @@ app.post('/api/auth/login', async (req, res) => {
       createdAt: Date.now(),
       expiresAt: Date.now() + duration,
       lastActive: Date.now(),
-      role
+      role,
+      userName,
+      adminId
     });
     return res.json({
       success: true,
       token,
       role,
+      userName,
+      adminId,
       autoLockMinutes: memAuthData.autoLockMinutes,
       isProtectionEnabled: memAuthData.isProtectionEnabled
     });
@@ -7239,23 +7536,25 @@ app.post('/api/auth/login', async (req, res) => {
 app.post('/api/auth/verify-token', async (req, res) => {
   await loadAuthSettings();
   if (!memAuthData.isProtectionEnabled) {
-    return res.json({ valid: true, role: 'admin', autoLockMinutes: memAuthData.autoLockMinutes, isProtectionEnabled: false });
+    return res.json({ valid: true, role: 'admin', userName: memAuthData.yonetici1Ad || '1. Yönetici', adminId: 'admin1', autoLockMinutes: memAuthData.autoLockMinutes, isProtectionEnabled: false });
   }
   const { token } = req.body;
   if (!token) return res.status(401).json({ valid: false, error: 'Token bulunamadı' });
   const session = activeSessions.get(token);
   if (session && session.expiresAt > Date.now()) {
     session.lastActive = Date.now();
-    return res.json({ valid: true, role: session.role || 'admin', autoLockMinutes: memAuthData.autoLockMinutes, isProtectionEnabled: true });
+    return res.json({ valid: true, role: session.role || 'admin', userName: session.userName || '1. Yönetici', adminId: session.adminId || 'admin1', autoLockMinutes: memAuthData.autoLockMinutes, isProtectionEnabled: true });
   }
   if (typeof token === 'string' && token.startsWith('tok_')) {
     activeSessions.set(token, {
       createdAt: Date.now(),
       expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
       lastActive: Date.now(),
-      role: 'admin'
+      role: 'admin',
+      userName: memAuthData.yonetici1Ad || '1. Yönetici',
+      adminId: 'admin1'
     });
-    return res.json({ valid: true, role: 'admin', autoLockMinutes: memAuthData.autoLockMinutes, isProtectionEnabled: true });
+    return res.json({ valid: true, role: 'admin', userName: memAuthData.yonetici1Ad || '1. Yönetici', adminId: 'admin1', autoLockMinutes: memAuthData.autoLockMinutes, isProtectionEnabled: true });
   }
   return res.status(401).json({ valid: false, error: 'Geçersiz veya süresi dolmuş oturum' });
 });
@@ -7267,22 +7566,26 @@ app.post('/api/auth/unlock', async (req, res) => {
   const clean = String(code).trim();
   
   if (memAuthData.ustabasiPin && clean === memAuthData.ustabasiPin) {
-    return res.json({ success: true, role: 'ustabasi', autoLockMinutes: memAuthData.autoLockMinutes });
+    return res.json({ success: true, role: 'ustabasi', userName: 'Ustabaşı', adminId: 'ustabasi', autoLockMinutes: memAuthData.autoLockMinutes });
+  }
+  if (memAuthData.quickPin2 && clean === memAuthData.quickPin2) {
+    return res.json({ success: true, role: 'admin', userName: memAuthData.yonetici2Ad || '2. Yönetici', adminId: 'admin2', autoLockMinutes: memAuthData.autoLockMinutes });
   }
   if (clean === memAuthData.masterPassword || (memAuthData.quickPin && clean === memAuthData.quickPin)) {
-    return res.json({ success: true, role: 'admin', autoLockMinutes: memAuthData.autoLockMinutes });
+    return res.json({ success: true, role: 'admin', userName: memAuthData.yonetici1Ad || '1. Yönetici', adminId: 'admin1', autoLockMinutes: memAuthData.autoLockMinutes });
   }
   return res.status(401).json({ success: false, error: 'Hatalı PIN veya Parola!' });
 });
 
 app.post('/api/auth/change-settings', async (req, res) => {
   await loadAuthSettings();
-  const { currentPassword, newPassword, newPin, newUstabasiPin, autoLockMinutes, isProtectionEnabled } = req.body;
+  const { currentPassword, newPassword, newPin, newPin2, yonetici1Ad, yonetici2Ad, newUstabasiPin, autoLockMinutes, isProtectionEnabled } = req.body;
   
   const cleanCurrent = String(currentPassword || '').trim();
   const isAuthValid = !memAuthData.isProtectionEnabled || 
                       cleanCurrent === memAuthData.masterPassword || 
-                      (memAuthData.quickPin && cleanCurrent === memAuthData.quickPin);
+                      (memAuthData.quickPin && cleanCurrent === memAuthData.quickPin) ||
+                      (memAuthData.quickPin2 && cleanCurrent === memAuthData.quickPin2);
 
   if (!isAuthValid) {
     return res.status(401).json({ success: false, error: 'Mevcut parolanız veya Yönetici PIN hatalı! Güvenlik nedeniyle değişiklik yapılamadı.' });
@@ -7294,6 +7597,15 @@ app.post('/api/auth/change-settings', async (req, res) => {
   }
   if (newPin !== undefined) {
     updateData.quickPin = String(newPin).trim();
+  }
+  if (newPin2 !== undefined) {
+    updateData.quickPin2 = String(newPin2).trim();
+  }
+  if (yonetici1Ad !== undefined && yonetici1Ad.trim().length > 0) {
+    updateData.yonetici1Ad = yonetici1Ad.trim();
+  }
+  if (yonetici2Ad !== undefined && yonetici2Ad.trim().length > 0) {
+    updateData.yonetici2Ad = yonetici2Ad.trim();
   }
   if (newUstabasiPin !== undefined) {
     updateData.ustabasiPin = String(newUstabasiPin).trim();
@@ -7308,11 +7620,15 @@ app.post('/api/auth/change-settings', async (req, res) => {
   await saveAuthSettings(updateData);
   return res.json({
     success: true,
-    message: 'Güvenlik ve parola ayarları başarıyla güncellendi.',
+    message: 'Güvenlik, PIN ve parola ayarları başarıyla güncellendi.',
     settings: {
       hasPin: Boolean(memAuthData.quickPin),
-      hasUstabasiPin: Boolean(memAuthData.ustabasiPin),
+      hasPin2: Boolean(memAuthData.quickPin2),
       quickPin: memAuthData.quickPin,
+      quickPin2: memAuthData.quickPin2,
+      yonetici1Ad: memAuthData.yonetici1Ad,
+      yonetici2Ad: memAuthData.yonetici2Ad,
+      hasUstabasiPin: Boolean(memAuthData.ustabasiPin),
       ustabasiPin: memAuthData.ustabasiPin,
       autoLockMinutes: memAuthData.autoLockMinutes,
       isProtectionEnabled: memAuthData.isProtectionEnabled
