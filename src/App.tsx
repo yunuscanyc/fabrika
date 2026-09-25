@@ -246,15 +246,14 @@ export default function App() {
     };
   }, [isAuthenticated, isLocked, autoLockMinutes, updateActivity]);
 
-  // Ajanda Bildirimlerini, Hatırlatıcı Listesini ve Ana Sayfa Özetini Getir (Canlı Senkronizasyon)
+  // Ajanda Bildirimlerini ve Güncel Hatırlatıcı Listesini Getir (Canlı Senkronizasyon)
   const yukleAjandaBildirimleri = useCallback(async () => {
     if (userRole !== 'admin') return;
     try {
       const uName = sessionStorage.getItem('rende_user_name') || currentUserName || '1. Yönetici';
-      const [resBildirim, resHatirlatici, resOzet] = await Promise.all([
+      const [resBildirim, resHatirlatici] = await Promise.all([
         fetch(`/api/ajanda/bildirimler?user=${encodeURIComponent(uName)}`),
-        fetch('/api/hatirlaticilar'),
-        fetch('/api/ozet')
+        fetch('/api/hatirlaticilar')
       ]);
 
       if (resBildirim.ok) {
@@ -268,13 +267,6 @@ export default function App() {
         const hList = await resHatirlatici.json();
         if (Array.isArray(hList)) {
           setHatirlaticilar(hList);
-        }
-      }
-
-      if (resOzet.ok) {
-        const oData = await resOzet.json();
-        if (oData) {
-          setOzet(oData);
         }
       }
     } catch (e) {}
