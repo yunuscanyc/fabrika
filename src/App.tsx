@@ -246,16 +246,27 @@ export default function App() {
     };
   }, [isAuthenticated, isLocked, autoLockMinutes, updateActivity]);
 
-  // Ajanda Bildirimlerini Getir
+  // Ajanda Bildirimlerini ve Güncel Hatırlatıcı Listesini Getir (Canlı Senkronizasyon)
   const yukleAjandaBildirimleri = useCallback(async () => {
     if (userRole !== 'admin') return;
     try {
       const uName = sessionStorage.getItem('rende_user_name') || currentUserName || '1. Yönetici';
-      const res = await fetch(`/api/ajanda/bildirimler?user=${encodeURIComponent(uName)}`);
-      if (res.ok) {
-        const data = await res.json();
+      const [resBildirim, resHatirlatici] = await Promise.all([
+        fetch(`/api/ajanda/bildirimler?user=${encodeURIComponent(uName)}`),
+        fetch('/api/hatirlaticilar')
+      ]);
+
+      if (resBildirim.ok) {
+        const data = await resBildirim.json();
         if (data && Array.isArray(data.bildirimler)) {
           setAjandaBildirimler(data.bildirimler);
+        }
+      }
+
+      if (resHatirlatici.ok) {
+        const hList = await resHatirlatici.json();
+        if (Array.isArray(hList)) {
+          setHatirlaticilar(hList);
         }
       }
     } catch (e) {}
