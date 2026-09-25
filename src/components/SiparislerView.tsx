@@ -164,10 +164,10 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
         const catItems = katalog.filter(k => k.Kategori.toLowerCase() === String(value).toLowerCase());
         if (catItems.length > 0) {
           const first = catItems[0];
-          item.MalzemeAdi = first.MalzemeAdi;
+          item.MalzemeAdi = first.MalzemeAdi || '';
+          item.Marka = first.Marka || '';
+          item.Model = first.Model || '';
           if (first.VarsayilanBirim) item.Birim = first.VarsayilanBirim;
-          if (first.Marka) item.Marka = first.Marka;
-          if (first.Model) item.Model = first.Model;
         } else {
           item.MalzemeAdi = '';
           item.Marka = '';
@@ -176,14 +176,41 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
       }
 
       if (field === 'MalzemeAdi') {
-        const matched = katalog.find(
+        const matchedItems = katalog.filter(
           k => k.Kategori.toLowerCase() === item.Kategori.toLowerCase() &&
                k.MalzemeAdi.toLowerCase() === String(value).toLowerCase()
         );
+        if (matchedItems.length > 0) {
+          const first = matchedItems[0];
+          item.Marka = first.Marka || '';
+          item.Model = first.Model || '';
+          if (first.VarsayilanBirim) item.Birim = first.VarsayilanBirim;
+        }
+      }
+
+      if (field === 'Marka') {
+        const matchedItems = katalog.filter(
+          k => k.Kategori.toLowerCase() === item.Kategori.toLowerCase() &&
+               k.MalzemeAdi.toLowerCase() === item.MalzemeAdi.toLowerCase() &&
+               (k.Marka || '').toLowerCase() === String(value).toLowerCase()
+        );
+        if (matchedItems.length > 0) {
+          const first = matchedItems[0];
+          item.Model = first.Model || '';
+          if (first.VarsayilanBirim) item.Birim = first.VarsayilanBirim;
+        }
+      }
+
+      if (field === 'Model') {
+        const matched = katalog.find(
+          k => k.Kategori.toLowerCase() === item.Kategori.toLowerCase() &&
+               k.MalzemeAdi.toLowerCase() === item.MalzemeAdi.toLowerCase() &&
+               (k.Marka || '').toLowerCase() === (item.Marka || '').toLowerCase() &&
+               (k.Model || '').toLowerCase() === String(value).toLowerCase()
+        );
         if (matched) {
           if (matched.VarsayilanBirim) item.Birim = matched.VarsayilanBirim;
-          if (matched.Marka) item.Marka = matched.Marka;
-          if (matched.Model) item.Model = matched.Model;
+          if (matched.Aciklama && !item.Aciklama) item.Aciklama = matched.Aciklama;
         }
       }
 
@@ -1128,16 +1155,30 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
 
                 {formKalemler.map((kalem, index) => {
                   const catItems = katalog.filter(k => k.Kategori.toLowerCase() === (kalem.Kategori || '').toLowerCase());
-                  const mevcutMarkalar = Array.from(new Set(catItems.map(k => k.Marka).filter((m): m is string => Boolean(m && m.trim()))));
-                  const mevcutModeller = Array.from(new Set(catItems.filter(k => !kalem.Marka || (k.Marka && k.Marka.toLowerCase() === kalem.Marka.toLowerCase())).map(k => k.Model).filter((m): m is string => Boolean(m && m.trim()))));
+                  const availableMalzemeler = Array.from(new Set(catItems.map(k => k.MalzemeAdi).filter((m): m is string => Boolean(m && m.trim())))).sort();
+                  
+                  const matItems = catItems.filter(k => (k.MalzemeAdi || '').toLowerCase() === (kalem.MalzemeAdi || '').toLowerCase());
+                  const availableMarkalar = Array.from(new Set(matItems.map(k => k.Marka).filter((m): m is string => Boolean(m && m.trim())))).sort();
+                  
+                  const brandItems = matItems.filter(k => !kalem.Marka || (k.Marka || '').toLowerCase() === (kalem.Marka || '').toLowerCase());
+                  const availableModeller = Array.from(new Set(brandItems.map(k => k.Model).filter((m): m is string => Boolean(m && m.trim())))).sort();
+
+                  const isCustomMalzeme = Boolean(kalem.MalzemeAdi && !availableMalzemeler.includes(kalem.MalzemeAdi));
+                  const isCustomMarka = Boolean(kalem.Marka && !availableMarkalar.includes(kalem.Marka));
+                  const isCustomModel = Boolean(kalem.Model && !availableModeller.includes(kalem.Model));
 
                   return (
                     <div key={kalem.Id || index} className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3 relative transition-all hover:border-slate-300">
                       {/* Kalem Başlığı ve Sil Butonu */}
                       <div className="flex items-center justify-between">
-                        <span className="px-2.5 py-1 bg-slate-200 text-slate-700 font-extrabold text-[11px] rounded-lg flex items-center gap-1.5">
-                          <span>Kalem #{index + 1}</span>
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="px-2.5 py-1 bg-slate-200 text-slate-800 font-extrabold text-[11px] rounded-lg">
+                            Kalem #{index + 1}
+                          </span>
+                          <span className="text-[11px] text-slate-500 font-semibold hidden sm:inline">
+                            Hiyerarşik Malzeme Seçimi
+                          </span>
+                        </div>
                         {formKalemler.length > 1 && (
                           <button
                             type="button"
@@ -1151,16 +1192,20 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
                         )}
                       </div>
 
-                      {/* Kategori ve Malzeme Adı */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                            Kategori <span className="text-red-500">*</span>
+                      {/* HİYERARŞİK 4 SEVİYELİ COMBO ALANI */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 p-3 bg-white border border-slate-200 rounded-xl shadow-2xs">
+                        {/* 1. SEVİYE: KATEGORİ COMBO */}
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-extrabold text-blue-950 flex items-center justify-between">
+                            <span className="flex items-center gap-1">
+                              <span className="w-4 h-4 rounded-full bg-blue-600 text-white text-[10px] flex items-center justify-center font-bold">1</span>
+                              <span>Kategori</span>
+                            </span>
                           </label>
                           <select
                             value={kalem.Kategori}
                             onChange={(e) => handleUpdateKalem(index, 'Kategori', e.target.value)}
-                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                           >
                             {tumKategoriler.map(cat => (
                               <option key={cat} value={cat}>{cat}</option>
@@ -1168,92 +1213,176 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
                           </select>
                         </div>
 
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                            Malzeme / Ürün Adı <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            list={`katalog-urun-listesi-${index}`}
-                            value={kalem.MalzemeAdi}
-                            onChange={(e) => handleUpdateKalem(index, 'MalzemeAdi', e.target.value)}
-                            placeholder="Örn: Teleskopik Ray, 6mm Temperli Cam..."
-                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          />
-                          <datalist id={`katalog-urun-listesi-${index}`}>
-                            {catItems.map((item) => (
-                              <option key={item.Id || item.MalzemeAdi} value={item.MalzemeAdi}>
-                                {item.Model ? item.Model : ''}
-                              </option>
-                            ))}
-                          </datalist>
+                        {/* 2. SEVİYE: MALZEME ADI COMBO */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[11px] font-extrabold text-indigo-950 flex items-center gap-1">
+                              <span className="w-4 h-4 rounded-full bg-indigo-600 text-white text-[10px] flex items-center justify-center font-bold">2</span>
+                              <span>Malzeme Adı</span>
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (isCustomMalzeme) {
+                                  handleUpdateKalem(index, 'MalzemeAdi', availableMalzemeler[0] || '');
+                                } else {
+                                  handleUpdateKalem(index, 'MalzemeAdi', '__yeni__');
+                                }
+                              }}
+                              className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 cursor-pointer"
+                            >
+                              {isCustomMalzeme || kalem.MalzemeAdi === '__yeni__' ? 'Listeden Seç' : '+ Manuel'}
+                            </button>
+                          </div>
+
+                          {isCustomMalzeme || kalem.MalzemeAdi === '__yeni__' || availableMalzemeler.length === 0 ? (
+                            <input
+                              type="text"
+                              required
+                              placeholder="Özel malzeme adı yazın..."
+                              value={kalem.MalzemeAdi === '__yeni__' ? '' : kalem.MalzemeAdi}
+                              onChange={(e) => handleUpdateKalem(index, 'MalzemeAdi', e.target.value)}
+                              className="w-full px-2.5 py-1.5 bg-amber-50/60 border border-amber-300 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                          ) : (
+                            <select
+                              value={kalem.MalzemeAdi}
+                              onChange={(e) => {
+                                if (e.target.value === '__custom__') {
+                                  handleUpdateKalem(index, 'MalzemeAdi', '__yeni__');
+                                } else {
+                                  handleUpdateKalem(index, 'MalzemeAdi', e.target.value);
+                                }
+                              }}
+                              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            >
+                              {availableMalzemeler.map(m => (
+                                <option key={m} value={m}>{m}</option>
+                              ))}
+                              <option value="__custom__">+ Listede Yok (Manuel Yaz)</option>
+                            </select>
+                          )}
+                        </div>
+
+                        {/* 3. SEVİYE: MARKA COMBO */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[11px] font-extrabold text-teal-950 flex items-center gap-1">
+                              <span className="w-4 h-4 rounded-full bg-teal-600 text-white text-[10px] flex items-center justify-center font-bold">3</span>
+                              <span>Marka</span>
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (isCustomMarka) {
+                                  handleUpdateKalem(index, 'Marka', availableMarkalar[0] || '');
+                                } else {
+                                  handleUpdateKalem(index, 'Marka', '__yeni__');
+                                }
+                              }}
+                              className="text-[10px] font-bold text-teal-600 hover:text-teal-800 cursor-pointer"
+                            >
+                              {isCustomMarka || kalem.Marka === '__yeni__' ? 'Listeden Seç' : '+ Manuel'}
+                            </button>
+                          </div>
+
+                          {isCustomMarka || kalem.Marka === '__yeni__' || availableMarkalar.length === 0 ? (
+                            <input
+                              type="text"
+                              placeholder="Marka adı..."
+                              value={kalem.Marka === '__yeni__' ? '' : kalem.Marka}
+                              onChange={(e) => handleUpdateKalem(index, 'Marka', e.target.value)}
+                              className="w-full px-2.5 py-1.5 bg-amber-50/60 border border-amber-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            />
+                          ) : (
+                            <select
+                              value={kalem.Marka}
+                              onChange={(e) => {
+                                if (e.target.value === '__custom__') {
+                                  handleUpdateKalem(index, 'Marka', '__yeni__');
+                                } else {
+                                  handleUpdateKalem(index, 'Marka', e.target.value);
+                                }
+                              }}
+                              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            >
+                              {availableMarkalar.map(m => (
+                                <option key={m} value={m}>{m}</option>
+                              ))}
+                              <option value="__custom__">+ Listede Yok (Manuel Yaz)</option>
+                            </select>
+                          )}
+                        </div>
+
+                        {/* 4. SEVİYE: MODEL COMBO */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[11px] font-extrabold text-amber-950 flex items-center gap-1">
+                              <span className="w-4 h-4 rounded-full bg-amber-600 text-white text-[10px] flex items-center justify-center font-bold">4</span>
+                              <span>Model / Kod</span>
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (isCustomModel) {
+                                  handleUpdateKalem(index, 'Model', availableModeller[0] || '');
+                                } else {
+                                  handleUpdateKalem(index, 'Model', '__yeni__');
+                                }
+                              }}
+                              className="text-[10px] font-bold text-amber-600 hover:text-amber-800 cursor-pointer"
+                            >
+                              {isCustomModel || kalem.Model === '__yeni__' ? 'Listeden Seç' : '+ Manuel'}
+                            </button>
+                          </div>
+
+                          {isCustomModel || kalem.Model === '__yeni__' || availableModeller.length === 0 ? (
+                            <input
+                              type="text"
+                              placeholder="Model / seri / kod..."
+                              value={kalem.Model === '__yeni__' ? '' : kalem.Model}
+                              onChange={(e) => handleUpdateKalem(index, 'Model', e.target.value)}
+                              className="w-full px-2.5 py-1.5 bg-amber-50/60 border border-amber-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                            />
+                          ) : (
+                            <select
+                              value={kalem.Model}
+                              onChange={(e) => {
+                                if (e.target.value === '__custom__') {
+                                  handleUpdateKalem(index, 'Model', '__yeni__');
+                                } else {
+                                  handleUpdateKalem(index, 'Model', e.target.value);
+                                }
+                              }}
+                              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                            >
+                              {availableModeller.map(m => (
+                                <option key={m} value={m}>{m}</option>
+                              ))}
+                              <option value="__custom__">+ Listede Yok (Manuel Yaz)</option>
+                            </select>
+                          )}
                         </div>
                       </div>
 
-                      {/* Hızlı Seçim Hapları */}
-                      {catItems.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mr-1">Hızlı Seç:</span>
-                          {catItems.slice(0, 5).map((item) => (
-                            <button
-                              key={item.Id || item.MalzemeAdi}
-                              type="button"
-                              onClick={() => handleUpdateKalem(index, 'MalzemeAdi', item.MalzemeAdi)}
-                              className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold border transition-all cursor-pointer ${
-                                kalem.MalzemeAdi.toLowerCase() === item.MalzemeAdi.toLowerCase()
-                                  ? 'bg-blue-600 text-white border-blue-600'
-                                  : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
-                              }`}
-                            >
-                              {item.MalzemeAdi}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Marka & Model */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-2.5 bg-indigo-50/50 border border-indigo-100 rounded-xl">
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-800 mb-1 flex items-center justify-between">
-                            <span className="flex items-center gap-1">
-                              <Tag className="w-3 h-3 text-indigo-600" />
-                              Marka
-                            </span>
-                          </label>
-                          <input
-                            type="text"
-                            list={`marka-listesi-${index}`}
-                            value={kalem.Marka}
-                            onChange={(e) => handleUpdateKalem(index, 'Marka', e.target.value)}
-                            placeholder="Örn: Blum, Hafele, Samet..."
-                            className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          />
-                          <datalist id={`marka-listesi-${index}`}>
-                            {mevcutMarkalar.map(m => (
-                              <option key={m} value={m} />
-                            ))}
-                          </datalist>
-                        </div>
-
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-800 mb-1">
-                            Model / Seri / Kod
-                          </label>
-                          <input
-                            type="text"
-                            list={`model-listesi-${index}`}
-                            value={kalem.Model}
-                            onChange={(e) => handleUpdateKalem(index, 'Model', e.target.value)}
-                            placeholder="Örn: Movento 50cm Soft-Close..."
-                            className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          />
-                          <datalist id={`model-listesi-${index}`}>
-                            {mevcutModeller.map(m => (
-                              <option key={m} value={m} />
-                            ))}
-                          </datalist>
-                        </div>
+                      {/* Seçili Yol İpuçları (Breadcrumbs) */}
+                      <div className="flex flex-wrap items-center gap-1.5 px-2.5 py-1 bg-slate-100 rounded-lg text-[11px] text-slate-700">
+                        <span className="font-bold text-slate-500">Seçim:</span>
+                        <span className="font-bold text-blue-800">{kalem.Kategori}</span>
+                        <span className="text-slate-400">➔</span>
+                        <span className="font-bold text-indigo-800">{kalem.MalzemeAdi || 'Seçilmedi'}</span>
+                        {kalem.Marka && (
+                          <>
+                            <span className="text-slate-400">➔</span>
+                            <span className="font-bold text-teal-800">{kalem.Marka}</span>
+                          </>
+                        )}
+                        {kalem.Model && (
+                          <>
+                            <span className="text-slate-400">➔</span>
+                            <span className="font-bold text-amber-800">{kalem.Model}</span>
+                          </>
+                        )}
                       </div>
 
                       {/* Miktar & Birim */}

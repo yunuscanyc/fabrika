@@ -8824,7 +8824,7 @@ app.delete('/api/siparisler/:id', async (req, res) => {
 app.get('/api/malzeme-katalog', async (req, res) => {
   try {
     const { kategori } = req.query;
-    let list = [...memMalzemeKatalog];
+    let list: any[] = [];
 
     if (isDbConnected && detectedTables.malzemeKatalog) {
       try {
@@ -8839,10 +8839,16 @@ app.get('/api/malzeme-katalog', async (req, res) => {
             VarsayilanBirim: String(getProp(r, 'VarsayilanBirim', 'varsayilanbirim') || 'Adet'),
             Aciklama: String(getProp(r, 'Aciklama', 'aciklama') || '')
           }));
+          memMalzemeKatalog = [...list];
+          saveMemMalzemeKatalog();
         }
       } catch (dbErr: any) {
         console.error('[DB KATALOG READ ERROR]', dbErr.message);
       }
+    }
+
+    if (list.length === 0) {
+      list = [...memMalzemeKatalog];
     }
 
     if (kategori && typeof kategori === 'string' && kategori !== 'Tumu') {
@@ -8871,39 +8877,60 @@ app.post('/api/malzeme-katalog', async (req, res) => {
       return res.status(400).json({ error: 'Kategori ve Malzeme Adı zorunludur.' });
     }
 
-    const nextId = memMalzemeKatalog.length > 0 ? Math.max(...memMalzemeKatalog.map(k => k.Id || 0)) + 1 : 1;
-
-    const newItem = {
-      Id: nextId,
-      Kategori: kategori,
-      MalzemeAdi: malzemeAdi,
-      Marka: marka,
-      Model: model,
-      VarsayilanBirim: varsayilanBirim,
-      Aciklama: aciklama
-    };
-
-    memMalzemeKatalog.push(newItem);
-    saveMemMalzemeKatalog();
+    let savedItem: any = null;
 
     if (isDbConnected && detectedTables.malzemeKatalog) {
       try {
-        await pool.query(`
+        const maxRes = await pool.query(`SELECT COALESCE(MAX("Id"), 0) + 1 as next_id FROM ${detectedTables.malzemeKatalog}`);
+        const dbNextId = Number(maxRes.rows[0].next_id);
+
+        const insRes = await pool.query(`
           INSERT INTO ${detectedTables.malzemeKatalog} (
             "Id", "Kategori", "MalzemeAdi", "Marka", "Model", "VarsayilanBirim", "Aciklama"
           ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+          RETURNING *
         `, [
-          newItem.Id, newItem.Kategori, newItem.MalzemeAdi, newItem.Marka, newItem.Model, newItem.VarsayilanBirim, newItem.Aciklama
+          dbNextId, kategori, malzemeAdi, marka, model, varsayilanBirim, aciklama
         ]);
+
+        if (insRes.rows.length > 0) {
+          const r = insRes.rows[0];
+          savedItem = {
+            Id: Number(getProp(r, 'Id', 'id')),
+            Kategori: String(getProp(r, 'Kategori', 'kategori') || kategori),
+            MalzemeAdi: String(getProp(r, 'MalzemeAdi', 'malzemeadi') || malzemeAdi),
+            Marka: String(getProp(r, 'Marka', 'marka') || marka),
+            Model: String(getProp(r, 'Model', 'model') || model),
+            VarsayilanBirim: String(getProp(r, 'VarsayilanBirim', 'varsayilanbirim') || varsayilanBirim),
+            Aciklama: String(getProp(r, 'Aciklama', 'aciklama') || aciklama)
+          };
+        }
       } catch (dbErr: any) {
         console.error('[DB KATALOG INSERT ERROR]', dbErr.message);
       }
     }
 
+    if (!savedItem) {
+      const nextId = memMalzemeKatalog.length > 0 ? Math.max(...memMalzemeKatalog.map(k => k.Id || 0)) + 1 : 1;
+      savedItem = {
+        Id: nextId,
+        Kategori: kategori,
+        MalzemeAdi: malzemeAdi,
+        Marka: marka,
+        Model: model,
+        VarsayilanBirim: varsayilanBirim,
+        Aciklama: aciklama
+      };
+    }
+
+    // Bellekte güncelle
+    memMalzemeKatalog.push(savedItem);
+    saveMemMalzemeKatalog();
+
     return res.status(201).json({
       success: true,
       message: `"${malzemeAdi}" kataloğa eklendi.`,
-      data: newItem
+      data: savedItem
     });
   } catch (err: any) {
     console.error('Katalog ekleme hatası:', err);

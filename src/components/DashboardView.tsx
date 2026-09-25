@@ -139,9 +139,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       )}
 
-      {/* PWA Uygulama Kurulum Kartı */}
-      <PWAInstallPrompt variant="card" />
-
       {/* Ana Metrik Kartları (7 Odaklı Modül) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
         {/* 1. Aktif Projeler */}

@@ -10,7 +10,6 @@ import { MakineView } from './components/MakineView';
 import { SiparislerView } from './components/SiparislerView';
 import { UstabasiSiparisBildirim } from './components/UstabasiSiparisBildirim';
 import { AjandaBildirimBari } from './components/AjandaBildirimBari';
-import { PushPromptBanner } from './components/PushPromptBanner';
 import { ServerSetupModal } from './components/ServerSetupModal';
 import { DatabaseStatusModal, DbStatusData } from './components/DatabaseStatusModal';
 import { OfflineIndicator } from './components/OfflineIndicator';
@@ -831,18 +830,13 @@ export default function App() {
 
       {/* Çoklu Yönetici Ajanda Değişiklik Bildirim Çubuğu (İlgili hatırlatma incelenene kadar kalkmaz) */}
       {userRole === 'admin' && (
-        <>
-          <AjandaBildirimBari
-            bildirimler={ajandaBildirimler}
-            currentUserName={currentUserName}
-            onOpenHatirlatici={handleOpenHatirlaticiFromNotification}
-            onMarkRead={handleMarkAjandaRead}
-            onMarkAllRead={handleMarkAllAjandaRead}
-          />
-          <PushPromptBanner
-            currentUserName={currentUserName}
-          />
-        </>
+        <AjandaBildirimBari
+          bildirimler={ajandaBildirimler}
+          currentUserName={currentUserName}
+          onOpenHatirlatici={handleOpenHatirlaticiFromNotification}
+          onMarkRead={handleMarkAjandaRead}
+          onMarkAllRead={handleMarkAllAjandaRead}
+        />
       )}
 
       {/* Ana İçerik Alanı */}
