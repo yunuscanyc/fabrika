@@ -1,21 +1,37 @@
 import React, { useState, useEffect } from 'react';
-import { X, Shield, Key, Lock, Clock, CheckCircle2, AlertCircle, Save, Hash } from 'lucide-react';
+import { X, Shield, Key, Lock, Clock, CheckCircle2, AlertCircle, Save, Hash, Bell, Smartphone, Send, Radio } from 'lucide-react';
+import { 
+  isPushNotificationSupported, 
+  getNotificationPermission, 
+  getCurrentPushSubscription, 
+  subscribeToPushNotifications, 
+  unsubscribeFromPushNotifications, 
+  sendTestPushNotification 
+} from '../utils/pushManager';
 
 interface SecuritySettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSettingsUpdated?: (newAutoLockMin: number) => void;
+  currentUserName?: string;
 }
 
 export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
   isOpen,
   onClose,
-  onSettingsUpdated
+  onSettingsUpdated,
+  currentUserName = '1. Yönetici'
 }) => {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Push Bildirim Durumu
+  const [pushSupported, setPushSupported] = useState<boolean>(true);
+  const [pushSubscribed, setPushSubscribed] = useState<boolean>(false);
+  const [pushLoading, setPushLoading] = useState<boolean>(false);
+  const [pushMsg, setPushMsg] = useState<string | null>(null);
 
   // Mevcut Ayarlar Bilgisi
   const [currentSavedAdminPin, setCurrentSavedAdminPin] = useState<string>('');
@@ -41,6 +57,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
     if (isOpen) {
       setError(null);
       setSuccessMsg(null);
+      setPushMsg(null);
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
@@ -51,6 +68,11 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
       setNewUstabasiPin('');
       setConfirmUstabasiPin('');
       setFetching(true);
+
+      setPushSupported(isPushNotificationSupported());
+      getCurrentPushSubscription().then(sub => {
+        setPushSubscribed(Boolean(sub));
+      }).catch(() => {});
 
       fetch('/api/auth/status')
         .then(r => r.json())
@@ -69,6 +91,47 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
         .finally(() => setFetching(false));
     }
   }, [isOpen]);
+
+  const handleTogglePush = async () => {
+    setPushLoading(true);
+    setPushMsg(null);
+    try {
+      if (pushSubscribed) {
+        await unsubscribeFromPushNotifications();
+        setPushSubscribed(false);
+        setPushMsg('Bu cihazdaki push bildirim aboneliği kapatıldı.');
+      } else {
+        const res = await subscribeToPushNotifications(currentUserName, currentUserName.includes('2') ? 'admin2' : 'admin1');
+        if (res.success) {
+          setPushSubscribed(true);
+          setPushMsg('✅ Tebrikler! Cep telefonu bildirimleri başarıyla aktifleştirildi.');
+        } else {
+          setPushMsg(`❌ ${res.error || 'Bildirim izni verilemedi.'}`);
+        }
+      }
+    } catch (e: any) {
+      setPushMsg(`❌ Hata: ${e.message}`);
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
+  const handleTestPush = async () => {
+    setPushLoading(true);
+    setPushMsg(null);
+    try {
+      const res = await sendTestPushNotification(currentUserName);
+      if (res.success) {
+        setPushMsg('📱 Test bildirimi telefonunuza/cihazınıza gönderildi! Bildirim çubuğunu kontrol ediniz.');
+      } else {
+        setPushMsg(`❌ ${res.error || 'Test bildirimi gönderilemedi.'}`);
+      }
+    } catch (e: any) {
+      setPushMsg(`❌ Hata: ${e.message}`);
+    } finally {
+      setPushLoading(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -448,7 +511,82 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                 </div>
               </div>
 
-              {/* 3. Parola Değiştirme (Tamamen Maskeli / Güvenli) */}
+              {/* 4. Cep Telefonu & Web Push Anlık Bildirim Ayarları */}
+              <div className="p-3.5 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50/70 border border-blue-200/90 space-y-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start gap-2">
+                    <div className="p-2 rounded-lg bg-blue-600 text-white shadow-xs">
+                      <Smartphone className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-blue-950 flex items-center gap-1.5">
+                        <span>Cep Telefonu Anlık (Push) Bildirimleri</span>
+                        <span className="text-[10px] px-1.5 py-0.2 rounded font-bold bg-blue-200/80 text-blue-900">
+                          {currentUserName}
+                        </span>
+                      </label>
+                      <p className="text-[11px] text-blue-800/80 mt-0.5">
+                        Diğer yönetici ajandaya görev eklediğinde, düzenlediğinde veya sildiğinde telefonunuzun bildirim çubuğuna sesli/titreşimli anlık bildirim gider.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="shrink-0">
+                    {pushSubscribed ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-md">
+                        <Radio className="w-3 h-3 text-emerald-600 animate-pulse" />
+                        <span>Bu Cihazda Aktif</span>
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-semibold bg-slate-100 text-slate-500 border border-slate-200 px-2 py-0.5 rounded-md">
+                        Kapalı
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {pushMsg && (
+                  <div className={`p-2.5 rounded-lg text-xs font-semibold ${
+                    pushMsg.startsWith('✅') 
+                      ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' 
+                      : pushMsg.startsWith('📱')
+                      ? 'bg-blue-100 text-blue-900 border border-blue-300'
+                      : 'bg-rose-50 text-rose-800 border border-rose-200'
+                  }`}>
+                    {pushMsg}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleTogglePush}
+                    disabled={pushLoading || !pushSupported}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer ${
+                      pushSubscribed
+                        ? 'bg-rose-100 hover:bg-rose-200 text-rose-800 border border-rose-300'
+                        : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/20'
+                    }`}
+                  >
+                    <Bell className="w-3.5 h-3.5" />
+                    <span>{pushSubscribed ? 'Bu Cihazda Bildirimleri Kapat' : 'Bu Telefonda / Cihazda Bildirimleri Aç'}</span>
+                  </button>
+
+                  {pushSubscribed && (
+                    <button
+                      type="button"
+                      onClick={handleTestPush}
+                      disabled={pushLoading}
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Test Bildirimi Gönder</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 5. Parola Değiştirme (Tamamen Maskeli / Güvenli) */}
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
                 <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                   <Key className="w-4 h-4 text-blue-600" />

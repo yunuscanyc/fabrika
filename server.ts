@@ -4,6 +4,7 @@ import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import pg from 'pg';
 import dotenv from 'dotenv';
+import webpush from 'web-push';
 
 // .env veya .env.example dosyasını güvenle yükle
 if (fs.existsSync(path.join(process.cwd(), '.env'))) {
@@ -5173,8 +5174,128 @@ app.delete('/api/araclar/:id/bakimlar/:bakimId', async (req, res) => {
 });
 
 // =========================================================================
-// 6. Hatırlatıcılar & Görevler CRUD & Çoklu Yönetici Ajanda Bildirimleri
+// 6. Hatırlatıcılar & Görevler CRUD & Çoklu Yönetici Ajanda Bildirimleri & Web Push
 // =========================================================================
+
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BB-BlnsliiTrP_tgryzagLdjLTP7FOkJMBcJCuhTW7og11JGISYtM--dcTs1U-CEUlgeR_U9WKtbVk8guQc3J0c';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || 'yepcDTEVmcusvjOogWtSATHwI0jN8_pUWz6zR4Ox0l8';
+const VAPID_EMAIL = process.env.VAPID_EMAIL || 'mailto:yunuscan1131@gmail.com';
+
+try {
+  webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+  console.log('[PUSH] Web Push VAPID basariyla yapilandirildi.');
+} catch (e: any) {
+  console.error('[PUSH VAPID ERROR]', e.message);
+}
+
+interface PushSubRecord {
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+  userName?: string;
+  adminId?: string;
+}
+
+let memPushSubscriptions: PushSubRecord[] = [];
+
+async function loadPushSubscriptionsFromDb(): Promise<PushSubRecord[]> {
+  if (isDbConnected) {
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS "PushSubscriptions" (
+          "Id" SERIAL PRIMARY KEY,
+          "Endpoint" TEXT UNIQUE,
+          "Keys" TEXT,
+          "UserName" VARCHAR(100),
+          "AdminId" VARCHAR(50),
+          "CreatedAt" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      const res = await pool.query(`SELECT * FROM "PushSubscriptions"`);
+      if (res.rows.length > 0) {
+        memPushSubscriptions = res.rows.map(r => {
+          let keys = { p256dh: '', auth: '' };
+          try {
+            keys = typeof r.Keys === 'string' ? JSON.parse(r.Keys) : (r.Keys || keys);
+          } catch {}
+          return {
+            endpoint: r.Endpoint,
+            keys,
+            userName: r.UserName,
+            adminId: r.AdminId
+          };
+        });
+      }
+    } catch (e: any) {
+      console.error('[DB LOAD PUSH SUBS ERROR]', e.message);
+    }
+  }
+  return memPushSubscriptions;
+}
+
+async function sendWebPushNotification(excludeUserName: string, payload: {
+  title: string;
+  body: string;
+  icon?: string;
+  badge?: string;
+  url?: string;
+  data?: any;
+}) {
+  try {
+    const subs = await loadPushSubscriptionsFromDb();
+    if (!subs || subs.length === 0) return;
+
+    const payloadString = JSON.stringify({
+      title: payload.title,
+      body: payload.body,
+      icon: payload.icon || '/pwa-192x192.png',
+      badge: payload.badge || '/icon.svg',
+      url: payload.url || '/',
+      data: payload.data || {}
+    });
+
+    const deadEndpoints: string[] = [];
+
+    for (const sub of subs) {
+      // İşlemi yapan kişinin kendi telefonuna bildirim gönderme (diğer yöneticilere gitsin)
+      if (excludeUserName && sub.userName && sub.userName.trim().toLowerCase() === excludeUserName.trim().toLowerCase()) {
+        continue;
+      }
+
+      if (!sub.endpoint || !sub.keys || !sub.keys.p256dh || !sub.keys.auth) {
+        continue;
+      }
+
+      try {
+        await webpush.sendNotification({
+          endpoint: sub.endpoint,
+          keys: sub.keys
+        }, payloadString, {
+          TTL: 60 * 60 * 24 // 24 saat
+        });
+        console.log(`[PUSH GÖNDERİLDİ] -> ${sub.userName || 'Yönetici'}`);
+      } catch (err: any) {
+        console.error(`[PUSH HATA]`, sub.userName, err.statusCode || err.message);
+        if (err.statusCode === 404 || err.statusCode === 410) {
+          deadEndpoints.push(sub.endpoint);
+        }
+      }
+    }
+
+    if (deadEndpoints.length > 0) {
+      memPushSubscriptions = memPushSubscriptions.filter(s => !deadEndpoints.includes(s.endpoint));
+      if (isDbConnected) {
+        try {
+          await pool.query(`DELETE FROM "PushSubscriptions" WHERE "Endpoint" = ANY($1)`, [deadEndpoints]);
+        } catch (e) {}
+      }
+    }
+  } catch (globalPushErr: any) {
+    console.error('[PUSH GÖNDERİM GENEL HATA]', globalPushErr.message);
+  }
+}
 
 interface AjandaNotification {
   Id: number;
@@ -5241,6 +5362,31 @@ async function recordAjandaNotification(notif: {
       console.error('[DB AJANDA BILDIRIM INSERT ERROR]', e.message);
     }
   }
+
+  // Cep Telefonlarına Anlık Push Bildirimi Gönder
+  let pushBody = `${yapan} ajandada işlem yaptı.`;
+  if (newNotif.IslemTuru === 'eklendi') {
+    pushBody = `${yapan} yeni hatırlatma ekledi: "${newNotif.Baslik}"`;
+  } else if (newNotif.IslemTuru === 'duzenlendi') {
+    pushBody = `${yapan} "${newNotif.Baslik}" hatırlatmasını güncelledi.`;
+  } else if (newNotif.IslemTuru === 'silindi') {
+    pushBody = `${yapan} "${newNotif.Baslik}" hatırlatmasını sildi.`;
+  } else if (newNotif.IslemTuru === 'tamamlandi') {
+    pushBody = `${yapan} "${newNotif.Baslik}" hatırlatmasını tamamlandı olarak işaretledi.`;
+  } else if (newNotif.IslemTuru === 'devam_ediyor') {
+    pushBody = `${yapan} "${newNotif.Baslik}" hatırlatmasını tekrar devam edene çevirdi.`;
+  }
+
+  sendWebPushNotification(yapan, {
+    title: `🔔 Rende Portal: ${yapan}`,
+    body: pushBody,
+    url: '/',
+    data: {
+      hatirlaticiId: newNotif.HatirlaticiId,
+      islemTuru: newNotif.IslemTuru,
+      yapanKisi: yapan
+    }
+  }).catch(() => {});
 }
 
 async function getAjandaNotificationsList(): Promise<AjandaNotification[]> {
@@ -5377,6 +5523,119 @@ app.post('/api/ajanda/bildirimler/hepsini-oku', async (req, res) => {
 
     res.json({ success: true });
   } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// Web Push Abonelik ve Test API Uçları
+// ==========================================
+app.get('/api/push/public-key', (req, res) => {
+  res.json({ publicKey: VAPID_PUBLIC_KEY });
+});
+
+app.post('/api/push/subscribe', async (req, res) => {
+  try {
+    const { subscription, userName, adminId } = req.body;
+    if (!subscription || !subscription.endpoint || !subscription.keys) {
+      return res.status(400).json({ error: 'Geçersiz abonelik verisi' });
+    }
+
+    const uName = String(userName || 'Yönetici').trim();
+    const aId = String(adminId || 'admin1').trim();
+    const endpoint = String(subscription.endpoint).trim();
+    const keysStr = JSON.stringify(subscription.keys);
+
+    // Bellekte güncelle/ekle
+    const existingIndex = memPushSubscriptions.findIndex(s => s.endpoint === endpoint);
+    if (existingIndex >= 0) {
+      memPushSubscriptions[existingIndex] = {
+        endpoint,
+        keys: subscription.keys,
+        userName: uName,
+        adminId: aId
+      };
+    } else {
+      memPushSubscriptions.push({
+        endpoint,
+        keys: subscription.keys,
+        userName: uName,
+        adminId: aId
+      });
+    }
+
+    if (isDbConnected) {
+      try {
+        await pool.query(`
+          INSERT INTO "PushSubscriptions" ("Endpoint", "Keys", "UserName", "AdminId", "CreatedAt")
+          VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+          ON CONFLICT ("Endpoint") DO UPDATE
+          SET "Keys" = EXCLUDED."Keys",
+              "UserName" = EXCLUDED."UserName",
+              "AdminId" = EXCLUDED."AdminId"
+        `, [endpoint, keysStr, uName, aId]);
+      } catch (e: any) {
+        console.error('[DB SAVE PUSH SUB ERROR]', e.message);
+      }
+    }
+
+    console.log(`[PUSH ABONE OLUNDU] -> ${uName} (${endpoint.slice(0, 35)}...)`);
+    res.json({ success: true, message: 'Push bildirim aboneliği başarıyla kaydedildi.' });
+  } catch (err: any) {
+    console.error('[PUSH SUBSCRIBE ERROR]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/push/unsubscribe', async (req, res) => {
+  try {
+    const { endpoint } = req.body;
+    if (!endpoint) return res.status(400).json({ error: 'Endpoint gerekli' });
+
+    memPushSubscriptions = memPushSubscriptions.filter(s => s.endpoint !== endpoint);
+    if (isDbConnected) {
+      try {
+        await pool.query(`DELETE FROM "PushSubscriptions" WHERE "Endpoint" = $1`, [endpoint]);
+      } catch (e) {}
+    }
+
+    res.json({ success: true, message: 'Abonelik iptal edildi.' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/push/test', async (req, res) => {
+  try {
+    const { subscription, userName } = req.body;
+    const targetName = userName || 'Yönetici';
+    
+    const payloadString = JSON.stringify({
+      title: '🔔 Rende Portal - Test Bildirimi',
+      body: `Harika! ${targetName} için cep telefonu bildirimleri başarıyla aktif edildi.`,
+      icon: '/pwa-192x192.png',
+      badge: '/icon.svg',
+      url: '/'
+    });
+
+    if (subscription && subscription.endpoint && subscription.keys) {
+      await webpush.sendNotification({
+        endpoint: subscription.endpoint,
+        keys: subscription.keys
+      }, payloadString, { TTL: 60 });
+      return res.json({ success: true, message: 'Test bildirimi cihazınıza başarıyla gönderildi!' });
+    }
+
+    // Aksi halde kayıtlı olan kullanıcılara test gönder
+    await sendWebPushNotification('', {
+      title: '🔔 Rende Portal - Test Bildirimi',
+      body: `${targetName} tarafından test bildirimi tetiklendi.`,
+      url: '/'
+    });
+
+    res.json({ success: true, message: 'Test bildirimi tüm kayıtlı cihazlara gönderildi.' });
+  } catch (err: any) {
+    console.error('[PUSH TEST ERROR]', err.message);
     res.status(500).json({ error: err.message });
   }
 });

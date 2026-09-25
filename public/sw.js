@@ -1,5 +1,5 @@
-// Service Worker for Rende Portal PWA
-const CACHE_NAME = 'rende-portal-v2';
+// Service Worker for Rende Portal PWA & Push Notifications
+const CACHE_NAME = 'rende-portal-v3';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -36,7 +36,7 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Do not cache API or database calls
+  // Do not cache API, database or push calls
   if (event.request.url.includes('/api/')) {
     return;
   }
@@ -63,5 +63,66 @@ self.addEventListener('fetch', (event) => {
           }
         });
       })
+  );
+});
+
+// ==========================================
+// PUSH BİLDİRİM VE TELEFON EKRANI UYARILARI
+// ==========================================
+self.addEventListener('push', (event) => {
+  let data = {
+    title: '🔔 Rende Portal - Ajanda Bildirimi',
+    body: 'Ajandada yeni bir işlem yapıldı.',
+    icon: '/pwa-192x192.png',
+    badge: '/icon.svg',
+    url: '/',
+    data: {}
+  };
+
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch (e) {
+      data.body = event.data.text();
+    }
+  }
+
+  const options = {
+    body: data.body || 'Ajandada yeni bir işlem yapıldı.',
+    icon: data.icon || '/pwa-192x192.png',
+    badge: data.badge || '/icon.svg',
+    vibrate: [300, 100, 300, 100, 400],
+    data: data.data || { url: data.url || '/' },
+    tag: data.tag || 'rende-ajanda-push-' + Date.now(),
+    renotify: true,
+    requireInteraction: true,
+    actions: [
+      { action: 'open', title: '📱 Aç & İncele' }
+    ]
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, options)
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = (event.notification.data && event.notification.data.url) || '/';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      for (const client of windowClients) {
+        if (client.url && 'focus' in client) {
+          if ('navigate' in client) {
+            client.navigate(targetUrl);
+          }
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+    })
   );
 });
