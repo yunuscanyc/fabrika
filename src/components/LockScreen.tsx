@@ -75,6 +75,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock, onLogout, auto
         sessionStorage.setItem('rende_user_role', userRole);
         sessionStorage.setItem('rende_user_name', userName);
         sessionStorage.setItem('rende_admin_id', adminId);
+        sessionStorage.removeItem('rende_is_locked');
         localStorage.setItem('rende_last_active', Date.now().toString());
         sessionStorage.setItem('rende_last_active', Date.now().toString());
         onUnlock(userRole, userName, adminId);

@@ -32,7 +32,9 @@ export default function App() {
 
   // Güvenlik & Oturum Durumu
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [isLocked, setIsLocked] = useState<boolean>(false);
+  const [isLocked, setIsLocked] = useState<boolean>(() => {
+    return sessionStorage.getItem('rende_is_locked') === 'true';
+  });
   const [autoLockMinutes, setAutoLockMinutes] = useState<number>(15);
   const [securityModalOpen, setSecurityModalOpen] = useState<boolean>(false);
   const [authChecking, setAuthChecking] = useState<boolean>(true);
@@ -65,7 +67,7 @@ export default function App() {
   const [gorevler, setGorevler] = useState<Gorev[]>([]);
   const [yukleniyor, setYukleniyor] = useState(true);
 
-  // Oturum ve Kimlik Doğrulama Kontrolü
+  // Oturum ve Kimlik Doğrulama Kontrolü (F5 veya Yeniden Yükleme Dahil)
   useEffect(() => {
     const checkAuth = async () => {
       try {
@@ -74,6 +76,8 @@ export default function App() {
         const savedRole = sessionStorage.getItem('rende_user_role') as 'admin' | 'ustabasi' | null;
         const savedName = sessionStorage.getItem('rende_user_name');
         const savedAdminId = sessionStorage.getItem('rende_admin_id');
+        const isSessionLocked = sessionStorage.getItem('rende_is_locked') === 'true';
+
         if (savedName) setCurrentUserName(savedName);
         if (savedAdminId) setCurrentAdminId(savedAdminId);
 
@@ -92,9 +96,12 @@ export default function App() {
           if (statusRes && statusRes.isProtectionEnabled === false) {
             setIsAuthenticated(true);
             setIsLocked(false);
+            sessionStorage.removeItem('rende_is_locked');
             verileriYukle();
           } else {
             setIsAuthenticated(false);
+            setIsLocked(false);
+            sessionStorage.removeItem('rende_is_locked');
           }
           setAuthChecking(false);
           return;
@@ -125,18 +132,34 @@ export default function App() {
           if (data.autoLockMinutes !== undefined) {
             setAutoLockMinutes(data.autoLockMinutes);
           }
+
+          // Zaman aşımı veya kilitli durum kontrolü
           const lastActiveStr = sessionStorage.getItem('rende_last_active');
+          let shouldBeLocked = isSessionLocked;
           if (lastActiveStr) {
             const lastActiveTime = parseInt(lastActiveStr, 10);
             const passedMinutes = (Date.now() - lastActiveTime) / (1000 * 60);
             if (autoLockVal > 0 && passedMinutes >= autoLockVal) {
-              setIsLocked(true);
+              shouldBeLocked = true;
             }
           }
+
+          if (shouldBeLocked) {
+            setIsLocked(true);
+            sessionStorage.setItem('rende_is_locked', 'true');
+          } else {
+            setIsLocked(false);
+            sessionStorage.removeItem('rende_is_locked');
+            lastActiveRef.current = Date.now();
+            sessionStorage.setItem('rende_last_active', Date.now().toString());
+          }
+
           verileriYukle();
         } else {
           sessionStorage.removeItem('rende_auth_token');
+          sessionStorage.removeItem('rende_is_locked');
           setIsAuthenticated(false);
+          setIsLocked(false);
         }
       } catch (err) {
         setIsAuthenticated(false);
@@ -147,6 +170,68 @@ export default function App() {
 
     checkAuth();
   }, []);
+
+  // Kullanıcı Aktivitesi Takibi (Inactivity Auto-Lock Listener)
+  const updateActivity = useCallback(() => {
+    // Eğer ekran kilitliyse aktivite süresini güncelleme
+    if (sessionStorage.getItem('rende_is_locked') === 'true') return;
+    const now = Date.now();
+    lastActiveRef.current = now;
+    sessionStorage.setItem('rende_last_active', now.toString());
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated || isLocked) return;
+
+    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
+    let throttleTimeout: any = null;
+
+    const handleUserActivity = () => {
+      if (!throttleTimeout) {
+        throttleTimeout = setTimeout(() => {
+          updateActivity();
+          throttleTimeout = null;
+        }, 2000);
+      }
+    };
+
+    events.forEach(ev => window.addEventListener(ev, handleUserActivity, { passive: true }));
+
+    // Periyodik boşta kalma kontrolü (Her 2 saniyede bir hassas kontrol)
+    const inactivityInterval = setInterval(() => {
+      if (autoLockMinutes <= 0) return;
+      const lastActive = lastActiveRef.current || parseInt(sessionStorage.getItem('rende_last_active') || '0', 10);
+      const idleMs = Date.now() - lastActive;
+      const timeoutMs = autoLockMinutes * 60 * 1000;
+
+      if (idleMs >= timeoutMs) {
+        setIsLocked(true);
+        sessionStorage.setItem('rende_is_locked', 'true');
+      }
+    }, 2500);
+
+    // Sekme odağı değişimi kontrolü (Başka sekmeden veya kilit ekranından dönüldüğünde)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && autoLockMinutes > 0) {
+        const lastActive = parseInt(sessionStorage.getItem('rende_last_active') || Date.now().toString(), 10);
+        if (Date.now() - lastActive >= autoLockMinutes * 60 * 1000) {
+          setIsLocked(true);
+          sessionStorage.setItem('rende_is_locked', 'true');
+        } else {
+          updateActivity();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      events.forEach(ev => window.removeEventListener(ev, handleUserActivity));
+      clearInterval(inactivityInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (throttleTimeout) clearTimeout(throttleTimeout);
+    };
+  }, [isAuthenticated, isLocked, autoLockMinutes, updateActivity]);
 
   // Ajanda Bildirimlerini Getir
   const yukleAjandaBildirimleri = useCallback(async () => {
@@ -214,6 +299,9 @@ export default function App() {
   };
 
   const handleLoginSuccess = (token: string, lockMin: number, role?: 'admin' | 'ustabasi', userName?: string, adminId?: string) => {
+    sessionStorage.removeItem('rende_is_locked');
+    sessionStorage.setItem('rende_last_active', Date.now().toString());
+    lastActiveRef.current = Date.now();
     setIsAuthenticated(true);
     setIsLocked(false);
     setAutoLockMinutes(lockMin);
@@ -226,7 +314,6 @@ export default function App() {
     } else {
       setActiveTab('dashboard');
     }
-    lastActiveRef.current = Date.now();
     verileriYukle();
     if (resolvedRole === 'admin') {
       yukleAjandaBildirimleri();
@@ -234,6 +321,9 @@ export default function App() {
   };
 
   const handleUnlock = (role?: 'admin' | 'ustabasi', userName?: string, adminId?: string) => {
+    sessionStorage.removeItem('rende_is_locked');
+    sessionStorage.setItem('rende_last_active', Date.now().toString());
+    lastActiveRef.current = Date.now();
     setIsLocked(false);
     if (role) {
       setUserRole(role);
@@ -243,14 +333,13 @@ export default function App() {
     }
     if (userName) setCurrentUserName(userName);
     if (adminId) setCurrentAdminId(adminId);
-    lastActiveRef.current = Date.now();
-    sessionStorage.setItem('rende_last_active', Date.now().toString());
     if (role === 'admin' || userRole === 'admin') {
       yukleAjandaBildirimleri();
     }
   };
 
   const handleManualLock = () => {
+    sessionStorage.setItem('rende_is_locked', 'true');
     setIsLocked(true);
   };
 
@@ -258,6 +347,10 @@ export default function App() {
     localStorage.removeItem('rende_auth_token');
     sessionStorage.removeItem('rende_auth_token');
     sessionStorage.removeItem('rende_last_active');
+    sessionStorage.removeItem('rende_user_role');
+    sessionStorage.removeItem('rende_user_name');
+    sessionStorage.removeItem('rende_admin_id');
+    sessionStorage.removeItem('rende_is_locked');
     setIsAuthenticated(false);
     setIsLocked(false);
   };
