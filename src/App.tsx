@@ -71,11 +71,10 @@ export default function App() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        localStorage.removeItem('rende_auth_token');
-        const token = sessionStorage.getItem('rende_auth_token');
-        const savedRole = sessionStorage.getItem('rende_user_role') as 'admin' | 'ustabasi' | null;
-        const savedName = sessionStorage.getItem('rende_user_name');
-        const savedAdminId = sessionStorage.getItem('rende_admin_id');
+        const token = sessionStorage.getItem('rende_auth_token') || localStorage.getItem('rende_auth_token');
+        const savedRole = (sessionStorage.getItem('rende_user_role') || localStorage.getItem('rende_user_role')) as 'admin' | 'ustabasi' | null;
+        const savedName = sessionStorage.getItem('rende_user_name') || localStorage.getItem('rende_user_name');
+        const savedAdminId = sessionStorage.getItem('rende_admin_id') || localStorage.getItem('rende_admin_id');
         const isSessionLocked = sessionStorage.getItem('rende_is_locked') === 'true';
 
         if (savedName) setCurrentUserName(savedName);
@@ -110,7 +109,11 @@ export default function App() {
         const res = await fetch('/api/auth/verify-token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token })
+          body: JSON.stringify({
+            token,
+            clientUserName: savedName,
+            clientAdminId: savedAdminId
+          })
         });
 
         const data = await res.json();
@@ -121,10 +124,20 @@ export default function App() {
           if (data.userName) {
             setCurrentUserName(data.userName);
             sessionStorage.setItem('rende_user_name', data.userName);
+            localStorage.setItem('rende_user_name', data.userName);
           }
           if (data.adminId) {
             setCurrentAdminId(data.adminId);
             sessionStorage.setItem('rende_admin_id', data.adminId);
+            localStorage.setItem('rende_admin_id', data.adminId);
+          }
+          if (currentRole) {
+            sessionStorage.setItem('rende_user_role', currentRole);
+            localStorage.setItem('rende_user_role', currentRole);
+          }
+          if (token) {
+            sessionStorage.setItem('rende_auth_token', token);
+            localStorage.setItem('rende_auth_token', token);
           }
           if (currentRole === 'ustabasi') {
             setActiveTab('siparisler');

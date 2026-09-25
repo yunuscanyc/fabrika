@@ -7769,8 +7769,17 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   if (role) {
-    const token = 'tok_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+    const payloadObj = {
+      role,
+      userName,
+      adminId,
+      ts: Date.now(),
+      rnd: Math.random().toString(36).substring(2, 8)
+    };
+    const payloadB64 = Buffer.from(JSON.stringify(payloadObj)).toString('base64url');
+    const token = 'tok_v2_' + payloadB64;
     const duration = rememberMe ? 30 * 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+    
     activeSessions.set(token, {
       createdAt: Date.now(),
       expiresAt: Date.now() + duration,
@@ -7794,27 +7803,87 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.post('/api/auth/verify-token', async (req, res) => {
   await loadAuthSettings();
+  const { token, clientUserName, clientAdminId } = req.body;
+
   if (!memAuthData.isProtectionEnabled) {
-    return res.json({ valid: true, role: 'admin', userName: memAuthData.yonetici1Ad || '1. Yönetici', adminId: 'admin1', autoLockMinutes: memAuthData.autoLockMinutes, isProtectionEnabled: false });
+    const defaultUser = clientUserName || memAuthData.yonetici1Ad || '1. Yönetici';
+    const defaultAdminId = clientAdminId || 'admin1';
+    return res.json({
+      valid: true,
+      role: 'admin',
+      userName: defaultUser,
+      adminId: defaultAdminId,
+      autoLockMinutes: memAuthData.autoLockMinutes,
+      isProtectionEnabled: false
+    });
   }
-  const { token } = req.body;
+
   if (!token) return res.status(401).json({ valid: false, error: 'Token bulunamadı' });
+
+  // 1. In-memory activeSessions Map kontrolü
   const session = activeSessions.get(token);
   if (session && session.expiresAt > Date.now()) {
     session.lastActive = Date.now();
-    return res.json({ valid: true, role: session.role || 'admin', userName: session.userName || '1. Yönetici', adminId: session.adminId || 'admin1', autoLockMinutes: memAuthData.autoLockMinutes, isProtectionEnabled: true });
+    return res.json({
+      valid: true,
+      role: session.role || 'admin',
+      userName: session.userName || clientUserName || memAuthData.yonetici1Ad || '1. Yönetici',
+      adminId: session.adminId || clientAdminId || 'admin1',
+      autoLockMinutes: memAuthData.autoLockMinutes,
+      isProtectionEnabled: true
+    });
   }
+
+  // 2. tok_v2_ token payload çözümleme (Sunucu yeniden başlasa bile oturum bilgisi korunur)
+  if (typeof token === 'string' && token.startsWith('tok_v2_')) {
+    try {
+      const payloadB64 = token.substring(7);
+      const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+      if (payload && payload.role && payload.userName) {
+        activeSessions.set(token, {
+          createdAt: payload.ts || Date.now(),
+          expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+          lastActive: Date.now(),
+          role: payload.role,
+          userName: payload.userName,
+          adminId: payload.adminId
+        });
+        return res.json({
+          valid: true,
+          role: payload.role,
+          userName: payload.userName,
+          adminId: payload.adminId || 'admin1',
+          autoLockMinutes: memAuthData.autoLockMinutes,
+          isProtectionEnabled: true
+        });
+      }
+    } catch (e) {}
+  }
+
+  // 3. Eski tok_ tokenler için akıllı eşleştirme (Asla istemcinin seçtiği hesabı 1. Yöneticiye ezmez)
   if (typeof token === 'string' && token.startsWith('tok_')) {
+    const determinedUserName = clientUserName || (clientAdminId === 'admin2' ? (memAuthData.yonetici2Ad || '2. Yönetici') : (memAuthData.yonetici1Ad || '1. Yönetici'));
+    const determinedAdminId = clientAdminId || 'admin1';
+    const determinedRole: 'admin' | 'ustabasi' = (clientAdminId === 'ustabasi' || clientUserName === 'Ustabaşı') ? 'ustabasi' : 'admin';
+
     activeSessions.set(token, {
       createdAt: Date.now(),
-      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
+      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
       lastActive: Date.now(),
-      role: 'admin',
-      userName: memAuthData.yonetici1Ad || '1. Yönetici',
-      adminId: 'admin1'
+      role: determinedRole,
+      userName: determinedUserName,
+      adminId: determinedAdminId
     });
-    return res.json({ valid: true, role: 'admin', userName: memAuthData.yonetici1Ad || '1. Yönetici', adminId: 'admin1', autoLockMinutes: memAuthData.autoLockMinutes, isProtectionEnabled: true });
+    return res.json({
+      valid: true,
+      role: determinedRole,
+      userName: determinedUserName,
+      adminId: determinedAdminId,
+      autoLockMinutes: memAuthData.autoLockMinutes,
+      isProtectionEnabled: true
+    });
   }
+
   return res.status(401).json({ valid: false, error: 'Geçersiz veya süresi dolmuş oturum' });
 });
 

@@ -67,11 +67,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
         const userRole: 'admin' | 'ustabasi' = data.role === 'ustabasi' ? 'ustabasi' : 'admin';
         const userName: string = data.userName || (userRole === 'ustabasi' ? 'Ustabaşı' : '1. Yönetici');
         const adminId: string = data.adminId || (userRole === 'ustabasi' ? 'ustabasi' : 'admin1');
-        localStorage.removeItem('rende_auth_token');
         sessionStorage.setItem('rende_auth_token', data.token);
+        localStorage.setItem('rende_auth_token', data.token);
         sessionStorage.setItem('rende_user_role', userRole);
+        localStorage.setItem('rende_user_role', userRole);
         sessionStorage.setItem('rende_user_name', userName);
+        localStorage.setItem('rende_user_name', userName);
         sessionStorage.setItem('rende_admin_id', adminId);
+        localStorage.setItem('rende_admin_id', adminId);
         sessionStorage.setItem('rende_last_active', Date.now().toString());
         if (data.autoLockMinutes !== undefined) {
           localStorage.setItem('rende_autolock_min', data.autoLockMinutes.toString());

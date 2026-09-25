@@ -73,8 +73,11 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock, onLogout, auto
         const userName: string = data.userName || (userRole === 'ustabasi' ? 'Ustabaşı' : '1. Yönetici');
         const adminId: string = data.adminId || (userRole === 'ustabasi' ? 'ustabasi' : 'admin1');
         sessionStorage.setItem('rende_user_role', userRole);
+        localStorage.setItem('rende_user_role', userRole);
         sessionStorage.setItem('rende_user_name', userName);
+        localStorage.setItem('rende_user_name', userName);
         sessionStorage.setItem('rende_admin_id', adminId);
+        localStorage.setItem('rende_admin_id', adminId);
         sessionStorage.removeItem('rende_is_locked');
         localStorage.setItem('rende_last_active', Date.now().toString());
         sessionStorage.setItem('rende_last_active', Date.now().toString());
