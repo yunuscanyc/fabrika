@@ -75,7 +75,7 @@ export default function App() {
         const savedRole = (sessionStorage.getItem('rende_user_role') || localStorage.getItem('rende_user_role')) as 'admin' | 'ustabasi' | null;
         const savedName = sessionStorage.getItem('rende_user_name') || localStorage.getItem('rende_user_name');
         const savedAdminId = sessionStorage.getItem('rende_admin_id') || localStorage.getItem('rende_admin_id');
-        const isSessionLocked = sessionStorage.getItem('rende_is_locked') === 'true';
+        const isSessionLocked = sessionStorage.getItem('rende_is_locked') === 'true' || localStorage.getItem('rende_is_locked') === 'true';
 
         if (savedName) setCurrentUserName(savedName);
         if (savedAdminId) setCurrentAdminId(savedAdminId);
@@ -96,11 +96,13 @@ export default function App() {
             setIsAuthenticated(true);
             setIsLocked(false);
             sessionStorage.removeItem('rende_is_locked');
+            localStorage.removeItem('rende_is_locked');
             verileriYukle();
           } else {
             setIsAuthenticated(false);
             setIsLocked(false);
             sessionStorage.removeItem('rende_is_locked');
+            localStorage.removeItem('rende_is_locked');
           }
           setAuthChecking(false);
           return;
@@ -146,31 +148,58 @@ export default function App() {
             setAutoLockMinutes(data.autoLockMinutes);
           }
 
-          // Zaman aşımı veya kilitli durum kontrolü
-          const lastActiveStr = sessionStorage.getItem('rende_last_active');
-          let shouldBeLocked = isSessionLocked;
-          if (lastActiveStr) {
+          // Sayfa yenileme (F5) mi yoksa başka siteden gelme/URL yazma mı kontrol et
+          let isPageReload = false;
+          try {
+            const navEntries = typeof performance !== 'undefined' ? performance.getEntriesByType('navigation') : [];
+            if (navEntries.length > 0) {
+              isPageReload = (navEntries[0] as PerformanceNavigationTiming).type === 'reload';
+            } else if (typeof performance !== 'undefined' && (performance as any).navigation) {
+              isPageReload = (performance as any).navigation.type === 1; // TYPE_RELOAD
+            }
+          } catch {}
+
+          const lastActiveStr = sessionStorage.getItem('rende_last_active') || localStorage.getItem('rende_last_active');
+          let shouldBeLocked = false;
+
+          // GÜVENLİK PROTOKOLÜ:
+          // 1. Ekran daha önceden kilitlendiyse -> KİLİTLE
+          // 2. Sayfa yenileme (F5) DEĞİLSE (yani başka siteden geri gelindi, URL tekrar yazıldı, sekme yeniden açıldı) -> MUTLAKA PIN SOR
+          // 3. Eğer sadece sayfa yenileme (F5) ise ve boşta kalma süresi dolmuşsa -> KİLİTLE
+          // 4. Son aktiflik bilgisi yoksa -> KİLİTLE
+          if (isSessionLocked) {
+            shouldBeLocked = true;
+          } else if (!isPageReload) {
+            shouldBeLocked = true;
+          } else if (lastActiveStr) {
             const lastActiveTime = parseInt(lastActiveStr, 10);
             const passedMinutes = (Date.now() - lastActiveTime) / (1000 * 60);
             if (autoLockVal > 0 && passedMinutes >= autoLockVal) {
               shouldBeLocked = true;
             }
+          } else {
+            shouldBeLocked = true;
           }
 
           if (shouldBeLocked) {
             setIsLocked(true);
             sessionStorage.setItem('rende_is_locked', 'true');
+            localStorage.setItem('rende_is_locked', 'true');
           } else {
             setIsLocked(false);
             sessionStorage.removeItem('rende_is_locked');
+            localStorage.removeItem('rende_is_locked');
             lastActiveRef.current = Date.now();
             sessionStorage.setItem('rende_last_active', Date.now().toString());
+            localStorage.setItem('rende_last_active', Date.now().toString());
           }
 
           verileriYukle();
         } else {
           sessionStorage.removeItem('rende_auth_token');
           sessionStorage.removeItem('rende_is_locked');
+          localStorage.removeItem('rende_auth_token');
+          localStorage.removeItem('rende_is_locked');
           setIsAuthenticated(false);
           setIsLocked(false);
         }
@@ -245,6 +274,59 @@ export default function App() {
       if (throttleTimeout) clearTimeout(throttleTimeout);
     };
   }, [isAuthenticated, isLocked, autoLockMinutes, updateActivity]);
+
+  // Sayfadan ayrılma, başka siteye geçiş veya geri/ileri önbelleği (bfcache) güvenliği
+  useEffect(() => {
+    // 1. Kullanıcı sayfadan ayrılırken (başka siteye giderken, sekme kapatılırken) HEMEN KİLİTLE
+    const handleLeavePage = () => {
+      const hasToken = sessionStorage.getItem('rende_auth_token') || localStorage.getItem('rende_auth_token');
+      if (hasToken) {
+        sessionStorage.setItem('rende_is_locked', 'true');
+        localStorage.setItem('rende_is_locked', 'true');
+      }
+    };
+
+    // 2. Tarayıcı Geri/İleri (bfcache) önbelleğinden dönüldüğünde anında kilit ekranını göster
+    const handlePageShow = (event: PageTransitionEvent) => {
+      const hasToken = sessionStorage.getItem('rende_auth_token') || localStorage.getItem('rende_auth_token');
+      if (hasToken && event.persisted) {
+        setIsLocked(true);
+        sessionStorage.setItem('rende_is_locked', 'true');
+        localStorage.setItem('rende_is_locked', 'true');
+      }
+    };
+
+    // 3. Sekmeden başka sekmeye geçildiğinde ve 60 saniyeden fazla kalındığında kilitle
+    const handleGlobalVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        sessionStorage.setItem('rende_hidden_at', Date.now().toString());
+      } else if (document.visibilityState === 'visible') {
+        const hiddenAtStr = sessionStorage.getItem('rende_hidden_at');
+        if (hiddenAtStr) {
+          const hiddenMs = Date.now() - parseInt(hiddenAtStr, 10);
+          // Sekmeden 60 saniyeden uzun süre ayrıldıysa güvenlik için kilitle
+          if (hiddenMs >= 60 * 1000) {
+            setIsLocked(true);
+            sessionStorage.setItem('rende_is_locked', 'true');
+            localStorage.setItem('rende_is_locked', 'true');
+          }
+          sessionStorage.removeItem('rende_hidden_at');
+        }
+      }
+    };
+
+    window.addEventListener('pagehide', handleLeavePage);
+    window.addEventListener('beforeunload', handleLeavePage);
+    window.addEventListener('pageshow', handlePageShow);
+    document.addEventListener('visibilitychange', handleGlobalVisibility);
+
+    return () => {
+      window.removeEventListener('pagehide', handleLeavePage);
+      window.removeEventListener('beforeunload', handleLeavePage);
+      window.removeEventListener('pageshow', handlePageShow);
+      document.removeEventListener('visibilitychange', handleGlobalVisibility);
+    };
+  }, []);
 
   // Ajanda Bildirimlerini ve Güncel Hatırlatıcı Listesini Getir (Canlı Senkronizasyon)
   const yukleAjandaBildirimleri = useCallback(async () => {
@@ -335,7 +417,9 @@ export default function App() {
 
   const handleLoginSuccess = (token: string, lockMin: number, role?: 'admin' | 'ustabasi', userName?: string, adminId?: string) => {
     sessionStorage.removeItem('rende_is_locked');
+    localStorage.removeItem('rende_is_locked');
     sessionStorage.setItem('rende_last_active', Date.now().toString());
+    localStorage.setItem('rende_last_active', Date.now().toString());
     lastActiveRef.current = Date.now();
     setIsAuthenticated(true);
     setIsLocked(false);
@@ -357,7 +441,9 @@ export default function App() {
 
   const handleUnlock = (role?: 'admin' | 'ustabasi', userName?: string, adminId?: string) => {
     sessionStorage.removeItem('rende_is_locked');
+    localStorage.removeItem('rende_is_locked');
     sessionStorage.setItem('rende_last_active', Date.now().toString());
+    localStorage.setItem('rende_last_active', Date.now().toString());
     lastActiveRef.current = Date.now();
     setIsLocked(false);
     if (role) {
@@ -375,6 +461,7 @@ export default function App() {
 
   const handleManualLock = () => {
     sessionStorage.setItem('rende_is_locked', 'true');
+    localStorage.setItem('rende_is_locked', 'true');
     setIsLocked(true);
   };
 
@@ -382,10 +469,15 @@ export default function App() {
     localStorage.removeItem('rende_auth_token');
     sessionStorage.removeItem('rende_auth_token');
     sessionStorage.removeItem('rende_last_active');
+    localStorage.removeItem('rende_last_active');
     sessionStorage.removeItem('rende_user_role');
+    localStorage.removeItem('rende_user_role');
     sessionStorage.removeItem('rende_user_name');
+    localStorage.removeItem('rende_user_name');
     sessionStorage.removeItem('rende_admin_id');
+    localStorage.removeItem('rende_admin_id');
     sessionStorage.removeItem('rende_is_locked');
+    localStorage.removeItem('rende_is_locked');
     setIsAuthenticated(false);
     setIsLocked(false);
   };
