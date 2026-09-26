@@ -5290,7 +5290,7 @@ async function sendWebPushNotification(excludeUserName: string, payload: {
       title: payload.title,
       body: payload.body,
       icon: payload.icon || '/pwa-192x192.png',
-      badge: payload.badge || '/icon.svg',
+      badge: payload.badge || '/pwa-192x192.png',
       url: payload.url || '/',
       data: payload.data || {}
     });
@@ -5649,7 +5649,7 @@ app.post('/api/push/test', async (req, res) => {
       title: '🔔 Rende Portal - Test Bildirimi',
       body: `Harika! ${targetName} için cep telefonu bildirimleri başarıyla aktif edildi.`,
       icon: '/pwa-192x192.png',
-      badge: '/icon.svg',
+      badge: '/pwa-192x192.png',
       url: '/'
     });
 

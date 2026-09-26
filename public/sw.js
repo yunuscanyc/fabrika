@@ -1,5 +1,5 @@
 // Service Worker for Rende Portal PWA & Push Notifications
-const CACHE_NAME = 'rende-portal-v3';
+const CACHE_NAME = 'rende-portal-v4';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -71,10 +71,10 @@ self.addEventListener('fetch', (event) => {
 // ==========================================
 self.addEventListener('push', (event) => {
   let data = {
-    title: '🔔 Rende Portal - Ajanda Bildirimi',
-    body: 'Ajandada yeni bir işlem yapıldı.',
+    title: '🔔 Rende Ahşap Portal',
+    body: 'Yeni bir işlem kaydedildi.',
     icon: '/pwa-192x192.png',
-    badge: '/icon.svg',
+    badge: '/pwa-192x192.png',
     url: '/',
     data: {}
   };
@@ -87,22 +87,35 @@ self.addEventListener('push', (event) => {
     }
   }
 
+  // iOS Safari ve Android Chrome ile %100 uyumlu bildirim parametreleri
   const options = {
-    body: data.body || 'Ajandada yeni bir işlem yapıldı.',
-    icon: data.icon || '/pwa-192x192.png',
-    badge: data.badge || '/icon.svg',
-    vibrate: [300, 100, 300, 100, 400],
+    body: data.body || 'Yeni bir işlem kaydedildi.',
+    icon: '/pwa-192x192.png',
+    badge: '/pwa-192x192.png',
     data: data.data || { url: data.url || '/' },
-    tag: data.tag || 'rende-ajanda-push-' + Date.now(),
-    renotify: true,
-    requireInteraction: true,
-    actions: [
-      { action: 'open', title: '📱 Aç & İncele' }
-    ]
+    tag: data.tag || 'rende-push-' + Date.now(),
+    renotify: true
   };
 
+  // Açık olan ekranlara mesaj gönder (Uygulama açıksa anında haberdar olsun)
+  clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+    windowClients.forEach((client) => {
+      client.postMessage({
+        type: 'PUSH_NOTIFICATION_RECEIVED',
+        payload: data
+      });
+    });
+  }).catch(() => {});
+
   event.waitUntil(
-    self.registration.showNotification(data.title, options)
+    self.registration.showNotification(data.title || '🔔 Rende Ahşap Portal', options)
+      .catch((err) => {
+        console.error('showNotification ilk deneme hatası, sade fallback deneniyor:', err);
+        return self.registration.showNotification(data.title || '🔔 Rende Ahşap Portal', {
+          body: data.body || 'Yeni bir işlem kaydedildi.',
+          icon: '/pwa-192x192.png'
+        });
+      })
   );
 });
 
