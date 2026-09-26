@@ -251,26 +251,37 @@ export default function App() {
     if (userRole !== 'admin') return;
     try {
       const uName = sessionStorage.getItem('rende_user_name') || currentUserName || '1. Yönetici';
-      const [resBildirim, resHatirlatici] = await Promise.all([
-        fetch(`/api/ajanda/bildirimler?user=${encodeURIComponent(uName)}`),
-        fetch('/api/hatirlaticilar')
-      ]);
+      
+      if (activeTab === 'hatirlaticilar') {
+        const [resBildirim, resHatirlatici] = await Promise.all([
+          fetch(`/api/ajanda/bildirimler?user=${encodeURIComponent(uName)}`),
+          fetch('/api/hatirlaticilar')
+        ]);
 
-      if (resBildirim.ok) {
-        const data = await resBildirim.json();
-        if (data && Array.isArray(data.bildirimler)) {
-          setAjandaBildirimler(data.bildirimler);
+        if (resBildirim.ok) {
+          const data = await resBildirim.json();
+          if (data && Array.isArray(data.bildirimler)) {
+            setAjandaBildirimler(data.bildirimler);
+          }
         }
-      }
 
-      if (resHatirlatici.ok) {
-        const hList = await resHatirlatici.json();
-        if (Array.isArray(hList)) {
-          setHatirlaticilar(hList);
+        if (resHatirlatici.ok) {
+          const hList = await resHatirlatici.json();
+          if (Array.isArray(hList)) {
+            setHatirlaticilar(hList);
+          }
+        }
+      } else {
+        const resBildirim = await fetch(`/api/ajanda/bildirimler?user=${encodeURIComponent(uName)}`);
+        if (resBildirim.ok) {
+          const data = await resBildirim.json();
+          if (data && Array.isArray(data.bildirimler)) {
+            setAjandaBildirimler(data.bildirimler);
+          }
         }
       }
     } catch (e) {}
-  }, [userRole, currentUserName]);
+  }, [userRole, currentUserName, activeTab]);
 
   // Periyodik Ajanda Bildirim Polling (4 saniyede bir)
   useEffect(() => {
@@ -379,33 +390,72 @@ export default function App() {
     setIsLocked(false);
   };
 
-  // Verileri API'den yükleme
+  // Sekme değiştiğinde sadece o sekmeye ait detay verilerini yükle (Lazy Loading)
+  useEffect(() => {
+    if (!isAuthenticated || isLocked) return;
+
+    const yukleAktifSekmeVerisi = async () => {
+      try {
+        if (activeTab === 'dashboard') {
+          const [resOzet, resDbStatus, resSiparisOzet] = await Promise.all([
+            fetch('/api/ozet').then(r => r.json()).catch(() => null),
+            fetch('/api/db-status').then(r => r.json()).catch(() => null),
+            fetch('/api/siparisler/ozet').then(r => r.json()).catch(() => null),
+          ]);
+          if (resOzet) {
+            if (resSiparisOzet && resSiparisOzet.bekleyen !== undefined) {
+              resOzet.bekleyenSiparisSayisi = resSiparisOzet.bekleyen;
+            }
+            setOzet(resOzet);
+          }
+          if (resSiparisOzet && resSiparisOzet.okunmamisUstabasi !== undefined) {
+            setUnreadOrdersCount(resSiparisOzet.okunmamisUstabasi);
+          }
+          if (resDbStatus) setDbStatus(resDbStatus);
+        } else if (activeTab === 'projeler') {
+          const resProjeler = await fetch('/api/projeler').then(r => r.json()).catch(() => []);
+          if (Array.isArray(resProjeler)) setProjeler(resProjeler);
+        } else if (activeTab === 'araclar') {
+          const resAraclar = await fetch('/api/araclar').then(r => r.json()).catch(() => []);
+          if (Array.isArray(resAraclar)) setAraclar(resAraclar);
+        } else if (activeTab === 'hatirlaticilar') {
+          const resHatirlaticilar = await fetch('/api/hatirlaticilar').then(r => r.json()).catch(() => []);
+          if (Array.isArray(resHatirlaticilar)) {
+            setHatirlaticilar(resHatirlaticilar);
+            try {
+              localStorage.setItem('fabrika_hatirlaticilar_cache_v2', JSON.stringify(resHatirlaticilar));
+            } catch (e) {}
+          }
+        } else if (activeTab === 'personel') {
+          const [resPersoneller, resIzinler, resDepartmanlar, resGorevler] = await Promise.all([
+            fetch('/api/personeller').then(r => r.json()).catch(() => []),
+            fetch('/api/izinler').then(r => r.json()).catch(() => []),
+            fetch('/api/departmanlar').then(r => r.json()).catch(() => []),
+            fetch('/api/gorevler').then(r => r.json()).catch(() => []),
+          ]);
+          if (Array.isArray(resPersoneller)) setPersoneller(resPersoneller);
+          if (Array.isArray(resIzinler)) setIzinler(resIzinler);
+          if (Array.isArray(resDepartmanlar)) setDepartmanlar(resDepartmanlar);
+          if (Array.isArray(resGorevler)) setGorevler(resGorevler);
+        } else if (activeTab === 'makineler') {
+          const resMakineler = await fetch('/api/makineler').then(r => r.json()).catch(() => []);
+          if (Array.isArray(resMakineler)) setMakineler(resMakineler);
+        }
+      } catch (err) {
+        console.error('Sekme verisi senkronizasyon hatası:', err);
+      }
+    };
+
+    yukleAktifSekmeVerisi();
+  }, [activeTab, isAuthenticated, isLocked]);
+
+  // Verileri API'den yükleme (Optimize edilmiş, sadece aktif sekme ve genel durum yüklenir)
   const verileriYukle = async () => {
     try {
       setYukleniyor(true);
-      const [
-        resOzet,
-        resProjeler,
-        resAraclar,
-        resHatirlaticilar,
-        resDbStatus,
-        resPersoneller,
-        resIzinler,
-        resMakineler,
-        resDepartmanlar,
-        resGorevler,
-        resSiparisOzet
-      ] = await Promise.all([
+      const [resOzet, resDbStatus, resSiparisOzet] = await Promise.all([
         fetch('/api/ozet').then(r => r.json()).catch(() => null),
-        fetch('/api/projeler').then(r => r.json()).catch(() => []),
-        fetch('/api/araclar').then(r => r.json()).catch(() => []),
-        fetch('/api/hatirlaticilar').then(r => r.json()).catch(() => []),
         fetch('/api/db-status').then(r => r.json()).catch(() => null),
-        fetch('/api/personeller').then(r => r.json()).catch(() => []),
-        fetch('/api/izinler').then(r => r.json()).catch(() => []),
-        fetch('/api/makineler').then(r => r.json()).catch(() => []),
-        fetch('/api/departmanlar').then(r => r.json()).catch(() => []),
-        fetch('/api/gorevler').then(r => r.json()).catch(() => []),
         fetch('/api/siparisler/ozet').then(r => r.json()).catch(() => null),
       ]);
 
@@ -418,30 +468,39 @@ export default function App() {
       if (resSiparisOzet && resSiparisOzet.okunmamisUstabasi !== undefined) {
         setUnreadOrdersCount(resSiparisOzet.okunmamisUstabasi);
       }
-      if (Array.isArray(resProjeler)) setProjeler(resProjeler);
-      if (Array.isArray(resAraclar)) setAraclar(resAraclar);
-      if (Array.isArray(resHatirlaticilar) && resHatirlaticilar.length > 0) {
-        setHatirlaticilar(resHatirlaticilar);
-        try {
-          localStorage.setItem('fabrika_hatirlaticilar_cache_v2', JSON.stringify(resHatirlaticilar));
-        } catch (e) {}
-      } else {
-        try {
-          const cached = localStorage.getItem('fabrika_hatirlaticilar_cache_v2');
-          if (cached) {
-            const parsed = JSON.parse(cached);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              setHatirlaticilar(parsed);
-            }
-          }
-        } catch (e) {}
-      }
       if (resDbStatus) setDbStatus(resDbStatus);
-      if (Array.isArray(resPersoneller)) setPersoneller(resPersoneller);
-      if (Array.isArray(resIzinler)) setIzinler(resIzinler);
-      if (Array.isArray(resMakineler)) setMakineler(resMakineler);
-      if (Array.isArray(resDepartmanlar)) setDepartmanlar(resDepartmanlar);
-      if (Array.isArray(resGorevler)) setGorevler(resGorevler);
+
+      // Sadece aktif olan sekmenin detay verisini çek
+      if (activeTab === 'projeler') {
+        const resProjeler = await fetch('/api/projeler').then(r => r.json()).catch(() => []);
+        if (Array.isArray(resProjeler)) setProjeler(resProjeler);
+      } else if (activeTab === 'araclar') {
+        const resAraclar = await fetch('/api/araclar').then(r => r.json()).catch(() => []);
+        if (Array.isArray(resAraclar)) setAraclar(resAraclar);
+      } else if (activeTab === 'hatirlaticilar') {
+        const resHatirlaticilar = await fetch('/api/hatirlaticilar').then(r => r.json()).catch(() => []);
+        if (Array.isArray(resHatirlaticilar)) {
+          setHatirlaticilar(resHatirlaticilar);
+          try {
+            localStorage.setItem('fabrika_hatirlaticilar_cache_v2', JSON.stringify(resHatirlaticilar));
+          } catch (e) {}
+        }
+      } else if (activeTab === 'personel') {
+        const [resPersoneller, resIzinler, resDepartmanlar, resGorevler] = await Promise.all([
+          fetch('/api/personeller').then(r => r.json()).catch(() => []),
+          fetch('/api/izinler').then(r => r.json()).catch(() => []),
+          fetch('/api/departmanlar').then(r => r.json()).catch(() => []),
+          fetch('/api/gorevler').then(r => r.json()).catch(() => []),
+        ]);
+        if (Array.isArray(resPersoneller)) setPersoneller(resPersoneller);
+        if (Array.isArray(resIzinler)) setIzinler(resIzinler);
+        if (Array.isArray(resDepartmanlar)) setDepartmanlar(resDepartmanlar);
+        if (Array.isArray(resGorevler)) setGorevler(resGorevler);
+      } else if (activeTab === 'makineler') {
+        const resMakineler = await fetch('/api/makineler').then(r => r.json()).catch(() => []);
+        if (Array.isArray(resMakineler)) setMakineler(resMakineler);
+      }
+
     } catch (err) {
       console.error('API Veri yükleme hatası:', err);
     } finally {
