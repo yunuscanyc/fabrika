@@ -5280,7 +5280,10 @@ async function sendWebPushNotification(excludeUserName: string, payload: {
 }) {
   try {
     const subs = await loadPushSubscriptionsFromDb();
-    if (!subs || subs.length === 0) return;
+    if (!subs || subs.length === 0) {
+      console.log('[PUSH UYARI] Bildirim gönderilecek kayıtlı cihaz/abone bulunamadı.');
+      return;
+    }
 
     const payloadString = JSON.stringify({
       title: payload.title,
@@ -5294,11 +5297,6 @@ async function sendWebPushNotification(excludeUserName: string, payload: {
     const deadEndpoints: string[] = [];
 
     for (const sub of subs) {
-      // Yalnızca birden fazla kayıtlı cihaz varsa ve hariç tutulacak isim belirtilmişse atla
-      if (subs.length > 1 && excludeUserName && sub.userName && sub.userName.trim().toLowerCase() === excludeUserName.trim().toLowerCase()) {
-        continue;
-      }
-
       if (!sub.endpoint || !sub.keys || !sub.keys.p256dh || !sub.keys.auth) {
         continue;
       }
