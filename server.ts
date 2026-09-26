@@ -5280,6 +5280,7 @@ async function sendWebPushNotification(excludeUserName: string, payload: {
 }) {
   try {
     const subs = await loadPushSubscriptionsFromDb();
+    console.log(`[PUSH TETİKLENDİ] Başlık: "${payload.title}", Veritabanındaki Abone Sayısı: ${subs?.length || 0}`);
     if (!subs || subs.length === 0) {
       console.log('[PUSH UYARI] Bildirim gönderilecek kayıtlı cihaz/abone bulunamadı.');
       return;
@@ -5302,15 +5303,16 @@ async function sendWebPushNotification(excludeUserName: string, payload: {
       }
 
       try {
+        console.log(`[PUSH GÖNDERİLİYOR] -> ${sub.userName || 'Yönetici'} (${sub.endpoint.slice(0, 30)}...)`);
         await webpush.sendNotification({
           endpoint: sub.endpoint,
           keys: sub.keys
         }, payloadString, {
           TTL: 60 * 60 * 24 // 24 saat
         });
-        console.log(`[PUSH GÖNDERİLDİ] -> ${sub.userName || 'Yönetici'}`);
+        console.log(`[PUSH BAŞARIYLA İLETİLDİ] -> ${sub.userName || 'Yönetici'}`);
       } catch (err: any) {
-        console.error(`[PUSH HATA]`, sub.userName, err.statusCode || err.message);
+        console.error(`[PUSH HATA] ${sub.userName || 'Yönetici'}:`, err.statusCode || err.message);
         if (err.statusCode === 404 || err.statusCode === 410) {
           deadEndpoints.push(sub.endpoint);
         }
@@ -5652,10 +5654,12 @@ app.post('/api/push/test', async (req, res) => {
     });
 
     if (subscription && subscription.endpoint && subscription.keys) {
+      console.log(`[PUSH TEST GÖNDERİLİYOR] -> ${targetName}`);
       await webpush.sendNotification({
         endpoint: subscription.endpoint,
         keys: subscription.keys
       }, payloadString, { TTL: 60 });
+      console.log(`[PUSH TEST BAŞARIYLA İLETİLDİ] -> ${targetName}`);
       return res.json({ success: true, message: 'Test bildirimi cihazınıza başarıyla gönderildi!' });
     }
 
