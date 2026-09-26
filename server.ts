@@ -4401,6 +4401,11 @@ app.post('/api/projeler', async (req, res) => {
             }
           }
           
+          sendWebPushNotification('', {
+            title: '🏗️ Yeni Proje Eklendi',
+            body: `"${inserted.ProjeAdi}" (${inserted.MusteriFirma || 'Müşteri Belirtilmedi'}) sisteme kaydedildi.`,
+            url: '/'
+          }).catch(() => {});
           return res.status(201).json(inserted);
         }
       } catch (err: any) {
@@ -4409,6 +4414,11 @@ app.post('/api/projeler', async (req, res) => {
     }
 
     memProjeler.unshift(yeniProje);
+    sendWebPushNotification('', {
+      title: '🏗️ Yeni Proje Eklendi',
+      body: `"${yeniProje.ProjeAdi}" (${yeniProje.MusteriFirma || 'Müşteri Belirtilmedi'}) sisteme kaydedildi.`,
+      url: '/'
+    }).catch(() => {});
     res.status(201).json(yeniProje);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -4457,6 +4467,11 @@ app.put('/api/projeler/:id', async (req, res) => {
           }
         }
         
+        sendWebPushNotification('', {
+          title: '📐 Proje Güncellendi',
+          body: `"${updatedProje.ProjeAdi}" projesinde değişiklik yapıldı.`,
+          url: '/'
+        }).catch(() => {});
         return res.json(updatedProje);
       }
     } catch (err: any) {
@@ -4509,6 +4524,11 @@ app.put('/api/projeler/:id', async (req, res) => {
     }
 
     memProjeler[index] = { ...memProjeler[index], ...bodyProje };
+    sendWebPushNotification('', {
+      title: '📐 Proje Güncellendi',
+      body: `"${memProjeler[index].ProjeAdi}" projesinde değişiklik yapıldı.`,
+      url: '/'
+    }).catch(() => {});
     return res.json(memProjeler[index]);
   }
   res.status(404).json({ error: 'Proje bulunamadı' });
@@ -4788,6 +4808,11 @@ app.post('/api/araclar', async (req, res) => {
     }
 
     memAraclar.push(yeniArac);
+    sendWebPushNotification('', {
+      title: '🚗 Yeni Araç Eklendi',
+      body: `${yeniArac.PlakaVeyaKod} (${yeniArac.MarkaModel || 'Araç'}) filoya eklendi.`,
+      url: '/'
+    }).catch(() => {});
     res.status(201).json(yeniArac);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -4873,6 +4898,11 @@ app.put('/api/araclar/:id', async (req, res) => {
     const guncel = { ...memAraclar[index], ...req.body };
     if (guncel.Durum === 'Elden Çıkarıldı / Satıldı') guncel.AktifMi = false;
     memAraclar[index] = guncel;
+    sendWebPushNotification('', {
+      title: '🔧 Araç Güncellendi',
+      body: `${guncel.PlakaVeyaKod} bilgileri güncellendi.`,
+      url: '/'
+    }).catch(() => {});
     return res.json(memAraclar[index]);
   }
   res.status(404).json({ error: 'Araç bulunamadı' });
@@ -5075,6 +5105,11 @@ app.post('/api/araclar/:id/bakimlar', async (req, res) => {
   if (yeniBakim.YapilanKmVeyaSaat > (arac.GuncelKmVeyaSaat || 0)) {
     arac.GuncelKmVeyaSaat = yeniBakim.YapilanKmVeyaSaat;
   }
+  sendWebPushNotification('', {
+    title: '🛠️ Yeni Araç Bakımı Yapıldı',
+    body: `${yeniBakim.BakimTarihi} tarihinde araç bakımı işlendi (${yeniBakim.Aciklama}).`,
+    url: '/'
+  }).catch(() => {});
   return res.status(201).json(yeniBakim);
 });
 
@@ -5259,8 +5294,8 @@ async function sendWebPushNotification(excludeUserName: string, payload: {
     const deadEndpoints: string[] = [];
 
     for (const sub of subs) {
-      // İşlemi yapan kişinin kendi telefonuna bildirim gönderme (diğer yöneticilere gitsin)
-      if (excludeUserName && sub.userName && sub.userName.trim().toLowerCase() === excludeUserName.trim().toLowerCase()) {
+      // Yalnızca birden fazla kayıtlı cihaz varsa ve hariç tutulacak isim belirtilmişse atla
+      if (subs.length > 1 && excludeUserName && sub.userName && sub.userName.trim().toLowerCase() === excludeUserName.trim().toLowerCase()) {
         continue;
       }
 
@@ -6505,6 +6540,11 @@ app.post('/api/makineler', async (req, res) => {
     }
 
     memMakineler.unshift(yeni);
+    sendWebPushNotification('', {
+      title: '⚙️ Yeni Makine Eklendi',
+      body: `${yeni.MakineAdi} (${yeni.MakineKodu}) makine parkuruna eklendi.`,
+      url: '/'
+    }).catch(() => {});
     res.status(201).json(yeni);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -8614,6 +8654,12 @@ app.post('/api/siparisler', async (req, res) => {
       }
     }
 
+    sendWebPushNotification('', {
+      title: '📦 Yeni Malzeme Siparişi',
+      body: `${newSiparis.ProjeAdi} için "${newSiparis.MalzemeAdi}" sipariş talebi açıldı.`,
+      url: '/'
+    }).catch(() => {});
+
     return res.status(201).json({
       success: true,
       message: `${newSiparis.SiparisNo} numaralı malzeme siparişi (${kalemler.length} kalem) kaydedildi.`,
@@ -8739,6 +8785,12 @@ app.put('/api/siparisler/:id', async (req, res) => {
         console.error('[DB SIPARIS UPDATE ERROR]', dbErr.message);
       }
     }
+
+    sendWebPushNotification('', {
+      title: '🚚 Sipariş Güncellendi',
+      body: `${updatedSiparis.SiparisNo} (${updatedSiparis.ProjeAdi}) durumu: ${updatedSiparis.Durum}`,
+      url: '/'
+    }).catch(() => {});
 
     return res.json({
       success: true,

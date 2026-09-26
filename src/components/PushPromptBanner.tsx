@@ -78,7 +78,7 @@ export const PushPromptBanner: React.FC<PushPromptBannerProps> = ({ currentUserN
               </span>
             </div>
             <p className="text-[11px] text-slate-300 leading-snug">
-              Diğer yönetici ajandada ekleme/silme yaptığında kilit ekranınıza sesli bildirim gelsin mi?
+              Projeler, malzeme siparişleri, araç/makine bakımları ve ajandada yeni kayıt veya düzenleme yapıldığında kilit ekranınıza anlık bildirim gelsin mi?
             </p>
           </div>
         </div>

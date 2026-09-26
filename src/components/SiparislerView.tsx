@@ -43,7 +43,7 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
   const [siparisler, setSiparisler] = useState<MalzemeSiparisi[]>([]);
   const [katalog, setKatalog] = useState<MalzemeKatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterDurum, setFilterDurum] = useState<string>('Tumu');
+  const [filterDurum, setFilterDurum] = useState<string>('Aktifler');
   const [filterKategori, setFilterKategori] = useState<string>('Tumu');
   const [filterAciliyet, setFilterAciliyet] = useState<string>('Tumu');
   const [searchQuery, setSearchQuery] = useState('');
@@ -548,7 +548,11 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
 
   // Filtreleme
   const filteredList = siparisler.filter(s => {
-    if (filterDurum !== 'Tumu' && s.Durum !== filterDurum) return false;
+    if (filterDurum === 'Aktifler') {
+      if (s.Durum === 'FabrikayaGeldi' || s.Durum === 'Iptal') return false;
+    } else if (filterDurum !== 'Tumu' && s.Durum !== filterDurum) {
+      return false;
+    }
     if (filterKategori !== 'Tumu' && s.Kategori !== filterKategori) return false;
     if (filterAciliyet !== 'Tumu' && s.Aciliyet !== filterAciliyet) return false;
     if (searchQuery.trim()) {
@@ -722,6 +726,7 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
               onChange={(e) => setFilterDurum(e.target.value)}
               className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
+              <option value="Aktifler">🔥 Aktif Talepler (Açık Kalanlar)</option>
               <option value="Tumu">Tüm Durumlar</option>
               <option value="Bekliyor">⏳ Bekleyen Talepler</option>
               <option value="Incelemede">🔍 İnceleniyor</option>

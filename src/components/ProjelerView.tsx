@@ -117,7 +117,7 @@ export const ProjelerView: React.FC<ProjelerViewProps> = ({
   }, [personeller]);
 
   const [seciliProje, setSeciliProje] = useState<Proje | null>(projeler[0] || null);
-  const [filtreDurum, setFiltreDurum] = useState<string>('Hepsi');
+  const [filtreDurum, setFiltreDurum] = useState<string>('Aktifler');
   const [aramaMetni, setAramaMetni] = useState<string>('');
   const [yeniProjeModalAcik, setYeniProjeModalAcik] = useState<boolean>(false);
   const [duzenlenenProje, setDuzenlenenProje] = useState<Proje | null>(null);
@@ -802,6 +802,7 @@ export const ProjelerView: React.FC<ProjelerViewProps> = ({
   const filtrelenenProjeler = (projeler || []).filter(p => {
     if (!p) return false;
     const durumUygun = filtreDurum === 'Hepsi' || 
+                       (filtreDurum === 'Aktifler' && !String(p.Durum || '').toLowerCase().includes('tamam') && !String(p.Durum || '').toLowerCase().includes('bitti')) ||
                        String(p.Durum || '').toLowerCase() === String(filtreDurum).toLowerCase() ||
                        (filtreDurum === 'Üretimde' && (String(p.Durum).includes('Üretim') || String(p.Durum).includes('İmalat'))) ||
                        (filtreDurum === 'Şantiyede' && (String(p.Durum).includes('Şantiye') || String(p.Durum).includes('Montaj'))) ||
@@ -878,7 +879,7 @@ export const ProjelerView: React.FC<ProjelerViewProps> = ({
           />
         </div>
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-          {['Hepsi', 'Üretimde', 'Teklif Verildi', 'Şantiyede', 'Tamamlandı'].map((durum) => (
+          {['Aktifler', 'Hepsi', 'Üretimde', 'Teklif Verildi', 'Şantiyede', 'Tamamlandı'].map((durum) => (
             <button
               key={durum}
               onClick={() => setFiltreDurum(durum)}
