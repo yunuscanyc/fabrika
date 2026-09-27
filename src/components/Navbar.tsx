@@ -3,7 +3,7 @@ import { Factory, Lock, Shield, LogOut } from 'lucide-react';
 import { DbStatusData } from './DatabaseStatusModal';
 import { PWAInstallPrompt } from './PWAInstallPrompt';
 
-export type TabType = 'dashboard' | 'personel' | 'makineler' | 'projeler' | 'araclar' | 'hatirlaticilar' | 'siparisler';
+export type TabType = 'dashboard' | 'personel' | 'ceride' | 'makineler' | 'projeler' | 'araclar' | 'hatirlaticilar' | 'siparisler';
 
 interface NavbarProps {
   activeTab: TabType;
@@ -108,6 +108,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }`}
               >
                 👥 Personel &amp; İK
+              </button>
+              <button
+                onClick={() => setActiveTab('ceride')}
+                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+                  activeTab === 'ceride'
+                    ? 'bg-amber-600 text-white shadow-sm'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
+                }`}
+                title="Şantiye & İşletme Ceridesi (Günlük Olay Defteri)"
+              >
+                📜 Ceride
               </button>
               <button
                 onClick={() => setActiveTab('makineler')}

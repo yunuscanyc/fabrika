@@ -20,7 +20,8 @@ import {
   CheckCircle2,
   Circle,
   Plus,
-  ShoppingCart
+  ShoppingCart,
+  BookOpen
 } from 'lucide-react';
 
 interface DashboardViewProps {
@@ -451,13 +452,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </button>
             </div>
 
-            <button
-              onClick={() => onNavigateTab('hatirlaticilar')}
-              className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition shrink-0"
-            >
-              <span>Ajandaya Git</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => onNavigateTab('ceride')}
+                className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition"
+                title="Şantiye & İşletme Ceridesine Git"
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Cerideye Git</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                onClick={() => onNavigateTab('hatirlaticilar')}
+                className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition"
+              >
+                <span>Ajandaya Git</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         </div>
 

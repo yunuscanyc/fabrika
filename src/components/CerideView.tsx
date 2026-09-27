@@ -1,0 +1,865 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  BookOpen, 
+  Plus, 
+  Search, 
+  Filter, 
+  Calendar, 
+  Clock, 
+  User, 
+  Building2, 
+  Printer, 
+  Download, 
+  Trash2, 
+  Edit3, 
+  CheckCircle2, 
+  AlertCircle, 
+  Package, 
+  Truck, 
+  Wrench, 
+  Cog, 
+  Users, 
+  Layers, 
+  ArrowRight,
+  ExternalLink,
+  RefreshCw,
+  Sparkles
+} from 'lucide-react';
+import { CerideKaydi, Proje } from '../types';
+import { formatTarihTR } from '../utils/dateUtils';
+
+interface CerideViewProps {
+  projeler: Proje[];
+  currentUserName: string;
+  userRole?: 'admin' | 'ustabasi';
+  onNavigateTab?: (tab: any) => void;
+  onSelectProje?: (p: Proje) => void;
+}
+
+export const CerideView: React.FC<CerideViewProps> = ({
+  projeler,
+  currentUserName,
+  userRole = 'admin',
+  onNavigateTab,
+  onSelectProje
+}) => {
+  const [cerideList, setCerideList] = useState<CerideKaydi[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Filtreler
+  const [searchTerm, setSearchTerm] = useState('');
+  const [kategoriFilter, setKategoriFilter] = useState('Tümü');
+  const [projeFilter, setProjeFilter] = useState('Tümü');
+  const [tarihFilter, setTarihFilter] = useState<'tumu' | 'bugun' | 'dun' | 'hafta' | 'ay'>('tumu');
+
+  // Modal Durumları
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<CerideKaydi | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  // Form State
+  const [formOlay, setFormOlay] = useState('');
+  const [formKategori, setFormKategori] = useState<CerideKaydi['Kategori']>('Genel');
+  const [formProjeId, setFormProjeId] = useState<string>('');
+  const [formTarih, setFormTarih] = useState(new Date().toISOString().slice(0, 10));
+  const [formSaat, setFormSaat] = useState(new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }));
+  const [formDetay, setFormDetay] = useState('');
+  const [formIsleyenKisi, setFormIsleyenKisi] = useState(currentUserName);
+
+  // Ceride verilerini çek
+  const fetchCeride = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await fetch('/api/ceride');
+      if (res.ok) {
+        const data = await res.json();
+        setCerideList(Array.isArray(data) ? data : []);
+      } else {
+        throw new Error('Ceride verileri alınamadı.');
+      }
+    } catch (err: any) {
+      console.error('Ceride fetch error:', err);
+      setError(err.message || 'Bir hata oluştu');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCeride();
+  }, []);
+
+  // Formu Sıfırla / Aç
+  const handleOpenNewModal = () => {
+    setEditingItem(null);
+    setFormOlay('');
+    setFormKategori('Genel');
+    setFormProjeId('');
+    setFormTarih(new Date().toISOString().slice(0, 10));
+    setFormSaat(new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }));
+    setFormDetay('');
+    setFormIsleyenKisi(currentUserName || 'Yönetici');
+    setModalOpen(true);
+  };
+
+  const handleOpenEditModal = (item: CerideKaydi) => {
+    setEditingItem(item);
+    setFormOlay(item.Olay);
+    setFormKategori(item.Kategori || 'Genel');
+    setFormProjeId(item.ProjeId ? String(item.ProjeId) : '');
+    setFormTarih(item.Tarih || new Date().toISOString().slice(0, 10));
+    setFormSaat(item.Saat || '09:00');
+    setFormDetay(item.Detay || '');
+    setFormIsleyenKisi(item.IsleyenKisi || currentUserName);
+    setModalOpen(true);
+  };
+
+  // Kaydet / Güncelle
+  const handleSubmitForm = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formOlay.trim()) {
+      alert('Lütfen olay açıklamasını yazınız.');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const seciliProje = formProjeId ? projeler.find(p => String(p.ProjeId) === formProjeId) : null;
+      const projeAdi = seciliProje ? seciliProje.ProjeAdi : (formProjeId ? '' : 'Genel / Projesiz');
+
+      const payload = {
+        Olay: formOlay.trim(),
+        Kategori: formKategori,
+        Tarih: formTarih,
+        Saat: formSaat,
+        ProjeId: formProjeId ? Number(formProjeId) : null,
+        ProjeAdi: projeAdi,
+        IsleyenKisi: formIsleyenKisi.trim() || currentUserName,
+        Detay: formDetay.trim(),
+        OtomatikMi: editingItem ? editingItem.OtomatikMi : false
+      };
+
+      let res;
+      if (editingItem) {
+        res = await fetch(`/api/ceride/${editingItem.Id}`, {
+          method: 'PUT',
+          headers: { 
+            'Content-Type': 'application/json',
+            'x-user-name': currentUserName
+          },
+          body: JSON.stringify(payload)
+        });
+      } else {
+        res = await fetch('/api/ceride', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'x-user-name': currentUserName
+          },
+          body: JSON.stringify(payload)
+        });
+      }
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText || 'Kayıt işlemi başarısız.');
+      }
+
+      setModalOpen(false);
+      fetchCeride();
+    } catch (err: any) {
+      alert('Hata: ' + (err.message || 'İşlem gerçekleştirilemedi.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Sil
+  const handleDelete = async (id: number, olay: string) => {
+    if (!confirm(`"${olay}" başlıklı ceride kaydını silmek istediğinize emin misiniz?`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/ceride/${id}`, {
+        method: 'DELETE',
+        headers: { 'x-user-name': currentUserName }
+      });
+      if (res.ok) {
+        setCerideList(prev => prev.filter(c => c.Id !== id));
+      } else {
+        alert('Kayıt silinemedi.');
+      }
+    } catch (err) {
+      alert('Silme sırasında hata oluştu.');
+    }
+  };
+
+  // Kategori İkon ve Renk Seçici
+  const getKategoriBadge = (kategori: string) => {
+    switch (kategori) {
+      case 'Proje':
+        return {
+          icon: Layers,
+          bg: 'bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/40 dark:border-indigo-800 dark:text-indigo-300',
+          dot: 'bg-indigo-500'
+        };
+      case 'Sipariş':
+        return {
+          icon: Package,
+          bg: 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300',
+          dot: 'bg-emerald-500'
+        };
+      case 'Makine':
+        return {
+          icon: Cog,
+          bg: 'bg-purple-50 border-purple-200 text-purple-700 dark:bg-purple-950/40 dark:border-purple-800 dark:text-purple-300',
+          dot: 'bg-purple-500'
+        };
+      case 'Araç':
+        return {
+          icon: Truck,
+          bg: 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300',
+          dot: 'bg-amber-500'
+        };
+      case 'Personel / İK':
+        return {
+          icon: Users,
+          bg: 'bg-cyan-50 border-cyan-200 text-cyan-700 dark:bg-cyan-950/40 dark:border-cyan-800 dark:text-cyan-300',
+          dot: 'bg-cyan-500'
+        };
+      case 'Şantiye':
+        return {
+          icon: Building2,
+          bg: 'bg-orange-50 border-orange-200 text-orange-700 dark:bg-orange-950/40 dark:border-orange-800 dark:text-orange-300',
+          dot: 'bg-orange-500'
+        };
+      default:
+        return {
+          icon: BookOpen,
+          bg: 'bg-slate-100 border-slate-200 text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300',
+          dot: 'bg-slate-500'
+        };
+    }
+  };
+
+  // Filtreleme Mantığı
+  const filteredList = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterdayDate = new Date();
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    const yesterday = yesterdayDate.toISOString().slice(0, 10);
+
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const sevenDaysStr = sevenDaysAgo.toISOString().slice(0, 10);
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const thirtyDaysStr = thirtyDaysAgo.toISOString().slice(0, 10);
+
+    return cerideList.filter(item => {
+      // Metin arama
+      if (searchTerm.trim()) {
+        const term = searchTerm.toLowerCase();
+        const matchOlay = (item.Olay || '').toLowerCase().includes(term);
+        const matchDetay = (item.Detay || '').toLowerCase().includes(term);
+        const matchKisi = (item.IsleyenKisi || '').toLowerCase().includes(term);
+        const matchProje = (item.ProjeAdi || '').toLowerCase().includes(term);
+        if (!matchOlay && !matchDetay && !matchKisi && !matchProje) return false;
+      }
+
+      // Kategori
+      if (kategoriFilter !== 'Tümü' && item.Kategori !== kategoriFilter) {
+        return false;
+      }
+
+      // Proje
+      if (projeFilter === 'projesiz') {
+        if (item.ProjeId) return false;
+      } else if (projeFilter === 'projeli') {
+        if (!item.ProjeId) return false;
+      } else if (projeFilter !== 'Tümü') {
+        if (String(item.ProjeId) !== projeFilter) return false;
+      }
+
+      // Tarih
+      if (tarihFilter === 'bugun') {
+        if (item.Tarih !== today) return false;
+      } else if (tarihFilter === 'dun') {
+        if (item.Tarih !== yesterday) return false;
+      } else if (tarihFilter === 'hafta') {
+        if (item.Tarih < sevenDaysStr) return false;
+      } else if (tarihFilter === 'ay') {
+        if (item.Tarih < thirtyDaysStr) return false;
+      }
+
+      return true;
+    });
+  }, [cerideList, searchTerm, kategoriFilter, projeFilter, tarihFilter]);
+
+  // Gruplandırılmış Liste (Tarihe göre)
+  const groupedByDate = useMemo(() => {
+    const groups: { [date: string]: CerideKaydi[] } = {};
+    filteredList.forEach(item => {
+      const d = item.Tarih || 'Tarihsiz';
+      if (!groups[d]) groups[d] = [];
+      groups[d].push(item);
+    });
+    return groups;
+  }, [filteredList]);
+
+  // Excel / CSV İndir
+  const handleExportCSV = () => {
+    if (filteredList.length === 0) {
+      alert('Dışa aktarılacak ceride kaydı bulunamadı.');
+      return;
+    }
+
+    const headers = ['ID', 'Tarih', 'Saat', 'Olay', 'Kategori', 'Proje', 'İşleyen Kişi', 'İşlenme Tarihi', 'Detay'];
+    const rows = filteredList.map(item => [
+      item.Id,
+      item.Tarih,
+      item.Saat,
+      `"${(item.Olay || '').replace(/"/g, '""')}"`,
+      `"${item.Kategori || ''}"`,
+      `"${(item.ProjeAdi || 'Genel / Projesiz').replace(/"/g, '""')}"`,
+      `"${(item.IsleyenKisi || '').replace(/"/g, '""')}"`,
+      `"${item.IslenmeTarihi || ''}"`,
+      `"${(item.Detay || '').replace(/"/g, '""')}"`
+    ]);
+
+    const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map(r => r.join(';'))].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Ceride_Raporu_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Yazdır
+  const handlePrint = () => {
+    window.print();
+  };
+
+  // İstatistikler
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const bugunSayisi = cerideList.filter(c => c.Tarih === todayStr).length;
+  const projeliSayisi = cerideList.filter(c => c.ProjeId).length;
+  const siparisSayisi = cerideList.filter(c => c.Kategori === 'Sipariş').length;
+
+  return (
+    <div className="space-y-6">
+      {/* Üst Başlık & İstatistikler */}
+      <div className="bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl text-white">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-amber-500/20 border border-amber-500/30 rounded-xl text-amber-400">
+                <BookOpen className="w-6 h-6" />
+              </div>
+              <div>
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center gap-2">
+                  Şantiye &amp; İşletme Ceridesi
+                </h1>
+                <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
+                  Günlük vukuat, makine/araç hareketleri, malzeme teslimatları ve şantiye faaliyet defteri
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <button
+              onClick={fetchCeride}
+              disabled={loading}
+              className="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-semibold border border-slate-700 transition flex items-center gap-1.5"
+              title="Yenile"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Yenile</span>
+            </button>
+
+            <button
+              onClick={handleExportCSV}
+              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold border border-slate-700 transition flex items-center gap-1.5 shadow-sm"
+              title="Excel'e Aktar"
+            >
+              <Download className="w-4 h-4 text-emerald-400" />
+              <span>Excel</span>
+            </button>
+
+            <button
+              onClick={handlePrint}
+              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold border border-slate-700 transition flex items-center gap-1.5 shadow-sm"
+              title="Yazdır / Rapor Al"
+            >
+              <Printer className="w-4 h-4 text-sky-400" />
+              <span>Yazdır</span>
+            </button>
+
+            <button
+              onClick={handleOpenNewModal}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-2 shadow-lg shadow-amber-600/30 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Yeni Olay Ekle</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Hızlı Sayaç Kartları */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-5 border-t border-slate-800/80">
+          <div className="bg-slate-800/60 border border-slate-700/60 p-3.5 rounded-xl">
+            <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider block">Toplam Kayıt</span>
+            <div className="text-xl sm:text-2xl font-black text-white mt-1">{cerideList.length}</div>
+          </div>
+          <div className="bg-slate-800/60 border border-slate-700/60 p-3.5 rounded-xl">
+            <span className="text-[11px] font-medium text-amber-400 uppercase tracking-wider block">Bugünkü Olaylar</span>
+            <div className="text-xl sm:text-2xl font-black text-amber-400 mt-1">{bugunSayisi}</div>
+          </div>
+          <div className="bg-slate-800/60 border border-slate-700/60 p-3.5 rounded-xl">
+            <span className="text-[11px] font-medium text-indigo-400 uppercase tracking-wider block">Proje Olayları</span>
+            <div className="text-xl sm:text-2xl font-black text-indigo-400 mt-1">{projeliSayisi}</div>
+          </div>
+          <div className="bg-slate-800/60 border border-slate-700/60 p-3.5 rounded-xl">
+            <span className="text-[11px] font-medium text-emerald-400 uppercase tracking-wider block">Malzeme &amp; Teslimat</span>
+            <div className="text-xl sm:text-2xl font-black text-emerald-400 mt-1">{siparisSayisi}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Arama ve Filtreleme Çubuğu */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl shadow-xs flex flex-wrap items-center gap-3">
+        {/* Metin Arama */}
+        <div className="relative flex-1 min-w-[220px]">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+          <input
+            type="text"
+            placeholder="Olay, proje, kişi veya detay ara..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs sm:text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+          />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              className="absolute right-3 top-2.5 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+            >
+              Temizle
+            </button>
+          )}
+        </div>
+
+        {/* Kategori Filtresi */}
+        <div className="flex items-center gap-1.5 text-xs">
+          <span className="text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap">Kategori:</span>
+          <select
+            value={kategoriFilter}
+            onChange={(e) => setKategoriFilter(e.target.value)}
+            className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+          >
+            <option value="Tümü">Tüm Kategoriler</option>
+            <option value="Proje">📐 Proje</option>
+            <option value="Sipariş">📦 Sipariş / Malzeme</option>
+            <option value="Makine">⚙️ Makine</option>
+            <option value="Araç">🚛 Araç</option>
+            <option value="Personel / İK">👥 Personel / İK</option>
+            <option value="Şantiye">🏗️ Şantiye</option>
+            <option value="Genel">📌 Genel</option>
+          </select>
+        </div>
+
+        {/* Proje Filtresi */}
+        <div className="flex items-center gap-1.5 text-xs">
+          <span className="text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap">Proje:</span>
+          <select
+            value={projeFilter}
+            onChange={(e) => setProjeFilter(e.target.value)}
+            className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500 max-w-[200px]"
+          >
+            <option value="Tümü">Tüm Projeler &amp; Genel</option>
+            <option value="projeli">Sadece Projeli Olaylar</option>
+            <option value="projesiz">Sadece Genel / Projesiz</option>
+            {projeler.map(p => (
+              <option key={p.ProjeId} value={String(p.ProjeId)}>
+                {p.ProjeAdi}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Zaman Aralığı */}
+        <div className="flex items-center gap-1 text-xs bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+          <button
+            onClick={() => setTarihFilter('tumu')}
+            className={`px-2.5 py-1.5 rounded-lg font-semibold transition ${
+              tarihFilter === 'tumu'
+                ? 'bg-white dark:bg-slate-950 text-slate-900 dark:text-white shadow-xs'
+                : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
+            }`}
+          >
+            Tümü
+          </button>
+          <button
+            onClick={() => setTarihFilter('bugun')}
+            className={`px-2.5 py-1.5 rounded-lg font-semibold transition ${
+              tarihFilter === 'bugun'
+                ? 'bg-amber-600 text-white shadow-xs'
+                : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
+            }`}
+          >
+            Bugün
+          </button>
+          <button
+            onClick={() => setTarihFilter('dun')}
+            className={`px-2.5 py-1.5 rounded-lg font-semibold transition ${
+              tarihFilter === 'dun'
+                ? 'bg-white dark:bg-slate-950 text-slate-900 dark:text-white shadow-xs'
+                : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
+            }`}
+          >
+            Dün
+          </button>
+          <button
+            onClick={() => setTarihFilter('hafta')}
+            className={`px-2.5 py-1.5 rounded-lg font-semibold transition ${
+              tarihFilter === 'hafta'
+                ? 'bg-white dark:bg-slate-950 text-slate-900 dark:text-white shadow-xs'
+                : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
+            }`}
+          >
+            Son 7 Gün
+          </button>
+        </div>
+      </div>
+
+      {/* Ceride Listesi / Zaman Çizelgesi */}
+      {loading ? (
+        <div className="py-20 text-center text-slate-400 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+          <RefreshCw className="w-8 h-8 animate-spin mx-auto text-amber-500 mb-3" />
+          <p className="text-sm font-semibold">Ceride kayıtları yükleniyor...</p>
+        </div>
+      ) : Object.keys(groupedByDate).length === 0 ? (
+        <div className="py-16 text-center text-slate-500 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 p-8">
+          <BookOpen className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+          <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">Kayıt Bulunamadı</h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
+            Arama veya filtre kriterlerinize uygun ceride kaydı bulunamadı. Yeni bir olay ekleyebilir veya filtreleri temizleyebilirsiniz.
+          </p>
+          <button
+            onClick={handleOpenNewModal}
+            className="mt-4 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition shadow-sm"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Yeni Ceride Olayı Ekle</span>
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {Object.entries(groupedByDate).map(([dateStr, items]) => {
+            const formattedDate = dateStr === 'Tarihsiz' ? 'Tarihsiz Olaylar' : formatTarihTR(dateStr);
+            const isToday = dateStr === todayStr;
+
+            return (
+              <div key={dateStr} className="space-y-3">
+                {/* Gün Başlığı */}
+                <div className="flex items-center gap-3">
+                  <div className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs ${
+                    isToday 
+                      ? 'bg-amber-600 text-white' 
+                      : 'bg-slate-800 text-slate-200'
+                  }`}>
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>{formattedDate}</span>
+                    {isToday && <span className="ml-1 text-[10px] bg-amber-700/60 px-1.5 py-0.2 rounded font-black">BUGÜN</span>}
+                  </div>
+                  <div className="flex-1 h-px bg-slate-200 dark:bg-slate-800"></div>
+                  <span className="text-xs font-semibold text-slate-400">{items.length} olay</span>
+                </div>
+
+                {/* Olay Kartları */}
+                <div className="grid grid-cols-1 gap-3">
+                  {items.map((item) => {
+                    const badge = getKategoriBadge(item.Kategori);
+                    const IconComponent = badge.icon;
+                    const bagliProje = item.ProjeId ? projeler.find(p => p.ProjeId === item.ProjeId) : null;
+
+                    return (
+                      <div
+                        key={item.Id}
+                        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-amber-500/40 p-4 rounded-xl shadow-xs transition group flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
+                      >
+                        {/* Sol Taraf: İkon, Olay, Detay, Proje */}
+                        <div className="flex items-start gap-3.5 flex-1 min-w-0">
+                          <div className={`p-2.5 rounded-xl border shrink-0 ${badge.bg}`}>
+                            <IconComponent className="w-4 h-4" />
+                          </div>
+
+                          <div className="space-y-1 min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-slate-400" />
+                                {item.Saat || '09:00'}
+                              </span>
+
+                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${badge.bg}`}>
+                                {item.Kategori || 'Genel'}
+                              </span>
+
+                              {item.OtomatikMi ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-medium" title="Sistem tarafından otomatik işlendi">
+                                  <Sparkles className="w-2.5 h-2.5 text-amber-500" />
+                                  <span>Otomatik</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 text-[10px] font-medium">
+                                  <span>Manuel</span>
+                                </span>
+                              )}
+
+                              {item.ProjeAdi && item.ProjeAdi !== 'Genel / Projesiz' && (
+                                <span 
+                                  onClick={() => {
+                                    if (bagliProje && onSelectProje) {
+                                      onSelectProje(bagliProje);
+                                      if (onNavigateTab) onNavigateTab('projeler');
+                                    }
+                                  }}
+                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 ${bagliProje ? 'cursor-pointer hover:bg-indigo-100 transition' : ''}`}
+                                  title={bagliProje ? 'Projeye Git' : ''}
+                                >
+                                  <Layers className="w-3 h-3" />
+                                  <span>{item.ProjeAdi}</span>
+                                  {bagliProje && <ExternalLink className="w-2.5 h-2.5 ml-0.5 opacity-70" />}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Olay Başlığı */}
+                            <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 leading-snug break-words">
+                              {item.Olay}
+                            </h4>
+
+                            {/* Detay Açıklaması */}
+                            {item.Detay && (
+                              <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">
+                                {item.Detay}
+                              </p>
+                            )}
+
+                            {/* Alt Bilgi: İşleyen Kişi ve Sisteme İşlenme Saati */}
+                            <div className="flex items-center gap-3 pt-1 text-[11px] text-slate-400">
+                              <span className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-300">
+                                <User className="w-3 h-3 text-amber-500" />
+                                <span>İşleyen: {item.IsleyenKisi || 'Yönetici'}</span>
+                              </span>
+                              <span>•</span>
+                              <span title="Veritabanına tam kayıt zamanı">
+                                Kayıt: {item.IslenmeTarihi || `${item.Tarih} ${item.Saat}`}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Sağ Taraf: Aksiyon Butonları */}
+                        <div className="flex items-center gap-1 self-end sm:self-center shrink-0 opacity-80 group-hover:opacity-100 transition">
+                          <button
+                            onClick={() => handleOpenEditModal(item)}
+                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 rounded-lg transition"
+                            title="Düzenle"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(item.Id, item.Olay)}
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-slate-800 rounded-lg transition"
+                            title="Sil"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Yeni Kayıt & Düzenleme Modalı */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-amber-500" />
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  {editingItem ? 'Ceride Kaydını Düzenle' : 'Yeni Ceride Olayı Ekle'}
+                </h3>
+              </div>
+              <button
+                onClick={() => setModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg leading-none"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitForm} className="space-y-4">
+              {/* Olay Tanımı */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Olay / Faaliyet Tanımı <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Örn: 2. Etap ahşap karkas montajı tamamlandı"
+                  value={formOlay}
+                  onChange={(e) => setFormOlay(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs sm:text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              {/* Kategori & Proje */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Kategori
+                  </label>
+                  <select
+                    value={formKategori}
+                    onChange={(e: any) => setFormKategori(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    <option value="Proje">📐 Proje</option>
+                    <option value="Şantiye">🏗️ Şantiye</option>
+                    <option value="Sipariş">📦 Sipariş / Malzeme</option>
+                    <option value="Makine">⚙️ Makine</option>
+                    <option value="Araç">🚛 Araç</option>
+                    <option value="Personel / İK">👥 Personel / İK</option>
+                    <option value="Genel">📌 Genel Faaliyet</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    İlişkili Proje (İsteğe Bağlı)
+                  </label>
+                  <select
+                    value={formProjeId}
+                    onChange={(e) => setFormProjeId(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    <option value="">Genel / Projesiz</option>
+                    {projeler.map(p => (
+                      <option key={p.ProjeId} value={String(p.ProjeId)}>
+                        {p.ProjeAdi}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Tarih & Saat */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Olay Tarihi
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={formTarih}
+                    onChange={(e) => setFormTarih(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Olay Saati
+                  </label>
+                  <input
+                    type="time"
+                    required
+                    value={formSaat}
+                    onChange={(e) => setFormSaat(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
+
+              {/* İşleyen Kişi */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  İşleyen Yönetici / Sorumlu (PIN Esaslı)
+                </label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    required
+                    value={formIsleyenKisi}
+                    onChange={(e) => setFormIsleyenKisi(e.target.value)}
+                    placeholder="Ad Soyad"
+                    className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs sm:text-sm font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
+
+              {/* Detay & Notlar */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Açıklama / Detaylı Notlar (İsteğe Bağlı)
+                </label>
+                <textarea
+                  rows={3}
+                  placeholder="Gözlemler, teslim tutanakları, firma yetkilisi görüşmeleri veya ek notlar..."
+                  value={formDetay}
+                  onChange={(e) => setFormDetay(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs sm:text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
+                />
+              </div>
+
+              {/* Butonlar */}
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold transition"
+                >
+                  Vazgeç
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="px-5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-amber-600/30 cursor-pointer disabled:opacity-50"
+                >
+                  {saving ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Kaydediliyor...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>{editingItem ? 'Değişiklikleri Kaydet' : 'Cerideye İşle'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

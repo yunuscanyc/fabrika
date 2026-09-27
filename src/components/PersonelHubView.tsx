@@ -7,7 +7,7 @@ import { SantiyeMontajView } from './SantiyeMontajView';
 import { IsgView } from './IsgView';
 import { YevmiyeciView } from './YevmiyeciView';
 import { SehirDisiGorevlendirmeView } from './SehirDisiGorevlendirmeView';
-import { Users, Calendar, Clock, ShieldCheck, Briefcase, HardHat, Send } from 'lucide-react';
+import { Users, Calendar, Clock, ShieldCheck, Briefcase, HardHat, Send, BookOpen } from 'lucide-react';
 
 interface PersonelHubViewProps {
   personeller: Personel[];
@@ -19,6 +19,7 @@ interface PersonelHubViewProps {
   initialAltSekme?: 'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci' | 'gorevlendirme';
   initialPersonelId?: number;
   initialIsgSekme?: 'kkd' | 'saglik' | 'egitim';
+  onNavigateTab?: (tab: any) => void;
 }
 
 export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
@@ -31,6 +32,7 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
   initialAltSekme = 'liste',
   initialPersonelId,
   initialIsgSekme,
+  onNavigateTab,
 }) => {
   const [altSekme, setAltSekme] = useState<'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci' | 'gorevlendirme'>(initialAltSekme);
 
@@ -128,6 +130,17 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
             <ShieldCheck className="w-4 h-4" />
             İSG &amp; KKD Zimmet
           </button>
+
+          {onNavigateTab && (
+            <button
+              onClick={() => onNavigateTab('ceride')}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-amber-600 hover:bg-amber-500 text-white shadow-sm transition cursor-pointer shrink-0"
+              title="Şantiye & İşletme Ceridesine Git"
+            >
+              <BookOpen className="w-4 h-4" />
+              <span>📜 Ceride</span>
+            </button>
+          )}
         </div>
 
         <div className="hidden lg:flex items-center gap-2 text-xs text-slate-400 pr-2">
@@ -144,6 +157,7 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
           departmanlar={departmanlar}
           gorevler={gorevler}
           onRefresh={onRefresh}
+          onNavigateTab={onNavigateTab}
         />
       )}
 

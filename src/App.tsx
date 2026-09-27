@@ -8,6 +8,7 @@ import { HatirlaticilarView } from './components/HatirlaticilarView';
 import { PersonelHubView } from './components/PersonelHubView';
 import { MakineView } from './components/MakineView';
 import { SiparislerView } from './components/SiparislerView';
+import { CerideView } from './components/CerideView';
 import { UstabasiSiparisBildirim } from './components/UstabasiSiparisBildirim';
 import { AjandaBildirimBari } from './components/AjandaBildirimBari';
 import { ServerSetupModal } from './components/ServerSetupModal';
@@ -1063,6 +1064,16 @@ export default function App() {
                 initialAltSekme={personelSubTab}
                 initialPersonelId={selectedPersonelId}
                 initialIsgSekme={isgSekme}
+                onNavigateTab={setActiveTab}
+              />
+            )}
+
+            {activeTab === 'ceride' && (
+              <CerideView
+                projeler={projeler}
+                currentUserName={currentUserName}
+                userRole={userRole}
+                onNavigateTab={setActiveTab}
               />
             )}
 

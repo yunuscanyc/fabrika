@@ -94,6 +94,7 @@ let detectedTables: {
   malzemeSiparisBelgeler?: string;
   malzemeKatalog?: string;
   sehirDisiGorevler?: string;
+  ceride?: string;
 } = {};
 
 // Nesnelerden büyük/küçük harf duyarsız ve alternatif alan isimlerini okuma
@@ -2718,6 +2719,32 @@ async function checkDbConnection() {
       }
     }
 
+    // 22. Ceride (Şantiye & İşletme Günlüğü)
+    if (!detectedTables.ceride) {
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS "Ceride" (
+            "Id" SERIAL PRIMARY KEY,
+            "Olay" TEXT NOT NULL,
+            "Tarih" VARCHAR(20) NOT NULL,
+            "Saat" VARCHAR(20) NOT NULL,
+            "IslenmeTarihi" VARCHAR(50) NOT NULL,
+            "ProjeId" INTEGER,
+            "ProjeAdi" VARCHAR(255),
+            "IsleyenKisi" VARCHAR(100) NOT NULL,
+            "Kategori" VARCHAR(50) DEFAULT 'Genel',
+            "Detay" TEXT,
+            "OtomatikMi" BOOLEAN DEFAULT false,
+            "CreatedAt" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+        console.log('[DB] "Ceride" tablosu hazırlandı.');
+        detectedTables.ceride = '"Ceride"';
+      } catch (createErr: any) {
+        console.error('[DB] "Ceride" tablosu oluşturulamadı:', createErr.message);
+      }
+    }
+
     console.log('[DB] Eşleşen Tablolar:', detectedTables);
   } catch (err: any) {
     isDbConnected = false;
@@ -3329,6 +3356,133 @@ let memGorevler: any[] = [
 let memPersoneller: any[] = [];
 let memIzinler: any[] = [];
 let memMakineler: any[] = [];
+
+// ==========================================
+// Ceride (Şantiye & İşletme Günlüğü) Bellek & Disk
+// ==========================================
+const CERIDE_FILE = path.join(DATA_DIR, 'mem_ceride.json');
+
+export interface CerideRecord {
+  Id: number;
+  Olay: string;
+  Tarih: string;
+  Saat: string;
+  IslenmeTarihi: string;
+  ProjeId?: number | null;
+  ProjeAdi?: string | null;
+  IsleyenKisi: string;
+  Kategori: string;
+  Detay?: string;
+  OtomatikMi?: boolean;
+}
+
+let memCeride: CerideRecord[] = [
+  {
+    Id: 1,
+    Olay: 'Fabrika ve Şantiye Portalı Ceride Sistemi Başlatıldı',
+    Tarih: new Date().toISOString().slice(0, 10),
+    Saat: '08:30',
+    IslenmeTarihi: new Date().toLocaleString('tr-TR'),
+    ProjeId: null,
+    ProjeAdi: 'Genel / Projesiz',
+    IsleyenKisi: 'Sistem Yöneticisi',
+    Kategori: 'Genel',
+    Detay: 'Günlük şantiye ve fabrika faaliyetlerinin kayıt altına alınması için ceride defteri devreye alındı.',
+    OtomatikMi: true
+  }
+];
+
+function saveMemCeride() {
+  try {
+    ensureDataDir();
+    fs.writeFileSync(CERIDE_FILE, JSON.stringify(memCeride, null, 2), 'utf-8');
+  } catch (e: any) {
+    console.error('[SAVE CERIDE FILE ERROR]', e.message);
+  }
+}
+
+function loadMemCeride(): CerideRecord[] | null {
+  try {
+    if (fs.existsSync(CERIDE_FILE)) {
+      const raw = fs.readFileSync(CERIDE_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e: any) {
+    console.error('[LOAD CERIDE FILE ERROR]', e.message);
+  }
+  return null;
+}
+
+const loadedCeride = loadMemCeride();
+if (loadedCeride && loadedCeride.length > 0) {
+  memCeride = loadedCeride;
+} else {
+  saveMemCeride();
+}
+
+async function recordCerideEvent(eventData: {
+  Olay: string;
+  Tarih?: string;
+  Saat?: string;
+  ProjeId?: number | null;
+  ProjeAdi?: string | null;
+  IsleyenKisi?: string;
+  Kategori?: string;
+  Detay?: string;
+  OtomatikMi?: boolean;
+}): Promise<CerideRecord> {
+  const now = new Date();
+  const dateStr = eventData.Tarih || now.toISOString().slice(0, 10);
+  const timeStr = eventData.Saat || now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+  const islenmeTarihi = now.toLocaleString('tr-TR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+  const nextId = memCeride.length > 0 ? Math.max(...memCeride.map(c => Number(c.Id) || 0)) + 1 : 1;
+  const newRecord: CerideRecord = {
+    Id: nextId,
+    Olay: eventData.Olay,
+    Tarih: dateStr,
+    Saat: timeStr,
+    IslenmeTarihi: islenmeTarihi,
+    ProjeId: eventData.ProjeId || null,
+    ProjeAdi: eventData.ProjeAdi || (eventData.ProjeId ? '' : 'Genel / Projesiz'),
+    IsleyenKisi: eventData.IsleyenKisi || 'Yönetici',
+    Kategori: eventData.Kategori || 'Genel',
+    Detay: eventData.Detay || '',
+    OtomatikMi: eventData.OtomatikMi !== undefined ? eventData.OtomatikMi : true
+  };
+
+  memCeride.unshift(newRecord);
+  saveMemCeride();
+
+  if (isDbConnected) {
+    try {
+      await pool.query(`
+        INSERT INTO "Ceride" ("Id", "Olay", "Tarih", "Saat", "IslenmeTarihi", "ProjeId", "ProjeAdi", "IsleyenKisi", "Kategori", "Detay", "OtomatikMi", "CreatedAt")
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP)
+        ON CONFLICT ("Id") DO NOTHING
+      `, [
+        newRecord.Id,
+        newRecord.Olay,
+        newRecord.Tarih,
+        newRecord.Saat,
+        newRecord.IslenmeTarihi,
+        newRecord.ProjeId,
+        newRecord.ProjeAdi,
+        newRecord.IsleyenKisi,
+        newRecord.Kategori,
+        newRecord.Detay,
+        newRecord.OtomatikMi
+      ]);
+    } catch (e: any) {
+      console.error('[DB SAVE CERIDE ERROR]', e.message);
+    }
+  }
+
+  return newRecord;
+}
 
 let memPuantajlar: any[] = [];
 let memMesaiAyarlari: any = {
@@ -4406,6 +4560,18 @@ app.post('/api/projeler', async (req, res) => {
             body: `"${inserted.ProjeAdi}" (${inserted.MusteriFirma || 'Müşteri Belirtilmedi'}) sisteme kaydedildi.`,
             url: '/'
           }).catch(() => {});
+
+          const yapanKisi = req.body.YapanKisi || req.headers['x-user-name'] || 'Yönetici';
+          recordCerideEvent({
+            Olay: `Yeni Proje Başlatıldı: ${inserted.ProjeAdi}`,
+            Kategori: 'Proje',
+            ProjeId: inserted.ProjeId ? Number(inserted.ProjeId) : null,
+            ProjeAdi: inserted.ProjeAdi,
+            IsleyenKisi: String(yapanKisi),
+            Detay: `Müşteri: ${inserted.MusteriFirma || '-'}, Şantiye: ${inserted.SantiyeAdresi || '-'}`,
+            OtomatikMi: true
+          }).catch(() => {});
+
           return res.status(201).json(inserted);
         }
       } catch (err: any) {
@@ -4418,6 +4584,17 @@ app.post('/api/projeler', async (req, res) => {
       title: '🏗️ Yeni Proje Eklendi',
       body: `"${yeniProje.ProjeAdi}" (${yeniProje.MusteriFirma || 'Müşteri Belirtilmedi'}) sisteme kaydedildi.`,
       url: '/'
+    }).catch(() => {});
+
+    const yapanKisi = req.body.YapanKisi || req.headers['x-user-name'] || 'Yönetici';
+    recordCerideEvent({
+      Olay: `Yeni Proje Başlatıldı: ${yeniProje.ProjeAdi}`,
+      Kategori: 'Proje',
+      ProjeId: yeniProje.ProjeId,
+      ProjeAdi: yeniProje.ProjeAdi,
+      IsleyenKisi: String(yapanKisi),
+      Detay: `Müşteri: ${yeniProje.MusteriFirma || '-'}, Şantiye: ${yeniProje.SantiyeAdresi || '-'}`,
+      OtomatikMi: true
     }).catch(() => {});
     res.status(201).json(yeniProje);
   } catch (err: any) {
@@ -4813,6 +4990,16 @@ app.post('/api/araclar', async (req, res) => {
       body: `${yeniArac.PlakaVeyaKod} (${yeniArac.MarkaModel || 'Araç'}) filoya eklendi.`,
       url: '/'
     }).catch(() => {});
+
+    const yapanAracKisi = req.body.YapanKisi || req.headers['x-user-name'] || 'Yönetici';
+    recordCerideEvent({
+      Olay: `Yeni Araç Eklendi: ${yeniArac.PlakaVeyaKod} (${yeniArac.MarkaModel || 'Araç'})`,
+      Kategori: 'Araç',
+      ProjeAdi: 'Genel / Araç Filosu',
+      IsleyenKisi: String(yapanAracKisi),
+      Detay: `Tip: ${yeniArac.AracTipi}, Zimmetli: ${yeniArac.ZimmetliKisi || '-'}, Güncel KM: ${yeniArac.GuncelKmVeyaSaat} km`,
+      OtomatikMi: true
+    }).catch(() => {});
     res.status(201).json(yeniArac);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -5109,6 +5296,16 @@ app.post('/api/araclar/:id/bakimlar', async (req, res) => {
     title: '🛠️ Yeni Araç Bakımı Yapıldı',
     body: `${yeniBakim.BakimTarihi} tarihinde araç bakımı işlendi (${yeniBakim.Aciklama}).`,
     url: '/'
+  }).catch(() => {});
+
+  const yapanBakimKisi = req.body.YapanKisi || req.headers['x-user-name'] || 'Yönetici';
+  recordCerideEvent({
+    Olay: `Araç Bakımı Yapıldı: ${arac ? arac.PlakaVeyaKod : 'Araç'}`,
+    Kategori: 'Araç',
+    ProjeAdi: 'Genel / Araç Filosu',
+    IsleyenKisi: String(yapanBakimKisi),
+    Detay: `KM: ${yeniBakim.YapilanKmVeyaSaat} km, Servis/Usta: ${yeniBakim.YapanUstaVeyaServis || '-'}, Maliyet: ${yeniBakim.Maliyet || 0} ₺. ${yeniBakim.Aciklama || ''}`,
+    OtomatikMi: true
   }).catch(() => {});
   return res.status(201).json(yeniBakim);
 });
@@ -5983,6 +6180,16 @@ app.post('/api/personeller', async (req, res) => {
     }
 
     memPersoneller.unshift(yeni);
+
+    const yapanPersonelKisi = req.body.YapanKisi || req.headers['x-user-name'] || 'Yönetici';
+    recordCerideEvent({
+      Olay: `Yeni Personel İşe Başladı: ${yeni.AdSoyad} (${yeni.Gorev})`,
+      Kategori: 'Personel / İK',
+      IsleyenKisi: String(yapanPersonelKisi),
+      Detay: `Departman: ${yeni.Departman}, İşe Giriş: ${yeni.IseGirisTarihi}, Tel: ${yeni.Telefon || '-'}`,
+      OtomatikMi: true
+    }).catch(() => {});
+
     res.status(201).json(yeni);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -6547,6 +6754,17 @@ app.post('/api/makineler', async (req, res) => {
       body: `${yeni.MakineAdi} (${yeni.MakineKodu}) makine parkuruna eklendi.`,
       url: '/'
     }).catch(() => {});
+
+    const yapanMakineKisi = req.body.YapanKisi || req.headers['x-user-name'] || 'Yönetici';
+    recordCerideEvent({
+      Olay: `Yeni Makine Eklendi: ${yeni.MakineAdi} (${yeni.MakineKodu})`,
+      Kategori: 'Makine',
+      ProjeAdi: 'Genel / Makine Parkuru',
+      IsleyenKisi: String(yapanMakineKisi),
+      Detay: `Marka/Model: ${yeni.MarkaModel || '-'}, Tür: ${yeni.MakineTuru}, Sorumlu: ${yeni.SorumluUsta || '-'}, Bölüm: ${yeni.KonumBolum}`,
+      OtomatikMi: true
+    }).catch(() => {});
+
     res.status(201).json(yeni);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -6720,6 +6938,17 @@ app.post('/api/makineler/:id/bakimlar', async (req, res) => {
     makine.BakimGecmisi.unshift(yeniBakim);
     makine.SonBakimTarihi = yeniBakim.BakimTarihi;
     makine.SonBakimSaati = yeniBakim.YapildigiSaat;
+
+    const yapanKisi = req.body.YapanKisi || req.headers['x-user-name'] || 'Yönetici';
+    recordCerideEvent({
+      Olay: `Makine Bakımı Yapıldı: ${makine.MakineAdi} (${yeniBakim.BakimTuru})`,
+      Kategori: 'Makine',
+      ProjeAdi: 'Genel / Makine Parkuru',
+      IsleyenKisi: String(yapanKisi),
+      Detay: `Bakımı Yapan: ${yeniBakim.BakimiYapan}, Maliyet: ${yeniBakim.Maliyet} ₺. ${yeniBakim.Aciklama || ''}`,
+      OtomatikMi: true
+    }).catch(() => {});
+
     return res.status(201).json(yeniBakim);
   }
   res.status(404).json({ error: 'Makine bulunamadı' });
@@ -8662,6 +8891,16 @@ app.post('/api/siparisler', async (req, res) => {
       url: '/'
     }).catch(() => {});
 
+    const talepKisi = newSiparis.TalepEden || req.headers['x-user-name'] || 'Ustabaşı';
+    recordCerideEvent({
+      Olay: `Yeni Sipariş Girildi: ${newSiparis.SiparisNo} - ${newSiparis.MalzemeAdi}`,
+      Kategori: 'Sipariş',
+      ProjeAdi: newSiparis.ProjeAdi || 'Genel',
+      IsleyenKisi: String(talepKisi),
+      Detay: `Miktar: ${newSiparis.Miktar} ${newSiparis.Birim}, Aciliyet: ${newSiparis.Aciliyet}, Termin: ${newSiparis.TerminTarihi || '-'}`,
+      OtomatikMi: true
+    }).catch(() => {});
+
     return res.status(201).json({
       success: true,
       message: `${newSiparis.SiparisNo} numaralı malzeme siparişi (${kalemler.length} kalem) kaydedildi.`,
@@ -8793,6 +9032,39 @@ app.put('/api/siparisler/:id', async (req, res) => {
       body: `${updatedSiparis.SiparisNo} (${updatedSiparis.ProjeAdi}) durumu: ${updatedSiparis.Durum}`,
       url: '/'
     }).catch(() => {});
+
+    // Cerideye Durum Değişikliği Kaydı (Fabrikaya Geldi, Kısmen Teslim Alındı, Sipariş Verildi):
+    if (body.Durum && body.Durum !== currentSiparis.Durum) {
+      const isleyenKisi = req.headers['x-user-name'] || req.body.YapanKisi || req.body.IsleyenKisi || 'Satınalma / Yönetici';
+      if (body.Durum === 'FabrikayaGeldi') {
+        recordCerideEvent({
+          Olay: `Sipariş Fabrikaya / Depoya Geldi: ${updatedSiparis.SiparisNo} - ${updatedSiparis.MalzemeAdi}`,
+          Kategori: 'Sipariş',
+          ProjeAdi: updatedSiparis.ProjeAdi || 'Genel',
+          IsleyenKisi: String(isleyenKisi),
+          Detay: `Tedarikçi: ${updatedSiparis.TedarikciFirma || '-'}, Fatura/İrsaliye: ${updatedSiparis.FaturaIrsaliyeNo || '-'}. Malzeme fabrikaya/depoya sağlam ulaştı.`,
+          OtomatikMi: true
+        }).catch(() => {});
+      } else if (body.Durum === 'KismiGeldi') {
+        recordCerideEvent({
+          Olay: `Sipariş Kısmen Teslim Alındı: ${updatedSiparis.SiparisNo} - ${updatedSiparis.MalzemeAdi}`,
+          Kategori: 'Sipariş',
+          ProjeAdi: updatedSiparis.ProjeAdi || 'Genel',
+          IsleyenKisi: String(isleyenKisi),
+          Detay: `Not: ${updatedSiparis.SatinalmaNotu || 'Siparişin bir kısmı teslim alındı, kalan kalemler tedarikçiden bekleniyor.'}`,
+          OtomatikMi: true
+        }).catch(() => {});
+      } else if (body.Durum === 'SiparisVerildi') {
+        recordCerideEvent({
+          Olay: `Sipariş Tedarikçiye Verildi: ${updatedSiparis.SiparisNo} - ${updatedSiparis.MalzemeAdi}`,
+          Kategori: 'Sipariş',
+          ProjeAdi: updatedSiparis.ProjeAdi || 'Genel',
+          IsleyenKisi: String(isleyenKisi),
+          Detay: `Tedarikçi: ${updatedSiparis.TedarikciFirma || '-'}, Anlaşılan Tutar: ${updatedSiparis.TahminiTutar ? updatedSiparis.TahminiTutar + ' ₺' : '-'}`,
+          OtomatikMi: true
+        }).catch(() => {});
+      }
+    }
 
     return res.json({
       success: true,
@@ -9511,6 +9783,133 @@ app.delete('/api/sehir-disi-gorevler/:id', async (req, res) => {
   } catch (err: any) {
     recordDbError(`DELETE /api/sehir-disi-gorevler/${req.params.id} (SERVER)`, err);
     return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// Ceride (Şantiye & İşletme Günlüğü) API Uçları
+// ==========================================
+app.get('/api/ceride', async (req, res) => {
+  try {
+    if (isDbConnected && detectedTables.ceride) {
+      try {
+        const dbRes = await pool.query(`SELECT * FROM ${detectedTables.ceride} ORDER BY "Id" DESC LIMIT 1000`);
+        if (dbRes.rows.length > 0) {
+          return res.json(dbRes.rows);
+        }
+      } catch (dbErr: any) {
+        console.error('[DB GET CERIDE ERROR]', dbErr.message);
+      }
+    }
+    return res.json(memCeride);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/ceride', async (req, res) => {
+  try {
+    const { Olay, Tarih, Saat, ProjeId, ProjeAdi, IsleyenKisi, Kategori, Detay, OtomatikMi } = req.body;
+    if (!Olay || !String(Olay).trim()) {
+      return res.status(400).json({ error: 'Olay tanımı zorunludur.' });
+    }
+
+    const isleyen = IsleyenKisi || req.headers['x-user-name'] || 'Yönetici';
+    const newRecord = await recordCerideEvent({
+      Olay: String(Olay).trim(),
+      Tarih: Tarih || new Date().toISOString().slice(0, 10),
+      Saat: Saat || new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+      ProjeId: ProjeId ? Number(ProjeId) : null,
+      ProjeAdi: ProjeAdi || (ProjeId ? '' : 'Genel / Projesiz'),
+      IsleyenKisi: String(isleyen),
+      Kategori: Kategori || 'Genel',
+      Detay: Detay ? String(Detay).trim() : '',
+      OtomatikMi: Boolean(OtomatikMi)
+    });
+
+    return res.status(201).json(newRecord);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/ceride/:id', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { Olay, Tarih, Saat, ProjeId, ProjeAdi, IsleyenKisi, Kategori, Detay } = req.body;
+    
+    const index = memCeride.findIndex(c => Number(c.Id) === id);
+    if (index === -1) {
+      return res.status(404).json({ error: 'Ceride kaydı bulunamadı.' });
+    }
+
+    const updated = {
+      ...memCeride[index],
+      Olay: Olay !== undefined ? String(Olay).trim() : memCeride[index].Olay,
+      Tarih: Tarih !== undefined ? Tarih : memCeride[index].Tarih,
+      Saat: Saat !== undefined ? Saat : memCeride[index].Saat,
+      ProjeId: ProjeId !== undefined ? (ProjeId ? Number(ProjeId) : null) : memCeride[index].ProjeId,
+      ProjeAdi: ProjeAdi !== undefined ? ProjeAdi : memCeride[index].ProjeAdi,
+      IsleyenKisi: IsleyenKisi !== undefined ? String(IsleyenKisi).trim() : memCeride[index].IsleyenKisi,
+      Kategori: Kategori !== undefined ? Kategori : memCeride[index].Kategori,
+      Detay: Detay !== undefined ? String(Detay).trim() : memCeride[index].Detay
+    };
+
+    memCeride[index] = updated;
+    saveMemCeride();
+
+    if (isDbConnected && detectedTables.ceride) {
+      try {
+        await pool.query(`
+          UPDATE ${detectedTables.ceride} SET
+            "Olay" = $1,
+            "Tarih" = $2,
+            "Saat" = $3,
+            "ProjeId" = $4,
+            "ProjeAdi" = $5,
+            "IsleyenKisi" = $6,
+            "Kategori" = $7,
+            "Detay" = $8
+          WHERE "Id" = $9
+        `, [
+          updated.Olay,
+          updated.Tarih,
+          updated.Saat,
+          updated.ProjeId,
+          updated.ProjeAdi,
+          updated.IsleyenKisi,
+          updated.Kategori,
+          updated.Detay,
+          id
+        ]);
+      } catch (dbErr: any) {
+        console.error('[DB UPDATE CERIDE ERROR]', dbErr.message);
+      }
+    }
+
+    return res.json(updated);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/ceride/:id', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    memCeride = memCeride.filter(c => Number(c.Id) !== id);
+    saveMemCeride();
+
+    if (isDbConnected && detectedTables.ceride) {
+      try {
+        await pool.query(`DELETE FROM ${detectedTables.ceride} WHERE "Id" = $1`, [id]);
+      } catch (dbErr: any) {
+        console.error('[DB DELETE CERIDE ERROR]', dbErr.message);
+      }
+    }
+
+    return res.json({ success: true, message: 'Ceride kaydı silindi.' });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
   }
 });
 

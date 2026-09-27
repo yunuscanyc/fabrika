@@ -20,7 +20,8 @@ import {
   X,
   HeartPulse,
   GraduationCap,
-  ShieldCheck
+  ShieldCheck,
+  BookOpen
 } from 'lucide-react';
 import { formatTarihTR } from '../utils/dateUtils';
 
@@ -30,6 +31,7 @@ interface PersonelViewProps {
   gorevler: Gorev[];
   onRefresh: () => void;
   onSelectPersonel?: (p: Personel) => void;
+  onNavigateTab?: (tab: string) => void;
 }
 
 export const PersonelView: React.FC<PersonelViewProps> = ({
@@ -37,6 +39,7 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
   departmanlar,
   gorevler,
   onRefresh,
+  onNavigateTab,
 }) => {
   const [arama, setArama] = useState('');
   const [durumFiltre, setDurumFiltre] = useState<'tumu' | 'aktif' | 'pasif'>('aktif');
@@ -286,6 +289,16 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
             <Settings className="w-4 h-4" />
             <span className="hidden sm:inline">Departman &amp; Görev Ayarları</span>
           </button>
+          {onNavigateTab && (
+            <button
+              onClick={() => onNavigateTab('ceride')}
+              className="flex items-center gap-2 px-3 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-semibold rounded-lg shadow-md transition cursor-pointer"
+              title="Şantiye & İşletme Ceridesi (Günlük Olay Defteri)"
+            >
+              <BookOpen className="w-4 h-4" />
+              <span>Ceride Defteri</span>
+            </button>
+          )}
         </div>
       </div>
 

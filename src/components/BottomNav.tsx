@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Users, Cog, FolderGit2, Truck, Bell, ShoppingCart } from 'lucide-react';
+import { LayoutDashboard, Users, Cog, FolderGit2, Truck, Bell, ShoppingCart, BookOpen } from 'lucide-react';
 import { TabType } from './Navbar';
 
 interface BadgeCounts {
@@ -28,7 +28,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
   return (
     <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur border-t border-slate-800 px-1 py-1 shadow-2xl safe-area-bottom">
-      <div className="grid grid-cols-7 gap-0.5 text-center">
+      <div className="grid grid-cols-8 gap-0.5 text-center">
         <button
           onClick={() => setActiveTab('dashboard')}
           className={`flex flex-col items-center justify-center py-1 rounded-lg transition-all ${
@@ -68,6 +68,18 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         >
           <Users className="w-4 h-4 mb-0.5" />
           <span className="text-[9px] tracking-tight">İK</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('ceride')}
+          className={`flex flex-col items-center justify-center py-1 rounded-lg transition-all ${
+            activeTab === 'ceride'
+              ? 'text-amber-400 font-bold bg-amber-950/50'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <BookOpen className="w-4 h-4 mb-0.5" />
+          <span className="text-[9px] tracking-tight">Ceride</span>
         </button>
 
         <button
