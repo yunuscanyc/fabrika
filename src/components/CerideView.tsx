@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   BookOpen, 
   Plus, 
@@ -23,10 +23,23 @@ import {
   ArrowRight,
   ExternalLink,
   RefreshCw,
-  Sparkles
+  Sparkles,
+  Camera,
+  Image as ImageIcon,
+  X,
+  Eye,
+  Maximize2,
+  ChevronLeft,
+  ChevronRight,
+  FileImage
 } from 'lucide-react';
-import { CerideKaydi, Proje } from '../types';
-import { formatTarihTR } from '../utils/dateUtils';
+import { CerideKaydi, CerideFotograf, Proje } from '../types';
+import { 
+  formatTarihTR, 
+  getTurkiyeSaatStr, 
+  getTurkiyeTarihStr, 
+  getTurkiyeTamZamanStr 
+} from '../utils/dateUtils';
 
 interface CerideViewProps {
   projeler: Proje[];
@@ -34,6 +47,52 @@ interface CerideViewProps {
   userRole?: 'admin' | 'ustabasi';
   onNavigateTab?: (tab: any) => void;
   onSelectProje?: (p: Proje) => void;
+}
+
+// Görseli optimize ederek küçültme (Mobil kameraların 10MB boyutundaki fotoğraflarını tarayıcıda sıkıştırır)
+async function compressImageFile(file: File, maxWidth = 1600, maxHeight = 1600, quality = 0.82): Promise<{ dataUrl: string; sizeStr: string }> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          if (width > height) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+          const sizeInKb = Math.round((compressedDataUrl.length * 3) / 4 / 1024);
+          const sizeStr = sizeInKb > 1024 ? `${(sizeInKb / 1024).toFixed(1)} MB` : `${sizeInKb} KB`;
+          resolve({ dataUrl: compressedDataUrl, sizeStr });
+          return;
+        }
+        // Fallback to original
+        const origSizeKb = Math.round(file.size / 1024);
+        resolve({ dataUrl: e.target?.result as string, sizeStr: `${origSizeKb} KB` });
+      };
+      img.onerror = () => {
+        const origSizeKb = Math.round(file.size / 1024);
+        resolve({ dataUrl: e.target?.result as string, sizeStr: `${origSizeKb} KB` });
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 export const CerideView: React.FC<CerideViewProps> = ({
@@ -57,15 +116,26 @@ export const CerideView: React.FC<CerideViewProps> = ({
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<CerideKaydi | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
 
   // Form State
   const [formOlay, setFormOlay] = useState('');
   const [formKategori, setFormKategori] = useState<CerideKaydi['Kategori']>('Genel');
   const [formProjeId, setFormProjeId] = useState<string>('');
-  const [formTarih, setFormTarih] = useState(new Date().toISOString().slice(0, 10));
-  const [formSaat, setFormSaat] = useState(new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }));
+  const [formTarih, setFormTarih] = useState(getTurkiyeTarihStr());
+  const [formSaat, setFormSaat] = useState(getTurkiyeSaatStr()); // 24 saat formatında Türkiye Saati
   const [formDetay, setFormDetay] = useState('');
   const [formIsleyenKisi, setFormIsleyenKisi] = useState(currentUserName);
+  const [formFotograflar, setFormFotograflar] = useState<CerideFotograf[]>([]);
+
+  // Fotoğraf Lightbox / Tam Ekran Görüntüleyici
+  const [lightboxData, setLightboxData] = useState<{
+    images: CerideFotograf[];
+    index: number;
+    title: string;
+  } | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Ceride verilerini çek
   const fetchCeride = async () => {
@@ -91,29 +161,73 @@ export const CerideView: React.FC<CerideViewProps> = ({
     fetchCeride();
   }, []);
 
-  // Formu Sıfırla / Aç
+  // Formu Sıfırla / Aç (Yeni Kayıt)
   const handleOpenNewModal = () => {
     setEditingItem(null);
     setFormOlay('');
     setFormKategori('Genel');
     setFormProjeId('');
-    setFormTarih(new Date().toISOString().slice(0, 10));
-    setFormSaat(new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }));
+    setFormTarih(getTurkiyeTarihStr());
+    setFormSaat(getTurkiyeSaatStr()); // 24 saat Türkiye saati
     setFormDetay('');
     setFormIsleyenKisi(currentUserName || 'Yönetici');
+    setFormFotograflar([]);
     setModalOpen(true);
   };
 
+  // Düzenleme Modalı Aç
   const handleOpenEditModal = (item: CerideKaydi) => {
     setEditingItem(item);
     setFormOlay(item.Olay);
     setFormKategori(item.Kategori || 'Genel');
     setFormProjeId(item.ProjeId ? String(item.ProjeId) : '');
-    setFormTarih(item.Tarih || new Date().toISOString().slice(0, 10));
-    setFormSaat(item.Saat || '09:00');
+    setFormTarih(item.Tarih || getTurkiyeTarihStr());
+    setFormSaat(item.Saat || getTurkiyeSaatStr());
     setFormDetay(item.Detay || '');
     setFormIsleyenKisi(item.IsleyenKisi || currentUserName);
+    setFormFotograflar(Array.isArray(item.Fotograflar) ? [...item.Fotograflar] : []);
     setModalOpen(true);
+  };
+
+  // Şu anki Türkiye saatini forma aktar
+  const handleSetCurrentTurkeyTime = () => {
+    setFormTarih(getTurkiyeTarihStr());
+    setFormSaat(getTurkiyeSaatStr());
+  };
+
+  // Fotoğraf Seçimi & Sıkıştırma
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploadingPhotos(true);
+    try {
+      const newPhotos: CerideFotograf[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (!file.type.startsWith('image/')) continue;
+
+        const { dataUrl, sizeStr } = await compressImageFile(file);
+        newPhotos.push({
+          Id: `img_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 6)}`,
+          DosyaAdi: file.name,
+          DosyaBoyutu: sizeStr,
+          YuklemeTarihi: getTurkiyeTamZamanStr(),
+          DosyaIcerigi: dataUrl
+        });
+      }
+      setFormFotograflar(prev => [...prev, ...newPhotos]);
+    } catch (err) {
+      console.error('Fotoğraf yükleme hatası:', err);
+      alert('Fotoğraflar işlenirken bir sorun oluştu.');
+    } finally {
+      setUploadingPhotos(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemovePhoto = (index: number) => {
+    setFormFotograflar(prev => prev.filter((_, i) => i !== index));
   };
 
   // Kaydet / Güncelle
@@ -121,6 +235,13 @@ export const CerideView: React.FC<CerideViewProps> = ({
     e.preventDefault();
     if (!formOlay.trim()) {
       alert('Lütfen olay açıklamasını yazınız.');
+      return;
+    }
+
+    // 24 saat format kontrolü (HH:mm)
+    const timeMatch = formSaat.trim().match(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/);
+    if (!timeMatch) {
+      alert('Lütfen saati 24 saat formatında (HH:mm, örn: 14:30) giriniz.');
       return;
     }
 
@@ -133,11 +254,13 @@ export const CerideView: React.FC<CerideViewProps> = ({
         Olay: formOlay.trim(),
         Kategori: formKategori,
         Tarih: formTarih,
-        Saat: formSaat,
+        Saat: formSaat.trim(),
         ProjeId: formProjeId ? Number(formProjeId) : null,
         ProjeAdi: projeAdi,
         IsleyenKisi: formIsleyenKisi.trim() || currentUserName,
         Detay: formDetay.trim(),
+        Fotograflar: formFotograflar,
+        FotoSayisi: formFotograflar.length,
         OtomatikMi: editingItem ? editingItem.OtomatikMi : false
       };
 
@@ -247,18 +370,18 @@ export const CerideView: React.FC<CerideViewProps> = ({
 
   // Filtreleme Mantığı
   const filteredList = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getTurkiyeTarihStr();
     const yesterdayDate = new Date();
     yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-    const yesterday = yesterdayDate.toISOString().slice(0, 10);
+    const yesterday = getTurkiyeTarihStr(yesterdayDate);
 
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const sevenDaysStr = sevenDaysAgo.toISOString().slice(0, 10);
+    const sevenDaysStr = getTurkiyeTarihStr(sevenDaysAgo);
 
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const thirtyDaysStr = thirtyDaysAgo.toISOString().slice(0, 10);
+    const thirtyDaysStr = getTurkiyeTarihStr(thirtyDaysAgo);
 
     return cerideList.filter(item => {
       // Metin arama
@@ -318,7 +441,7 @@ export const CerideView: React.FC<CerideViewProps> = ({
       return;
     }
 
-    const headers = ['ID', 'Tarih', 'Saat', 'Olay', 'Kategori', 'Proje', 'İşleyen Kişi', 'İşlenme Tarihi', 'Detay'];
+    const headers = ['ID', 'Tarih', 'Saat (24s TR)', 'Olay', 'Kategori', 'Proje', 'İşleyen Kişi', 'Foto Sayısı', 'İşlenme Tarihi', 'Detay'];
     const rows = filteredList.map(item => [
       item.Id,
       item.Tarih,
@@ -327,6 +450,7 @@ export const CerideView: React.FC<CerideViewProps> = ({
       `"${item.Kategori || ''}"`,
       `"${(item.ProjeAdi || 'Genel / Projesiz').replace(/"/g, '""')}"`,
       `"${(item.IsleyenKisi || '').replace(/"/g, '""')}"`,
+      item.Fotograflar ? item.Fotograflar.length : (item.FotoSayisi || 0),
       `"${item.IslenmeTarihi || ''}"`,
       `"${(item.Detay || '').replace(/"/g, '""')}"`
     ]);
@@ -336,7 +460,7 @@ export const CerideView: React.FC<CerideViewProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `Ceride_Raporu_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `Ceride_Raporu_${getTurkiyeTarihStr()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -348,10 +472,10 @@ export const CerideView: React.FC<CerideViewProps> = ({
   };
 
   // İstatistikler
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getTurkiyeTarihStr();
   const bugunSayisi = cerideList.filter(c => c.Tarih === todayStr).length;
   const projeliSayisi = cerideList.filter(c => c.ProjeId).length;
-  const siparisSayisi = cerideList.filter(c => c.Kategori === 'Sipariş').length;
+  const fotoluSayisi = cerideList.filter(c => (c.Fotograflar && c.Fotograflar.length > 0) || (c.FotoSayisi && c.FotoSayisi > 0)).length;
 
   return (
     <div className="space-y-6">
@@ -367,8 +491,12 @@ export const CerideView: React.FC<CerideViewProps> = ({
                 <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center gap-2">
                   Şantiye &amp; İşletme Ceridesi
                 </h1>
-                <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-                  Günlük vukuat, makine/araç hareketleri, malzeme teslimatları ve şantiye faaliyet defteri
+                <p className="text-xs sm:text-sm text-slate-400 mt-0.5 flex items-center gap-2 flex-wrap">
+                  <span>Günlük vukuat, şantiye fotoğrafları, malzeme teslimatları ve makine hareketleri</span>
+                  <span className="inline-flex items-center gap-1 text-[11px] bg-slate-800 px-2 py-0.5 rounded-md text-amber-300 font-mono">
+                    <Clock className="w-3 h-3 text-amber-400" />
+                    24 Saat Formatı (TR: GMT+3)
+                  </span>
                 </p>
               </div>
             </div>
@@ -408,7 +536,7 @@ export const CerideView: React.FC<CerideViewProps> = ({
               className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-2 shadow-lg shadow-amber-600/30 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              <span>Yeni Olay Ekle</span>
+              <span>Yeni Olay / Fotoğraf Ekle</span>
             </button>
           </div>
         </div>
@@ -428,8 +556,11 @@ export const CerideView: React.FC<CerideViewProps> = ({
             <div className="text-xl sm:text-2xl font-black text-indigo-400 mt-1">{projeliSayisi}</div>
           </div>
           <div className="bg-slate-800/60 border border-slate-700/60 p-3.5 rounded-xl">
-            <span className="text-[11px] font-medium text-emerald-400 uppercase tracking-wider block">Malzeme &amp; Teslimat</span>
-            <div className="text-xl sm:text-2xl font-black text-emerald-400 mt-1">{siparisSayisi}</div>
+            <span className="text-[11px] font-medium text-rose-400 uppercase tracking-wider block">Fotoğraflı Olaylar</span>
+            <div className="text-xl sm:text-2xl font-black text-rose-400 mt-1 flex items-center gap-1.5">
+              <Camera className="w-5 h-5 text-rose-400 inline" />
+              <span>{fotoluSayisi}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -589,101 +720,142 @@ export const CerideView: React.FC<CerideViewProps> = ({
                     const badge = getKategoriBadge(item.Kategori);
                     const IconComponent = badge.icon;
                     const bagliProje = item.ProjeId ? projeler.find(p => p.ProjeId === item.ProjeId) : null;
+                    const fotolar = Array.isArray(item.Fotograflar) ? item.Fotograflar : [];
 
                     return (
                       <div
                         key={item.Id}
-                        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-amber-500/40 p-4 rounded-xl shadow-xs transition group flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
+                        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-amber-500/40 p-4 rounded-xl shadow-xs transition group flex flex-col gap-3"
                       >
-                        {/* Sol Taraf: İkon, Olay, Detay, Proje */}
-                        <div className="flex items-start gap-3.5 flex-1 min-w-0">
-                          <div className={`p-2.5 rounded-xl border shrink-0 ${badge.bg}`}>
-                            <IconComponent className="w-4 h-4" />
-                          </div>
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                          {/* Sol Taraf: İkon, Olay, Detay, Proje */}
+                          <div className="flex items-start gap-3.5 flex-1 min-w-0">
+                            <div className={`p-2.5 rounded-xl border shrink-0 ${badge.bg}`}>
+                              <IconComponent className="w-4 h-4" />
+                            </div>
 
-                          <div className="space-y-1 min-w-0 flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                                <Clock className="w-3 h-3 text-slate-400" />
-                                {item.Saat || '09:00'}
-                              </span>
-
-                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${badge.bg}`}>
-                                {item.Kategori || 'Genel'}
-                              </span>
-
-                              {item.OtomatikMi ? (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-medium" title="Sistem tarafından otomatik işlendi">
-                                  <Sparkles className="w-2.5 h-2.5 text-amber-500" />
-                                  <span>Otomatik</span>
+                            <div className="space-y-1 min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {/* 24 Saat Formatında Saat (TR) */}
+                                <span className="text-xs font-mono font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md flex items-center gap-1 border border-slate-200 dark:border-slate-700" title="24 Saat Formatı (Türkiye Saati)">
+                                  <Clock className="w-3 h-3 text-amber-500" />
+                                  <span>{item.Saat || '09:00'}</span>
                                 </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 text-[10px] font-medium">
-                                  <span>Manuel</span>
+
+                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${badge.bg}`}>
+                                  {item.Kategori || 'Genel'}
                                 </span>
+
+                                {item.OtomatikMi ? (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-medium" title="Sistem tarafından otomatik işlendi">
+                                    <Sparkles className="w-2.5 h-2.5 text-amber-500" />
+                                    <span>Otomatik</span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 text-[10px] font-medium">
+                                    <span>Manuel</span>
+                                  </span>
+                                )}
+
+                                {fotolar.length > 0 && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 text-[10px] font-bold">
+                                    <Camera className="w-3 h-3" />
+                                    <span>{fotolar.length} Fotoğraf</span>
+                                  </span>
+                                )}
+
+                                {item.ProjeAdi && item.ProjeAdi !== 'Genel / Projesiz' && (
+                                  <span 
+                                    onClick={() => {
+                                      if (bagliProje && onSelectProje) {
+                                        onSelectProje(bagliProje);
+                                        if (onNavigateTab) onNavigateTab('projeler');
+                                      }
+                                    }}
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 ${bagliProje ? 'cursor-pointer hover:bg-indigo-100 transition' : ''}`}
+                                    title={bagliProje ? 'Projeye Git' : ''}
+                                  >
+                                    <Layers className="w-3 h-3" />
+                                    <span>{item.ProjeAdi}</span>
+                                    {bagliProje && <ExternalLink className="w-2.5 h-2.5 ml-0.5 opacity-70" />}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Olay Başlığı */}
+                              <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 leading-snug break-words">
+                                {item.Olay}
+                              </h4>
+
+                              {/* Detay Açıklaması */}
+                              {item.Detay && (
+                                <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">
+                                  {item.Detay}
+                                </p>
                               )}
 
-                              {item.ProjeAdi && item.ProjeAdi !== 'Genel / Projesiz' && (
-                                <span 
-                                  onClick={() => {
-                                    if (bagliProje && onSelectProje) {
-                                      onSelectProje(bagliProje);
-                                      if (onNavigateTab) onNavigateTab('projeler');
-                                    }
-                                  }}
-                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 ${bagliProje ? 'cursor-pointer hover:bg-indigo-100 transition' : ''}`}
-                                  title={bagliProje ? 'Projeye Git' : ''}
+                              {/* Alt Bilgi: İşleyen Kişi ve Sisteme İşlenme Saati */}
+                              <div className="flex items-center gap-3 pt-1 text-[11px] text-slate-400 flex-wrap">
+                                <span className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-300">
+                                  <User className="w-3 h-3 text-amber-500" />
+                                  <span>İşleyen: {item.IsleyenKisi || 'Yönetici'}</span>
+                                </span>
+                                <span>•</span>
+                                <span title="Veritabanına tam kayıt zamanı (Türkiye Saati)">
+                                  İşlenme: {item.IslenmeTarihi || `${item.Tarih} ${item.Saat}`}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Sağ Taraf: Aksiyon Butonları */}
+                          <div className="flex items-center gap-1 self-end sm:self-center shrink-0 opacity-80 group-hover:opacity-100 transition">
+                            <button
+                              onClick={() => handleOpenEditModal(item)}
+                              className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 rounded-lg transition"
+                              title="Düzenle / Fotoğraf Yönet"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(item.Id, item.Olay)}
+                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-slate-800 rounded-lg transition"
+                              title="Sil"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Fotoğraf Galerisi Küçük Önizlemeleri */}
+                        {fotolar.length > 0 && (
+                          <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                            <div className="flex items-center gap-2 overflow-x-auto py-1">
+                              {fotolar.map((f, fIdx) => (
+                                <div
+                                  key={f.Id || fIdx}
+                                  onClick={() => setLightboxData({ images: fotolar, index: fIdx, title: item.Olay })}
+                                  className="relative group/thumb cursor-pointer shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 transition hover:ring-2 hover:ring-amber-500 shadow-2xs"
                                 >
-                                  <Layers className="w-3 h-3" />
-                                  <span>{item.ProjeAdi}</span>
-                                  {bagliProje && <ExternalLink className="w-2.5 h-2.5 ml-0.5 opacity-70" />}
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Olay Başlığı */}
-                            <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 leading-snug break-words">
-                              {item.Olay}
-                            </h4>
-
-                            {/* Detay Açıklaması */}
-                            {item.Detay && (
-                              <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">
-                                {item.Detay}
-                              </p>
-                            )}
-
-                            {/* Alt Bilgi: İşleyen Kişi ve Sisteme İşlenme Saati */}
-                            <div className="flex items-center gap-3 pt-1 text-[11px] text-slate-400">
-                              <span className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-300">
-                                <User className="w-3 h-3 text-amber-500" />
-                                <span>İşleyen: {item.IsleyenKisi || 'Yönetici'}</span>
-                              </span>
-                              <span>•</span>
-                              <span title="Veritabanına tam kayıt zamanı">
-                                Kayıt: {item.IslenmeTarihi || `${item.Tarih} ${item.Saat}`}
-                              </span>
+                                  <img 
+                                    src={f.DosyaIcerigi} 
+                                    alt={f.DosyaAdi || 'Ceride Fotoğrafı'} 
+                                    className="w-full h-full object-cover group-hover/thumb:scale-105 transition duration-200"
+                                    loading="lazy"
+                                  />
+                                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover/thumb:opacity-100 transition flex items-center justify-center text-white">
+                                    <Eye className="w-4 h-4" />
+                                  </div>
+                                  {f.DosyaBoyutu && (
+                                    <span className="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] px-1 rounded font-mono">
+                                      {f.DosyaBoyutu}
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
                             </div>
                           </div>
-                        </div>
-
-                        {/* Sağ Taraf: Aksiyon Butonları */}
-                        <div className="flex items-center gap-1 self-end sm:self-center shrink-0 opacity-80 group-hover:opacity-100 transition">
-                          <button
-                            onClick={() => handleOpenEditModal(item)}
-                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 rounded-lg transition"
-                            title="Düzenle"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(item.Id, item.Olay)}
-                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-slate-800 rounded-lg transition"
-                            title="Sil"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                        )}
                       </div>
                     );
                   })}
@@ -696,24 +868,24 @@ export const CerideView: React.FC<CerideViewProps> = ({
 
       {/* Yeni Kayıt & Düzenleme Modalı */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 my-8 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 shrink-0">
               <div className="flex items-center gap-2">
                 <BookOpen className="w-5 h-5 text-amber-500" />
                 <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  {editingItem ? 'Ceride Kaydını Düzenle' : 'Yeni Ceride Olayı Ekle'}
+                  {editingItem ? 'Ceride Kaydını Düzenle' : 'Yeni Ceride Olayı & Fotoğraf Ekle'}
                 </h3>
               </div>
               <button
                 onClick={() => setModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg leading-none"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg leading-none p-1"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleSubmitForm} className="space-y-4">
+            <form onSubmit={handleSubmitForm} className="space-y-4 overflow-y-auto pr-1 flex-1">
               {/* Olay Tanımı */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
@@ -722,7 +894,7 @@ export const CerideView: React.FC<CerideViewProps> = ({
                 <input
                   type="text"
                   required
-                  placeholder="Örn: 2. Etap ahşap karkas montajı tamamlandı"
+                  placeholder="Örn: Mutfak dolaplarının montajı tamamlandı ve müşteri teslim tutanağı imzalandı"
                   value={formOlay}
                   onChange={(e) => setFormOlay(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs sm:text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -769,31 +941,51 @@ export const CerideView: React.FC<CerideViewProps> = ({
                 </div>
               </div>
 
-              {/* Tarih & Saat */}
-              <div className="grid grid-cols-2 gap-3">
+              {/* Tarih & Saat (24 Saat Formatı - Türkiye Saati) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-amber-50/60 dark:bg-amber-950/20 p-3 rounded-xl border border-amber-200/60 dark:border-amber-900/40">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Olay Tarihi
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Olay Tarihi
+                    </label>
+                  </div>
                   <input
                     type="date"
                     required
                     value={formTarih}
                     onChange={(e) => setFormTarih(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Olay Saati
-                  </label>
-                  <input
-                    type="time"
-                    required
-                    value={formSaat}
-                    onChange={(e) => setFormSaat(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-amber-600" />
+                      <span>Olay Saati (24s - TR)</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleSetCurrentTurkeyTime}
+                      className="text-[10px] text-amber-700 dark:text-amber-300 hover:underline font-bold"
+                    >
+                      Şu Anki Saat
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      placeholder="14:30 (24s)"
+                      pattern="^([01]?[0-9]|2[0-3]):[0-5][0-9]$"
+                      value={formSaat}
+                      onChange={(e) => setFormSaat(e.target.value)}
+                      className="w-full px-3 py-2 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs font-mono font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 block">
+                    Örn: 08:30, 14:45, 21:00 (24 saat esası)
+                  </span>
                 </div>
               </div>
 
@@ -821,16 +1013,86 @@ export const CerideView: React.FC<CerideViewProps> = ({
                   Açıklama / Detaylı Notlar (İsteğe Bağlı)
                 </label>
                 <textarea
-                  rows={3}
-                  placeholder="Gözlemler, teslim tutanakları, firma yetkilisi görüşmeleri veya ek notlar..."
+                  rows={2}
+                  placeholder="Gözlemler, şantiye tutanakları, firma yetkilisi görüşmeleri veya ek notlar..."
                   value={formDetay}
                   onChange={(e) => setFormDetay(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs sm:text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
                 />
               </div>
 
+              {/* Fotoğraf Ekleme Bölümü */}
+              <div className="space-y-2 border-t border-slate-200 dark:border-slate-800 pt-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <Camera className="w-4 h-4 text-rose-500" />
+                    <span>Şantiye &amp; Olay Fotoğrafları</span>
+                    {formFotograflar.length > 0 && (
+                      <span className="text-[10px] bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 px-1.5 py-0.5 rounded-full font-bold">
+                        {formFotograflar.length} adet
+                      </span>
+                    )}
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingPhotos}
+                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+                  >
+                    <Camera className="w-3.5 h-3.5" />
+                    <span>{uploadingPhotos ? 'İşleniyor...' : 'Fotoğraf / Çek'}</span>
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                </div>
+
+                {/* Fotoğraf Küçük Önizlemeleri */}
+                {formFotograflar.length > 0 ? (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 pt-1 max-h-48 overflow-y-auto p-1 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
+                    {formFotograflar.map((foto, idx) => (
+                      <div key={foto.Id || idx} className="relative group/pic rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 aspect-square shadow-2xs">
+                        <img 
+                          src={foto.DosyaIcerigi} 
+                          alt={foto.DosyaAdi} 
+                          className="w-full h-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePhoto(idx)}
+                          className="absolute top-1 right-1 p-1 bg-red-600 hover:bg-red-700 text-white rounded-full transition shadow-md cursor-pointer opacity-90 group-hover/pic:opacity-100"
+                          title="Fotoğrafı Kaldır"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                        {foto.DosyaBoyutu && (
+                          <span className="absolute bottom-1 left-1 bg-black/70 text-white text-[8px] px-1 rounded font-mono">
+                            {foto.DosyaBoyutu}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="py-4 border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-rose-400 rounded-xl text-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition cursor-pointer bg-slate-50/50 dark:bg-slate-950/50"
+                  >
+                    <Camera className="w-6 h-6 mx-auto mb-1 text-slate-300 dark:text-slate-600" />
+                    <p className="text-xs font-semibold">Fotoğraf yüklemek veya kamera ile çekmek için tıklayın</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">JPG, PNG, WEBP desteklenir (otomatik optimize edilir)</p>
+                  </div>
+                )}
+              </div>
+
               {/* Butonlar */}
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-800 shrink-0">
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
@@ -840,7 +1102,7 @@ export const CerideView: React.FC<CerideViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={saving}
+                  disabled={saving || uploadingPhotos}
                   className="px-5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-amber-600/30 cursor-pointer disabled:opacity-50"
                 >
                   {saving ? (
@@ -857,6 +1119,84 @@ export const CerideView: React.FC<CerideViewProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Fotoğraf Tam Ekran Lightbox / Görüntüleyici */}
+      {lightboxData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-md animate-in fade-in duration-150">
+          <div className="relative max-w-4xl w-full max-h-[95vh] flex flex-col items-center">
+            {/* Üst Başlık ve Kapat Butonu */}
+            <div className="w-full flex items-center justify-between text-white pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2 min-w-0">
+                <Camera className="w-4 h-4 text-rose-400 shrink-0" />
+                <span className="text-xs sm:text-sm font-bold truncate">{lightboxData.title}</span>
+                <span className="text-xs text-slate-400 shrink-0">
+                  ({lightboxData.index + 1} / {lightboxData.images.length})
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={lightboxData.images[lightboxData.index]?.DosyaIcerigi}
+                  download={lightboxData.images[lightboxData.index]?.DosyaAdi || 'ceride_foto.jpg'}
+                  className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition"
+                  title="Fotoğrafı İndir"
+                >
+                  <Download className="w-4 h-4" />
+                </a>
+                <button
+                  onClick={() => setLightboxData(null)}
+                  className="p-1.5 bg-slate-800 hover:bg-red-600 text-slate-200 rounded-lg text-xs transition cursor-pointer"
+                  title="Kapat"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Büyük Resim */}
+            <div className="relative w-full flex items-center justify-center my-4 overflow-hidden max-h-[75vh]">
+              <img
+                src={lightboxData.images[lightboxData.index]?.DosyaIcerigi}
+                alt={lightboxData.images[lightboxData.index]?.DosyaAdi || 'Ceride Fotoğrafı'}
+                className="max-h-[75vh] max-w-full object-contain rounded-xl shadow-2xl"
+              />
+
+              {/* Önceki / Sonraki Butonları */}
+              {lightboxData.images.length > 1 && (
+                <>
+                  <button
+                    onClick={() => setLightboxData(prev => prev ? {
+                      ...prev,
+                      index: (prev.index - 1 + prev.images.length) % prev.images.length
+                    } : null)}
+                    className="absolute left-2 p-2 rounded-full bg-slate-900/80 hover:bg-amber-600 text-white transition shadow-lg"
+                  >
+                    <ChevronLeft className="w-6 h-6" />
+                  </button>
+                  <button
+                    onClick={() => setLightboxData(prev => prev ? {
+                      ...prev,
+                      index: (prev.index + 1) % prev.images.length
+                    } : null)}
+                    className="absolute right-2 p-2 rounded-full bg-slate-900/80 hover:bg-amber-600 text-white transition shadow-lg"
+                  >
+                    <ChevronRight className="w-6 h-6" />
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* Alt Dosya Bilgisi */}
+            <div className="text-center text-xs text-slate-400">
+              <span>{lightboxData.images[lightboxData.index]?.DosyaAdi}</span>
+              {lightboxData.images[lightboxData.index]?.DosyaBoyutu && (
+                <span className="ml-2 font-mono text-slate-500">
+                  • {lightboxData.images[lightboxData.index]?.DosyaBoyutu}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       )}

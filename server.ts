@@ -2734,6 +2734,8 @@ async function checkDbConnection() {
             "IsleyenKisi" VARCHAR(100) NOT NULL,
             "Kategori" VARCHAR(50) DEFAULT 'Genel',
             "Detay" TEXT,
+            "Fotograflar" TEXT,
+            "FotoSayisi" INTEGER DEFAULT 0,
             "OtomatikMi" BOOLEAN DEFAULT false,
             "CreatedAt" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
           )
@@ -2742,6 +2744,15 @@ async function checkDbConnection() {
         detectedTables.ceride = '"Ceride"';
       } catch (createErr: any) {
         console.error('[DB] "Ceride" tablosu oluşturulamadı:', createErr.message);
+      }
+    } else {
+      try {
+        await pool.query(`
+          ALTER TABLE ${detectedTables.ceride} ADD COLUMN IF NOT EXISTS "Fotograflar" TEXT;
+          ALTER TABLE ${detectedTables.ceride} ADD COLUMN IF NOT EXISTS "FotoSayisi" INTEGER DEFAULT 0;
+        `);
+      } catch (e: any) {
+        console.log('[DB-MIGRATE] Ceride fotograf kolonu kontrolü:', e.message);
       }
     }
 
@@ -3362,17 +3373,63 @@ let memMakineler: any[] = [];
 // ==========================================
 const CERIDE_FILE = path.join(DATA_DIR, 'mem_ceride.json');
 
+function getTurkiyeTarihStr(): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Istanbul',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(new Date());
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
+
+function getTurkiyeSaatStr(): string {
+  try {
+    return new Intl.DateTimeFormat('tr-TR', {
+      timeZone: 'Europe/Istanbul',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).format(new Date());
+  } catch {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
+}
+
+function getTurkiyeTamZamanStr(): string {
+  try {
+    return new Intl.DateTimeFormat('tr-TR', {
+      timeZone: 'Europe/Istanbul',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).format(new Date());
+  } catch {
+    return new Date().toLocaleString('tr-TR');
+  }
+}
+
 export interface CerideRecord {
   Id: number;
   Olay: string;
-  Tarih: string;
-  Saat: string;
-  IslenmeTarihi: string;
+  Tarih: string; // YYYY-MM-DD
+  Saat: string;  // HH:mm (24 saat, TR saati)
+  IslenmeTarihi: string; // DD.MM.YYYY HH:mm:ss (TR saati)
   ProjeId?: number | null;
   ProjeAdi?: string | null;
   IsleyenKisi: string;
   Kategori: string;
   Detay?: string;
+  Fotograflar?: any[];
+  FotoSayisi?: number;
   OtomatikMi?: boolean;
 }
 
@@ -3380,14 +3437,16 @@ let memCeride: CerideRecord[] = [
   {
     Id: 1,
     Olay: 'Fabrika ve Şantiye Portalı Ceride Sistemi Başlatıldı',
-    Tarih: new Date().toISOString().slice(0, 10),
+    Tarih: getTurkiyeTarihStr(),
     Saat: '08:30',
-    IslenmeTarihi: new Date().toLocaleString('tr-TR'),
+    IslenmeTarihi: getTurkiyeTamZamanStr(),
     ProjeId: null,
     ProjeAdi: 'Genel / Projesiz',
     IsleyenKisi: 'Sistem Yöneticisi',
     Kategori: 'Genel',
     Detay: 'Günlük şantiye ve fabrika faaliyetlerinin kayıt altına alınması için ceride defteri devreye alındı.',
+    Fotograflar: [],
+    FotoSayisi: 0,
     OtomatikMi: true
   }
 ];
@@ -3432,12 +3491,13 @@ async function recordCerideEvent(eventData: {
   IsleyenKisi?: string;
   Kategori?: string;
   Detay?: string;
+  Fotograflar?: any[];
   OtomatikMi?: boolean;
 }): Promise<CerideRecord> {
-  const now = new Date();
-  const dateStr = eventData.Tarih || now.toISOString().slice(0, 10);
-  const timeStr = eventData.Saat || now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-  const islenmeTarihi = now.toLocaleString('tr-TR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const dateStr = eventData.Tarih || getTurkiyeTarihStr();
+  const timeStr = eventData.Saat || getTurkiyeSaatStr();
+  const islenmeTarihi = getTurkiyeTamZamanStr();
+  const fotolar = Array.isArray(eventData.Fotograflar) ? eventData.Fotograflar : [];
 
   const nextId = memCeride.length > 0 ? Math.max(...memCeride.map(c => Number(c.Id) || 0)) + 1 : 1;
   const newRecord: CerideRecord = {
@@ -3451,18 +3511,32 @@ async function recordCerideEvent(eventData: {
     IsleyenKisi: eventData.IsleyenKisi || 'Yönetici',
     Kategori: eventData.Kategori || 'Genel',
     Detay: eventData.Detay || '',
+    Fotograflar: fotolar,
+    FotoSayisi: fotolar.length,
     OtomatikMi: eventData.OtomatikMi !== undefined ? eventData.OtomatikMi : true
   };
 
   memCeride.unshift(newRecord);
   saveMemCeride();
 
-  if (isDbConnected) {
+  if (isDbConnected && detectedTables.ceride) {
     try {
       await pool.query(`
-        INSERT INTO "Ceride" ("Id", "Olay", "Tarih", "Saat", "IslenmeTarihi", "ProjeId", "ProjeAdi", "IsleyenKisi", "Kategori", "Detay", "OtomatikMi", "CreatedAt")
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP)
-        ON CONFLICT ("Id") DO NOTHING
+        INSERT INTO ${detectedTables.ceride} (
+          "Id", "Olay", "Tarih", "Saat", "IslenmeTarihi", "ProjeId", "ProjeAdi", "IsleyenKisi", "Kategori", "Detay", "Fotograflar", "FotoSayisi", "OtomatikMi", "CreatedAt"
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP)
+        ON CONFLICT ("Id") DO UPDATE SET
+          "Olay" = EXCLUDED."Olay",
+          "Tarih" = EXCLUDED."Tarih",
+          "Saat" = EXCLUDED."Saat",
+          "ProjeId" = EXCLUDED."ProjeId",
+          "ProjeAdi" = EXCLUDED."ProjeAdi",
+          "IsleyenKisi" = EXCLUDED."IsleyenKisi",
+          "Kategori" = EXCLUDED."Kategori",
+          "Detay" = EXCLUDED."Detay",
+          "Fotograflar" = EXCLUDED."Fotograflar",
+          "FotoSayisi" = EXCLUDED."FotoSayisi"
       `, [
         newRecord.Id,
         newRecord.Olay,
@@ -3474,10 +3548,27 @@ async function recordCerideEvent(eventData: {
         newRecord.IsleyenKisi,
         newRecord.Kategori,
         newRecord.Detay,
+        JSON.stringify(newRecord.Fotograflar || []),
+        newRecord.FotoSayisi || 0,
         newRecord.OtomatikMi
       ]);
     } catch (e: any) {
       console.error('[DB SAVE CERIDE ERROR]', e.message);
+    }
+  }
+
+  // Kullanıcı Talebi: "Sadece manuel ceride girildiğinde bildirim göndersin"
+  if (newRecord.OtomatikMi === false) {
+    try {
+      const projeStr = newRecord.ProjeAdi && newRecord.ProjeAdi !== 'Genel / Projesiz' ? ` [${newRecord.ProjeAdi}]` : '';
+      const fotoEk = (newRecord.FotoSayisi && newRecord.FotoSayisi > 0) ? ` 📷 (${newRecord.FotoSayisi} Fotoğraf)` : '';
+      sendWebPushNotification('', {
+        title: `📜 Yeni Ceride Kaydı${projeStr}`,
+        body: `${newRecord.IsleyenKisi} (${newRecord.Saat}): ${newRecord.Olay}${fotoEk}`,
+        url: '/'
+      }).catch(() => {});
+    } catch (pushErr: any) {
+      console.error('[CERIDE PUSH NOTIFICATION ERROR]', pushErr.message);
     }
   }
 
@@ -9795,7 +9886,22 @@ app.get('/api/ceride', async (req, res) => {
       try {
         const dbRes = await pool.query(`SELECT * FROM ${detectedTables.ceride} ORDER BY "Id" DESC LIMIT 1000`);
         if (dbRes.rows.length > 0) {
-          return res.json(dbRes.rows);
+          const list = dbRes.rows.map(r => {
+            let fotolar = [];
+            try {
+              if (typeof r.Fotograflar === 'string') {
+                fotolar = JSON.parse(r.Fotograflar || '[]');
+              } else if (Array.isArray(r.Fotograflar)) {
+                fotolar = r.Fotograflar;
+              }
+            } catch {}
+            return {
+              ...r,
+              Fotograflar: fotolar,
+              FotoSayisi: Number(r.FotoSayisi) || fotolar.length
+            };
+          });
+          return res.json(list);
         }
       } catch (dbErr: any) {
         console.error('[DB GET CERIDE ERROR]', dbErr.message);
@@ -9809,7 +9915,7 @@ app.get('/api/ceride', async (req, res) => {
 
 app.post('/api/ceride', async (req, res) => {
   try {
-    const { Olay, Tarih, Saat, ProjeId, ProjeAdi, IsleyenKisi, Kategori, Detay, OtomatikMi } = req.body;
+    const { Olay, Tarih, Saat, ProjeId, ProjeAdi, IsleyenKisi, Kategori, Detay, Fotograflar, OtomatikMi } = req.body;
     if (!Olay || !String(Olay).trim()) {
       return res.status(400).json({ error: 'Olay tanımı zorunludur.' });
     }
@@ -9817,13 +9923,14 @@ app.post('/api/ceride', async (req, res) => {
     const isleyen = IsleyenKisi || req.headers['x-user-name'] || 'Yönetici';
     const newRecord = await recordCerideEvent({
       Olay: String(Olay).trim(),
-      Tarih: Tarih || new Date().toISOString().slice(0, 10),
-      Saat: Saat || new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+      Tarih: Tarih || getTurkiyeTarihStr(),
+      Saat: Saat || getTurkiyeSaatStr(),
       ProjeId: ProjeId ? Number(ProjeId) : null,
       ProjeAdi: ProjeAdi || (ProjeId ? '' : 'Genel / Projesiz'),
       IsleyenKisi: String(isleyen),
       Kategori: Kategori || 'Genel',
       Detay: Detay ? String(Detay).trim() : '',
+      Fotograflar: Array.isArray(Fotograflar) ? Fotograflar : [],
       OtomatikMi: Boolean(OtomatikMi)
     });
 
@@ -9836,13 +9943,14 @@ app.post('/api/ceride', async (req, res) => {
 app.put('/api/ceride/:id', async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const { Olay, Tarih, Saat, ProjeId, ProjeAdi, IsleyenKisi, Kategori, Detay } = req.body;
+    const { Olay, Tarih, Saat, ProjeId, ProjeAdi, IsleyenKisi, Kategori, Detay, Fotograflar } = req.body;
     
     const index = memCeride.findIndex(c => Number(c.Id) === id);
     if (index === -1) {
       return res.status(404).json({ error: 'Ceride kaydı bulunamadı.' });
     }
 
+    const updatedFotolar = Array.isArray(Fotograflar) ? Fotograflar : (memCeride[index].Fotograflar || []);
     const updated = {
       ...memCeride[index],
       Olay: Olay !== undefined ? String(Olay).trim() : memCeride[index].Olay,
@@ -9852,7 +9960,9 @@ app.put('/api/ceride/:id', async (req, res) => {
       ProjeAdi: ProjeAdi !== undefined ? ProjeAdi : memCeride[index].ProjeAdi,
       IsleyenKisi: IsleyenKisi !== undefined ? String(IsleyenKisi).trim() : memCeride[index].IsleyenKisi,
       Kategori: Kategori !== undefined ? Kategori : memCeride[index].Kategori,
-      Detay: Detay !== undefined ? String(Detay).trim() : memCeride[index].Detay
+      Detay: Detay !== undefined ? String(Detay).trim() : memCeride[index].Detay,
+      Fotograflar: updatedFotolar,
+      FotoSayisi: updatedFotolar.length
     };
 
     memCeride[index] = updated;
@@ -9869,8 +9979,10 @@ app.put('/api/ceride/:id', async (req, res) => {
             "ProjeAdi" = $5,
             "IsleyenKisi" = $6,
             "Kategori" = $7,
-            "Detay" = $8
-          WHERE "Id" = $9
+            "Detay" = $8,
+            "Fotograflar" = $9,
+            "FotoSayisi" = $10
+          WHERE "Id" = $11
         `, [
           updated.Olay,
           updated.Tarih,
@@ -9880,6 +9992,8 @@ app.put('/api/ceride/:id', async (req, res) => {
           updated.IsleyenKisi,
           updated.Kategori,
           updated.Detay,
+          JSON.stringify(updated.Fotograflar || []),
+          updated.FotoSayisi || 0,
           id
         ]);
       } catch (dbErr: any) {

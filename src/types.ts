@@ -585,17 +585,27 @@ export interface SehirDisiGorevlendirme {
   Durum: 'Aktif' | 'Tamamlandı' | 'İptal';
 }
 
+export interface CerideFotograf {
+  Id?: string | number;
+  DosyaAdi: string;
+  DosyaBoyutu?: string;
+  YuklemeTarihi?: string;
+  DosyaIcerigi: string; // Base64 data URL
+}
+
 export interface CerideKaydi {
   Id: number;
   Olay: string;
   Tarih: string; // YYYY-MM-DD
-  Saat: string;  // HH:mm
-  IslenmeTarihi: string; // YYYY-MM-DD HH:mm:ss
+  Saat: string;  // HH:mm (24 saat formatında, Türkiye saati)
+  IslenmeTarihi: string; // DD.MM.YYYY HH:mm:ss (Türkiye saati)
   ProjeId?: number | null;
   ProjeAdi?: string | null;
   IsleyenKisi: string; // PIN esaslı kullanıcı adı
   Kategori: 'Proje' | 'Sipariş' | 'Makine' | 'Araç' | 'Personel / İK' | 'Şantiye' | 'Genel';
   Detay?: string;
+  Fotograflar?: CerideFotograf[];
+  FotoSayisi?: number;
   OtomatikMi?: boolean;
 }
 

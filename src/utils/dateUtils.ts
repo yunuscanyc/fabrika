@@ -275,3 +275,67 @@ export function getIlkMesaiGunu(bitisTarihi: string, rejim: '5gun' | '6gun' = '5
   }
   return tarihKaydir(bitisTarihi, 1); // Güvenli fallback
 }
+
+// =========================================================================
+// Türkiye Saati (Europe/Istanbul - GMT+3) ve 24 Saat Formatı Yardımcıları
+// =========================================================================
+
+/**
+ * Türkiye saat dilimine (Europe/Istanbul) göre 24 saat formatında (HH:mm) saat döndürür.
+ * Örn: "14:35", "08:15", "23:05"
+ */
+export function getTurkiyeSaatStr(dateObj?: Date): string {
+  try {
+    const d = dateObj || new Date();
+    return new Intl.DateTimeFormat('tr-TR', {
+      timeZone: 'Europe/Istanbul',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).format(d);
+  } catch {
+    const d = dateObj || new Date();
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
+}
+
+/**
+ * Türkiye saat dilimine (Europe/Istanbul) göre YYYY-MM-DD formatında bugünün tarihini döndürür.
+ */
+export function getTurkiyeTarihStr(dateObj?: Date): string {
+  try {
+    const d = dateObj || new Date();
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Istanbul',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(d);
+  } catch {
+    return getBugunIso();
+  }
+}
+
+/**
+ * Türkiye saat dilimine (Europe/Istanbul) göre tam tarih ve 24 saat formatında zaman damgası döndürür.
+ * Örn: "27.09.2026 14:35:22"
+ */
+export function getTurkiyeTamZamanStr(dateObj?: Date): string {
+  try {
+    const d = dateObj || new Date();
+    return new Intl.DateTimeFormat('tr-TR', {
+      timeZone: 'Europe/Istanbul',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).format(d);
+  } catch {
+    const now = dateObj || new Date();
+    return now.toLocaleString('tr-TR');
+  }
+}
+
