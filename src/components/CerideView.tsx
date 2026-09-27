@@ -106,11 +106,11 @@ export const CerideView: React.FC<CerideViewProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Filtreler
+  // Filtreler (Varsayılan: Sadece Bugün - Boşuna veri akışı olmasın)
   const [searchTerm, setSearchTerm] = useState('');
   const [kategoriFilter, setKategoriFilter] = useState('Tümü');
   const [projeFilter, setProjeFilter] = useState('Tümü');
-  const [tarihFilter, setTarihFilter] = useState<'tumu' | 'bugun' | 'dun' | 'hafta' | 'ay'>('tumu');
+  const [tarihFilter, setTarihFilter] = useState<'bugun' | 'dun' | 'hafta' | 'ay' | 'tumu'>('bugun');
 
   // Modal Durumları
   const [modalOpen, setModalOpen] = useState(false);
@@ -137,12 +137,12 @@ export const CerideView: React.FC<CerideViewProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Ceride verilerini çek
-  const fetchCeride = async () => {
+  // Ceride verilerini çek (Varsayılan: Sadece Bugün - Boşuna veri akışı olmasın)
+  const fetchCeride = async (aralik: string = tarihFilter) => {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch('/api/ceride');
+      const res = await fetch(`/api/ceride?aralik=${aralik}`);
       if (res.ok) {
         const data = await res.json();
         setCerideList(Array.isArray(data) ? data : []);
@@ -158,8 +158,14 @@ export const CerideView: React.FC<CerideViewProps> = ({
   };
 
   useEffect(() => {
-    fetchCeride();
+    // İlk açılışta boşuna veri akışı olmaması için varsayılan olarak SADECE BUGÜN yüklenir
+    fetchCeride('bugun');
   }, []);
+
+  const handleFilterChange = (yeniAralik: 'bugun' | 'dun' | 'hafta' | 'ay' | 'tumu') => {
+    setTarihFilter(yeniAralik);
+    fetchCeride(yeniAralik);
+  };
 
   // Formu Sıfırla / Aç (Yeni Kayıt)
   const handleOpenNewModal = () => {
@@ -291,7 +297,7 @@ export const CerideView: React.FC<CerideViewProps> = ({
       }
 
       setModalOpen(false);
-      fetchCeride();
+      fetchCeride(tarihFilter);
     } catch (err: any) {
       alert('Hata: ' + (err.message || 'İşlem gerçekleştirilemedi.'));
     } finally {
@@ -497,6 +503,9 @@ export const CerideView: React.FC<CerideViewProps> = ({
                     <Clock className="w-3 h-3 text-amber-400" />
                     24 Saat Formatı (TR: GMT+3)
                   </span>
+                  <span className="inline-flex items-center gap-1 text-[11px] bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 px-2 py-0.5 rounded-md font-medium" title="Hızlı açılış için varsayılan olarak sadece bugünün olayları yüklenir">
+                    ⚡ Hızlı Yükleme (Sadece Bugün)
+                  </span>
                 </p>
               </div>
             </div>
@@ -504,9 +513,9 @@ export const CerideView: React.FC<CerideViewProps> = ({
 
           <div className="flex items-center gap-2.5 flex-wrap">
             <button
-              onClick={fetchCeride}
+              onClick={() => fetchCeride(tarihFilter)}
               disabled={loading}
-              className="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-semibold border border-slate-700 transition flex items-center gap-1.5"
+              className="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-semibold border border-slate-700 transition flex items-center gap-1.5 cursor-pointer"
               title="Yenile"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -628,44 +637,55 @@ export const CerideView: React.FC<CerideViewProps> = ({
         {/* Zaman Aralığı */}
         <div className="flex items-center gap-1 text-xs bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
           <button
-            onClick={() => setTarihFilter('tumu')}
-            className={`px-2.5 py-1.5 rounded-lg font-semibold transition ${
-              tarihFilter === 'tumu'
-                ? 'bg-white dark:bg-slate-950 text-slate-900 dark:text-white shadow-xs'
-                : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
-            }`}
-          >
-            Tümü
-          </button>
-          <button
-            onClick={() => setTarihFilter('bugun')}
-            className={`px-2.5 py-1.5 rounded-lg font-semibold transition ${
+            onClick={() => handleFilterChange('bugun')}
+            className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer flex items-center gap-1 ${
               tarihFilter === 'bugun'
                 ? 'bg-amber-600 text-white shadow-xs'
-                : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
+                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            Bugün
+            <span>Bugün</span>
+            <span className="text-[10px] opacity-80 font-normal">(Varsayılan)</span>
           </button>
           <button
-            onClick={() => setTarihFilter('dun')}
-            className={`px-2.5 py-1.5 rounded-lg font-semibold transition ${
+            onClick={() => handleFilterChange('dun')}
+            className={`px-2.5 py-1.5 rounded-lg font-bold transition cursor-pointer ${
               tarihFilter === 'dun'
-                ? 'bg-white dark:bg-slate-950 text-slate-900 dark:text-white shadow-xs'
-                : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
+                ? 'bg-amber-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             Dün
           </button>
           <button
-            onClick={() => setTarihFilter('hafta')}
-            className={`px-2.5 py-1.5 rounded-lg font-semibold transition ${
+            onClick={() => handleFilterChange('hafta')}
+            className={`px-2.5 py-1.5 rounded-lg font-bold transition cursor-pointer ${
               tarihFilter === 'hafta'
-                ? 'bg-white dark:bg-slate-950 text-slate-900 dark:text-white shadow-xs'
-                : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
+                ? 'bg-amber-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             Son 7 Gün
+          </button>
+          <button
+            onClick={() => handleFilterChange('ay')}
+            className={`px-2.5 py-1.5 rounded-lg font-bold transition cursor-pointer ${
+              tarihFilter === 'ay'
+                ? 'bg-amber-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            Son 30 Gün
+          </button>
+          <button
+            onClick={() => handleFilterChange('tumu')}
+            className={`px-2.5 py-1.5 rounded-lg font-bold transition cursor-pointer ${
+              tarihFilter === 'tumu'
+                ? 'bg-amber-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            Tüm Geçmiş
           </button>
         </div>
       </div>

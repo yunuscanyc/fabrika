@@ -3373,16 +3373,18 @@ let memMakineler: any[] = [];
 // ==========================================
 const CERIDE_FILE = path.join(DATA_DIR, 'mem_ceride.json');
 
-function getTurkiyeTarihStr(): string {
+function getTurkiyeTarihStr(dateObj?: Date): string {
   try {
+    const d = dateObj || new Date();
     return new Intl.DateTimeFormat('en-CA', {
       timeZone: 'Europe/Istanbul',
       year: 'numeric',
       month: '2-digit',
       day: '2-digit'
-    }).format(new Date());
+    }).format(d);
   } catch {
-    return new Date().toISOString().slice(0, 10);
+    const d = dateObj || new Date();
+    return d.toISOString().slice(0, 10);
   }
 }
 
@@ -9882,32 +9884,98 @@ app.delete('/api/sehir-disi-gorevler/:id', async (req, res) => {
 // ==========================================
 app.get('/api/ceride', async (req, res) => {
   try {
+    const aralik = String(req.query.aralik || 'bugun').toLowerCase();
+    const spesifikTarih = req.query.tarih ? String(req.query.tarih).trim() : null;
+
+    const bugunStr = getTurkiyeTarihStr();
+    
+    // Dün
+    const dunDate = new Date();
+    dunDate.setDate(dunDate.getDate() - 1);
+    const dunStr = getTurkiyeTarihStr(dunDate);
+
+    // Son 7 gün
+    const yediGunDate = new Date();
+    yediGunDate.setDate(yediGunDate.getDate() - 7);
+    const yediGunStr = getTurkiyeTarihStr(yediGunDate);
+
+    // Son 30 gün
+    const otuzGunDate = new Date();
+    otuzGunDate.setDate(otuzGunDate.getDate() - 30);
+    const otuzGunStr = getTurkiyeTarihStr(otuzGunDate);
+
     if (isDbConnected && detectedTables.ceride) {
       try {
-        const dbRes = await pool.query(`SELECT * FROM ${detectedTables.ceride} ORDER BY "Id" DESC LIMIT 1000`);
-        if (dbRes.rows.length > 0) {
-          const list = dbRes.rows.map(r => {
-            let fotolar = [];
-            try {
-              if (typeof r.Fotograflar === 'string') {
-                fotolar = JSON.parse(r.Fotograflar || '[]');
-              } else if (Array.isArray(r.Fotograflar)) {
-                fotolar = r.Fotograflar;
-              }
-            } catch {}
-            return {
-              ...r,
-              Fotograflar: fotolar,
-              FotoSayisi: Number(r.FotoSayisi) || fotolar.length
-            };
-          });
-          return res.json(list);
+        let whereClause = '';
+        let queryParams: any[] = [];
+
+        if (spesifikTarih) {
+          whereClause = 'WHERE "Tarih" = $1';
+          queryParams = [spesifikTarih];
+        } else if (aralik === 'bugun') {
+          whereClause = 'WHERE "Tarih" = $1';
+          queryParams = [bugunStr];
+        } else if (aralik === 'dun') {
+          whereClause = 'WHERE "Tarih" = $1';
+          queryParams = [dunStr];
+        } else if (aralik === 'hafta') {
+          whereClause = 'WHERE "Tarih" >= $1';
+          queryParams = [yediGunStr];
+        } else if (aralik === 'ay') {
+          whereClause = 'WHERE "Tarih" >= $1';
+          queryParams = [otuzGunStr];
+        } else if (aralik === 'tumu') {
+          whereClause = '';
+          queryParams = [];
+        } else {
+          // Varsayılan: Bugün (boşuna veri akışı olmasın)
+          whereClause = 'WHERE "Tarih" = $1';
+          queryParams = [bugunStr];
         }
+
+        const sql = `SELECT * FROM ${detectedTables.ceride} ${whereClause} ORDER BY "Id" DESC LIMIT 1000`;
+        const dbRes = await pool.query(sql, queryParams);
+        
+        const list = dbRes.rows.map(r => {
+          let fotolar = [];
+          try {
+            if (typeof r.Fotograflar === 'string') {
+              fotolar = JSON.parse(r.Fotograflar || '[]');
+            } else if (Array.isArray(r.Fotograflar)) {
+              fotolar = r.Fotograflar;
+            }
+          } catch {}
+          return {
+            ...r,
+            Fotograflar: fotolar,
+            FotoSayisi: Number(r.FotoSayisi) || fotolar.length
+          };
+        });
+        return res.json(list);
       } catch (dbErr: any) {
         console.error('[DB GET CERIDE ERROR]', dbErr.message);
       }
     }
-    return res.json(memCeride);
+
+    // Bellek içi fallback (Veritabanı bağlantısı yoksa)
+    let filteredMem = memCeride;
+    if (spesifikTarih) {
+      filteredMem = memCeride.filter(c => c.Tarih === spesifikTarih);
+    } else if (aralik === 'bugun') {
+      filteredMem = memCeride.filter(c => c.Tarih === bugunStr);
+    } else if (aralik === 'dun') {
+      filteredMem = memCeride.filter(c => c.Tarih === dunStr);
+    } else if (aralik === 'hafta') {
+      filteredMem = memCeride.filter(c => c.Tarih >= yediGunStr);
+    } else if (aralik === 'ay') {
+      filteredMem = memCeride.filter(c => c.Tarih >= otuzGunStr);
+    } else if (aralik === 'tumu') {
+      filteredMem = memCeride;
+    } else {
+      filteredMem = memCeride.filter(c => c.Tarih === bugunStr);
+    }
+
+    return res.json(filteredMem);
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
