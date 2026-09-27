@@ -34,6 +34,7 @@ import {
   FileImage
 } from 'lucide-react';
 import { CerideKaydi, CerideFotograf, Proje } from '../types';
+import { PageLoadingIndicator } from './PageLoadingIndicator';
 import { 
   formatTarihTR, 
   getTurkiyeSaatStr, 
@@ -137,22 +138,45 @@ export const CerideView: React.FC<CerideViewProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Yükleme Sayacı State
+  const [yuklenenCount, setYuklenenCount] = useState<number>(0);
+  const [toplamCount, setToplamCount] = useState<number>(0);
+
   // Ceride verilerini çek (Varsayılan: Sadece Bugün - Boşuna veri akışı olmasın)
   const fetchCeride = async (aralik: string = tarihFilter) => {
     try {
       setLoading(true);
       setError(null);
+      setYuklenenCount(0);
+      setToplamCount(0);
       const res = await fetch(`/api/ceride?aralik=${aralik}`);
       if (res.ok) {
         const data = await res.json();
-        setCerideList(Array.isArray(data) ? data : []);
+        const list = Array.isArray(data) ? data : [];
+        setToplamCount(list.length);
+        if (list.length === 0) {
+          setYuklenenCount(0);
+          setCerideList([]);
+          setLoading(false);
+        } else {
+          let curr = 0;
+          const step = Math.max(1, Math.ceil(list.length / 8));
+          const timer = setInterval(() => {
+            curr = Math.min(list.length, curr + step);
+            setYuklenenCount(curr);
+            if (curr >= list.length) {
+              clearInterval(timer);
+              setCerideList(list);
+              setLoading(false);
+            }
+          }, 25);
+        }
       } else {
         throw new Error('Ceride verileri alınamadı.');
       }
     } catch (err: any) {
       console.error('Ceride fetch error:', err);
       setError(err.message || 'Bir hata oluştu');
-    } finally {
       setLoading(false);
     }
   };
@@ -692,10 +716,11 @@ export const CerideView: React.FC<CerideViewProps> = ({
 
       {/* Ceride Listesi / Zaman Çizelgesi */}
       {loading ? (
-        <div className="py-20 text-center text-slate-400 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
-          <RefreshCw className="w-8 h-8 animate-spin mx-auto text-amber-500 mb-3" />
-          <p className="text-sm font-semibold">Ceride kayıtları yükleniyor...</p>
-        </div>
+        <PageLoadingIndicator
+          baslik="Şantiye Ceridesi Yükleniyor..."
+          yuklenenCount={yuklenenCount}
+          toplamCount={toplamCount}
+        />
       ) : Object.keys(groupedByDate).length === 0 ? (
         <div className="py-16 text-center text-slate-500 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 p-8 space-y-3">
           <BookOpen className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto" />

@@ -17,6 +17,7 @@ import { OfflineIndicator } from './components/OfflineIndicator';
 import { LoginScreen } from './components/LoginScreen';
 import { LockScreen } from './components/LockScreen';
 import { SecuritySettingsModal } from './components/SecuritySettingsModal';
+import { PageLoadingIndicator } from './components/PageLoadingIndicator';
 import { Proje, Arac, BakimKaydi, Hatirlatici, OzetIstatistikler, Personel, IzinKaydi, Makine, Departman, Gorev, AjandaBildirimi } from './types';
 
 export default function App() {
@@ -67,6 +68,43 @@ export default function App() {
   const [departmanlar, setDepartmanlar] = useState<Departman[]>([]);
   const [gorevler, setGorevler] = useState<Gorev[]>([]);
   const [yukleniyor, setYukleniyor] = useState(true);
+
+  // Sayfa Yükleme & Progress Durumu
+  const [sayfaYukleniyor, setSayfaYukleniyor] = useState<boolean>(true);
+  const [sayfaBaslik, setSayfaBaslik] = useState<string>('Veriler Yükleniyor...');
+  const [yuklenenCount, setYuklenenCount] = useState<number>(0);
+  const [toplamCount, setToplamCount] = useState<number>(0);
+
+  const startPageLoading = (title: string) => {
+    setSayfaBaslik(title);
+    setYuklenenCount(0);
+    setToplamCount(0);
+    setSayfaYukleniyor(true);
+    setYukleniyor(true);
+  };
+
+  const finishPageLoadingWithCount = (total: number) => {
+    setToplamCount(total);
+    if (total === 0) {
+      setYuklenenCount(0);
+      setSayfaYukleniyor(false);
+      setYukleniyor(false);
+      return;
+    }
+    let current = 0;
+    const step = Math.max(1, Math.ceil(total / 8));
+    const interval = setInterval(() => {
+      current = Math.min(total, current + step);
+      setYuklenenCount(current);
+      if (current >= total) {
+        clearInterval(interval);
+        setTimeout(() => {
+          setSayfaYukleniyor(false);
+          setYukleniyor(false);
+        }, 150);
+      }
+    }, 25);
+  };
 
   // Oturum ve Kimlik Doğrulama Kontrolü (F5 veya Yeniden Yükleme Dahil)
   useEffect(() => {
@@ -329,42 +367,20 @@ export default function App() {
     };
   }, []);
 
-  // Ajanda Bildirimlerini ve Güncel Hatırlatıcı Listesini Getir (Canlı Senkronizasyon)
+  // Ajanda Bildirimlerini Getir (Canlı Senkronizasyon - Bildirim Polling)
   const yukleAjandaBildirimleri = useCallback(async () => {
     if (userRole !== 'admin') return;
     try {
       const uName = sessionStorage.getItem('rende_user_name') || currentUserName || '1. Yönetici';
-      
-      if (activeTab === 'hatirlaticilar') {
-        const [resBildirim, resHatirlatici] = await Promise.all([
-          fetch(`/api/ajanda/bildirimler?user=${encodeURIComponent(uName)}`),
-          fetch('/api/hatirlaticilar')
-        ]);
-
-        if (resBildirim.ok) {
-          const data = await resBildirim.json();
-          if (data && Array.isArray(data.bildirimler)) {
-            setAjandaBildirimler(data.bildirimler);
-          }
-        }
-
-        if (resHatirlatici.ok) {
-          const hList = await resHatirlatici.json();
-          if (Array.isArray(hList)) {
-            setHatirlaticilar(hList);
-          }
-        }
-      } else {
-        const resBildirim = await fetch(`/api/ajanda/bildirimler?user=${encodeURIComponent(uName)}`);
-        if (resBildirim.ok) {
-          const data = await resBildirim.json();
-          if (data && Array.isArray(data.bildirimler)) {
-            setAjandaBildirimler(data.bildirimler);
-          }
+      const resBildirim = await fetch(`/api/ajanda/bildirimler?user=${encodeURIComponent(uName)}`);
+      if (resBildirim.ok) {
+        const data = await resBildirim.json();
+        if (data && Array.isArray(data.bildirimler)) {
+          setAjandaBildirimler(data.bildirimler);
         }
       }
     } catch (e) {}
-  }, [userRole, currentUserName, activeTab]);
+  }, [userRole, currentUserName]);
 
   // Periyodik Ajanda Bildirim Polling (4 saniyede bir)
   useEffect(() => {
@@ -483,13 +499,14 @@ export default function App() {
     setIsLocked(false);
   };
 
-  // Sekme değiştiğinde sadece o sekmeye ait detay verilerini yükle (Lazy Loading)
+  // Sekme değiştiğinde sadece o sekmeye ait detay verilerini yükle (Lazy Loading + Progress)
   useEffect(() => {
     if (!isAuthenticated || isLocked) return;
 
     const yukleAktifSekmeVerisi = async () => {
       try {
         if (activeTab === 'dashboard') {
+          startPageLoading('Dashboard İstatistikleri Yükleniyor...');
           const [resOzet, resDbStatus, resSiparisOzet] = await Promise.all([
             fetch('/api/ozet').then(r => r.json()).catch(() => null),
             fetch('/api/db-status').then(r => r.json()).catch(() => null),
@@ -505,37 +522,53 @@ export default function App() {
             setUnreadOrdersCount(resSiparisOzet.okunmamisUstabasi);
           }
           if (resDbStatus) setDbStatus(resDbStatus);
+          finishPageLoadingWithCount(resOzet ? 10 : 0);
         } else if (activeTab === 'projeler') {
+          startPageLoading('Projeler & Şantiyeler Yükleniyor...');
           const resProjeler = await fetch('/api/projeler').then(r => r.json()).catch(() => []);
-          if (Array.isArray(resProjeler)) setProjeler(resProjeler);
+          const list = Array.isArray(resProjeler) ? resProjeler : [];
+          setProjeler(list);
+          finishPageLoadingWithCount(list.length);
         } else if (activeTab === 'araclar') {
+          startPageLoading('Araç Filosu & Bakım Kayıtları Yükleniyor...');
           const resAraclar = await fetch('/api/araclar').then(r => r.json()).catch(() => []);
-          if (Array.isArray(resAraclar)) setAraclar(resAraclar);
+          const list = Array.isArray(resAraclar) ? resAraclar : [];
+          setAraclar(list);
+          finishPageLoadingWithCount(list.length);
         } else if (activeTab === 'hatirlaticilar') {
+          startPageLoading('Ajanda & Hatırlatıcılar Yükleniyor...');
           const resHatirlaticilar = await fetch('/api/hatirlaticilar').then(r => r.json()).catch(() => []);
-          if (Array.isArray(resHatirlaticilar)) {
-            setHatirlaticilar(resHatirlaticilar);
-            try {
-              localStorage.setItem('fabrika_hatirlaticilar_cache_v2', JSON.stringify(resHatirlaticilar));
-            } catch (e) {}
-          }
+          const list = Array.isArray(resHatirlaticilar) ? resHatirlaticilar : [];
+          setHatirlaticilar(list);
+          try {
+            localStorage.setItem('fabrika_hatirlaticilar_cache_v2', JSON.stringify(list));
+          } catch (e) {}
+          finishPageLoadingWithCount(list.length);
         } else if (activeTab === 'personel') {
+          startPageLoading('Personel & İK Kayıtları Yükleniyor...');
           const [resPersoneller, resIzinler, resDepartmanlar, resGorevler] = await Promise.all([
             fetch('/api/personeller').then(r => r.json()).catch(() => []),
             fetch('/api/izinler').then(r => r.json()).catch(() => []),
             fetch('/api/departmanlar').then(r => r.json()).catch(() => []),
             fetch('/api/gorevler').then(r => r.json()).catch(() => []),
           ]);
+          const pList = Array.isArray(resPersoneller) ? resPersoneller : [];
           if (Array.isArray(resPersoneller)) setPersoneller(resPersoneller);
           if (Array.isArray(resIzinler)) setIzinler(resIzinler);
           if (Array.isArray(resDepartmanlar)) setDepartmanlar(resDepartmanlar);
           if (Array.isArray(resGorevler)) setGorevler(resGorevler);
+          finishPageLoadingWithCount(pList.length);
         } else if (activeTab === 'makineler') {
+          startPageLoading('Makine Parkuru Yükleniyor...');
           const resMakineler = await fetch('/api/makineler').then(r => r.json()).catch(() => []);
-          if (Array.isArray(resMakineler)) setMakineler(resMakineler);
+          const list = Array.isArray(resMakineler) ? resMakineler : [];
+          setMakineler(list);
+          finishPageLoadingWithCount(list.length);
         }
       } catch (err) {
         console.error('Sekme verisi senkronizasyon hatası:', err);
+        setSayfaYukleniyor(false);
+        setYukleniyor(false);
       }
     };
 
@@ -1017,11 +1050,12 @@ export default function App() {
 
       {/* Ana İçerik Alanı */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-4 sm:pt-6">
-        {yukleniyor && (
-          <div className="flex items-center justify-center p-8 text-xs text-slate-500">
-            <span className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-2"></span>
-            Veriler senkronize ediliyor...
-          </div>
+        {(sayfaYukleniyor || yukleniyor) && (
+          <PageLoadingIndicator
+            baslik={sayfaBaslik}
+            yuklenenCount={yuklenenCount}
+            toplamCount={toplamCount}
+          />
         )}
 
         {/* Ustabaşı Modunda Doğrudan ve Yalnızca Sipariş Modülü Açılır */}

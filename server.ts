@@ -3931,73 +3931,76 @@ async function getProjelerList(): Promise<any[]> {
 }
 
 // Canlı Araçları Getir (Önce Gerçek DB, Bulunamazsa Bellek)
+// Canlı Araçları Getir (Önce Gerçek DB, Bulunamazsa Bellek)
 async function getAraclarList(aktifSadece = false): Promise<any[]> {
   if (isDbConnected && detectedTables.araclar) {
     try {
-      const aRes = await pool.query(`SELECT * FROM ${detectedTables.araclar} ORDER BY 1 DESC`);
-      let bakimlarRows: any[] = [];
-      if (detectedTables.aracBakimlar) {
-        try {
-          const bRes = await pool.query(`SELECT * FROM ${detectedTables.aracBakimlar} ORDER BY 1 DESC`);
-          bakimlarRows = bRes.rows;
-        } catch (err: any) {
-          console.log('[DB] Bakım kayıtları tablosu okunamadı:', err.message);
+      const [aRes, bRes, bbRes] = await Promise.all([
+        pool.query(`SELECT * FROM ${detectedTables.araclar} ORDER BY 1 DESC`),
+        detectedTables.aracBakimlar
+          ? pool.query(`SELECT * FROM ${detectedTables.aracBakimlar} ORDER BY 1 DESC`).catch(() => ({ rows: [] }))
+          : Promise.resolve({ rows: [] }),
+        detectedTables.aracBakimBelgeler
+          ? pool.query(`SELECT * FROM ${detectedTables.aracBakimBelgeler} ORDER BY 1 ASC`).catch(() => ({ rows: [] }))
+          : Promise.resolve({ rows: [] })
+      ]);
+
+      const bakimlarRows = bRes.rows || [];
+      const bakimBelgelerRows = bbRes.rows || [];
+
+      // Map document rows by BakimId (O(1) lookup)
+      const belgelerMap = new Map<number, any[]>();
+      for (const doc of bakimBelgelerRows) {
+        const docBId = Number(getProp(doc, 'BakimId', 'bakimid', 'bakim_id', 'id'));
+        if (!docBId) continue;
+        const icerik = extractFileContentFromRow(doc);
+        const docObj = {
+          BelgeId: Number(getProp(doc, 'BelgeId', 'belgeid', 'id')),
+          BakimId: docBId,
+          DosyaAdi: String(getProp(doc, 'DosyaAdi', 'dosyaadi', 'ad', 'filename', 'dosya_adi', 'DosyaAd') || 'belge.png'),
+          DosyaBoyutu: String(getProp(doc, 'DosyaBoyutu', 'dosyaboyutu', 'boyut', 'filesize') || '0 KB'),
+          YuklemeTarihi: String(getProp(doc, 'YuklemeTarihi', 'yuklemetarihi', 'tarih', 'created_at') || ''),
+          DosyaIcerigi: icerik,
+          base64: icerik,
+          DosyaVerisi: icerik
+        };
+        if (!belgelerMap.has(docBId)) {
+          belgelerMap.set(docBId, []);
         }
+        belgelerMap.get(docBId)!.push(docObj);
       }
 
-      let bakimBelgelerRows: any[] = [];
-      if (detectedTables.aracBakimBelgeler) {
-        try {
-          const bbRes = await pool.query(`SELECT * FROM ${detectedTables.aracBakimBelgeler} ORDER BY 1 ASC`);
-          bakimBelgelerRows = bbRes.rows;
-        } catch (bbErr: any) {
-          console.log('[DB] Araç bakım belgeleri okunamadı:', bbErr.message);
+      // Map maintenance rows by AracId (O(1) lookup)
+      const bakimlarMap = new Map<number, any[]>();
+      for (const b of bakimlarRows) {
+        const aId = Number(getProp(b, 'AracId', 'aracid'));
+        if (!aId) continue;
+        const bakim = normalizeBakim(b);
+        const bBelgeler = belgelerMap.get(bakim.BakimId) || [];
+        if (bBelgeler.length === 0 && bakim._directPhoto) {
+          bBelgeler.push({
+            BelgeId: 0,
+            BakimId: bakim.BakimId,
+            DosyaAdi: bakim._directPhotoName || 'foto.png',
+            DosyaBoyutu: bakim._directPhotoSize || '0 KB',
+            YuklemeTarihi: bakim.BakimTarihi || '',
+            DosyaIcerigi: bakim._directPhoto,
+            base64: bakim._directPhoto,
+            DosyaVerisi: bakim._directPhoto
+          });
         }
+        bakim.Belgeler = bBelgeler;
+        bakim.FotoSayisi = bBelgeler.length;
+
+        if (!bakimlarMap.has(aId)) {
+          bakimlarMap.set(aId, []);
+        }
+        bakimlarMap.get(aId)!.push(bakim);
       }
 
       let araclar = aRes.rows.map(row => {
         const arac = normalizeArac(row);
-        const relatedBakimlar = bakimlarRows
-          .filter(b => Number(getProp(b, 'AracId', 'aracid')) === arac.AracId)
-          .map(b => {
-            const bakim = normalizeBakim(b);
-            const bBelgeler = bakimBelgelerRows
-              .filter((doc: any) => {
-                const docBId = Number(getProp(doc, 'BakimId', 'bakimid', 'bakim_id', 'id'));
-                return docBId === bakim.BakimId;
-              })
-              .map((doc: any) => {
-                const icerik = extractFileContentFromRow(doc);
-                return {
-                  BelgeId: Number(getProp(doc, 'BelgeId', 'belgeid', 'id')),
-                  BakimId: Number(getProp(doc, 'BakimId', 'bakimid', 'bakim_id')),
-                  DosyaAdi: String(getProp(doc, 'DosyaAdi', 'dosyaadi', 'ad', 'filename', 'dosya_adi', 'DosyaAd', 'dosya_ad') || 'belge.png'),
-                  DosyaBoyutu: String(getProp(doc, 'DosyaBoyutu', 'dosyaboyutu', 'boyut', 'filesize', 'dosya_boyutu') || '0 KB'),
-                  YuklemeTarihi: String(getProp(doc, 'YuklemeTarihi', 'yuklemetarihi', 'tarih', 'created_at', 'yukleme_tarihi') || ''),
-                  DosyaIcerigi: icerik,
-                  base64: icerik,
-                  DosyaVerisi: icerik
-                };
-              });
-
-            if (bBelgeler.length === 0 && bakim._directPhoto) {
-              bBelgeler.push({
-                BelgeId: 0,
-                BakimId: bakim.BakimId,
-                DosyaAdi: bakim._directPhotoName || 'foto.png',
-                DosyaBoyutu: bakim._directPhotoSize || '0 KB',
-                YuklemeTarihi: bakim.BakimTarihi || '',
-                DosyaIcerigi: bakim._directPhoto,
-                base64: bakim._directPhoto,
-                DosyaVerisi: bakim._directPhoto
-              });
-            }
-
-            bakim.Belgeler = bBelgeler;
-            bakim.FotoSayisi = bBelgeler.length;
-            return bakim;
-          });
-        arac.BakimGecmisi = relatedBakimlar;
+        arac.BakimGecmisi = bakimlarMap.get(arac.AracId) || [];
         return arac;
       });
 
@@ -4016,99 +4019,74 @@ async function getAraclarList(aktifSadece = false): Promise<any[]> {
 async function getHatirlaticilarList(): Promise<any[]> {
   if (isDbConnected && detectedTables.hatirlaticilar) {
     try {
-      const hRes = await pool.query(`SELECT * FROM ${detectedTables.hatirlaticilar} ORDER BY 1 DESC`);
-      let hatirlaticilar = hRes.rows.map(normalizeHatirlatici);
+      const [hRes, bRes] = await Promise.all([
+        pool.query(`SELECT * FROM ${detectedTables.hatirlaticilar} ORDER BY 1 DESC`),
+        detectedTables.hatirlaticiBelgeler
+          ? pool.query(`SELECT * FROM ${detectedTables.hatirlaticiBelgeler} ORDER BY 1 ASC`).catch(() => ({ rows: [] }))
+          : Promise.resolve({ rows: [] })
+      ]);
 
-      if (detectedTables.hatirlaticiBelgeler) {
-        try {
-          // 'ORDER BY 1 ASC' avoids errors when 'BelgeId' is spelled differently in different database schemas
-          const bRes = await pool.query(`SELECT * FROM ${detectedTables.hatirlaticiBelgeler} ORDER BY 1 ASC`);
-          const belgeler = bRes.rows;
-          hatirlaticilar = hatirlaticilar.map(h => {
-            const hBelgeler = belgeler
-              .filter((b: any) => {
-                const bHId = Number(getProp(b, 'HatirlaticiId', 'hatirlaticiid', 'gorevid', 'GorevId', 'gorev_id', 'hatirlatici_id'));
-                return bHId === h.Id;
-              })
-              .map((b: any) => {
-                const icerik = extractFileContentFromRow(b);
-                return {
-                  BelgeId: Number(getProp(b, 'BelgeId', 'belgeid', 'id')),
-                  HatirlaticiId: Number(getProp(b, 'HatirlaticiId', 'hatirlaticiid', 'gorevid', 'GorevId', 'gorev_id', 'hatirlatici_id')),
-                  DosyaAdi: String(getProp(b, 'DosyaAdi', 'dosyaadi', 'ad', 'filename', 'dosya_adi', 'DosyaAd', 'dosya_ad', 'dosya_adi') || 'foto.png'),
-                  DosyaBoyutu: String(getProp(b, 'DosyaBoyutu', 'dosyaboyutu', 'boyut', 'filesize', 'dosya_boyutu', 'DosyaBoyut', 'dosya_boyut', 'dosya_boyutu') || '0 KB'),
-                  YuklemeTarihi: String(getProp(b, 'YuklemeTarihi', 'yuklemetarihi', 'tarih', 'created_at', 'yukleme_tarihi', 'YuklemeTarih', 'yukleme_tarih', 'yukleme_tarihi') || ''),
-                  DosyaIcerigi: icerik,
-                  base64: icerik,
-                  DosyaVerisi: icerik
-                };
-              });
+      const hatirlaticilar = hRes.rows.map(normalizeHatirlatici);
+      const belgeler = bRes.rows || [];
 
-            // Eğer DB'den gelen belgeler boşsa veya içerikleri yoksa, hafızadaki (memHatirlaticilar) zengin veriden eşleştir
-            const memMatch = memHatirlaticilar.find(m => Number(m.Id) === Number(h.Id));
-            if (memMatch && Array.isArray(memMatch.Belgeler) && memMatch.Belgeler.length > 0) {
-              const hasValidDbContent = hBelgeler.some(b => b.DosyaIcerigi && b.DosyaIcerigi.length > 20);
-              if (!hasValidDbContent) {
-                h.Belgeler = memMatch.Belgeler;
-                h.FotoSayisi = memMatch.Belgeler.length;
-                return h;
-              }
-            }
-
-            // Eğer ilişkili tabloda belge yoksa fakat ana tabloda doğrudan bir görsel alanı bulunmuşsa
-            if (hBelgeler.length === 0 && h._directPhoto && h._directPhoto.length > 20) {
-              hBelgeler.push({
-                BelgeId: 0,
-                HatirlaticiId: h.Id,
-                DosyaAdi: h._directPhotoName || 'foto.png',
-                DosyaBoyutu: h._directPhotoSize || '0 KB',
-                YuklemeTarihi: h.Tarih || '',
-                DosyaIcerigi: h._directPhoto,
-                base64: h._directPhoto,
-                DosyaVerisi: h._directPhoto
-              });
-            }
-
-            return {
-              ...h,
-              Belgeler: hBelgeler,
-              FotoSayisi: hBelgeler.length || h.FotoSayisi || 0
-            };
-          });
-        } catch (belgeErr: any) {
-          console.error('[DB HATIRLATICI BELGELER QUERY ERROR]', belgeErr.message);
+      // Map document rows by HatirlaticiId for O(1) instant lookup
+      const belgelerMap = new Map<number, any[]>();
+      for (const b of belgeler) {
+        const bHId = Number(getProp(b, 'HatirlaticiId', 'hatirlaticiid', 'gorevid', 'GorevId', 'gorev_id', 'hatirlatici_id'));
+        if (!bHId) continue;
+        const icerik = extractFileContentFromRow(b);
+        const docObj = {
+          BelgeId: Number(getProp(b, 'BelgeId', 'belgeid', 'id')),
+          HatirlaticiId: bHId,
+          DosyaAdi: String(getProp(b, 'DosyaAdi', 'dosyaadi', 'ad', 'filename', 'dosya_adi', 'DosyaAd') || 'foto.png'),
+          DosyaBoyutu: String(getProp(b, 'DosyaBoyutu', 'dosyaboyutu', 'boyut', 'filesize') || '0 KB'),
+          YuklemeTarihi: String(getProp(b, 'YuklemeTarihi', 'yuklemetarihi', 'tarih', 'created_at') || ''),
+          DosyaIcerigi: icerik,
+          base64: icerik,
+          DosyaVerisi: icerik
+        };
+        if (!belgelerMap.has(bHId)) {
+          belgelerMap.set(bHId, []);
         }
-      } else {
-        hatirlaticilar = hatirlaticilar.map(h => {
-          const memMatch = memHatirlaticilar.find(m => Number(m.Id) === Number(h.Id));
-          if (memMatch && Array.isArray(memMatch.Belgeler) && memMatch.Belgeler.length > 0) {
-            return {
-              ...h,
-              Belgeler: memMatch.Belgeler,
-              FotoSayisi: memMatch.Belgeler.length
-            };
-          }
-          const hBelgeler = [];
-          if (h._directPhoto && h._directPhoto.length > 20) {
-            hBelgeler.push({
-              BelgeId: 0,
-              HatirlaticiId: h.Id,
-              DosyaAdi: h._directPhotoName || 'foto.png',
-              DosyaBoyutu: h._directPhotoSize || '0 KB',
-              YuklemeTarihi: h.Tarih || '',
-              DosyaIcerigi: h._directPhoto,
-              base64: h._directPhoto,
-              DosyaVerisi: h._directPhoto
-            });
-          }
-          return {
-            ...h,
-            Belgeler: hBelgeler,
-            FotoSayisi: hBelgeler.length || h.FotoSayisi || 0
-          };
-        });
+        belgelerMap.get(bHId)!.push(docObj);
       }
-      return hatirlaticilar;
+
+      // Memory lookup Map for fallback
+      const memMap = new Map<number, any>();
+      for (const m of memHatirlaticilar) {
+        memMap.set(Number(m.Id), m);
+      }
+
+      return hatirlaticilar.map(h => {
+        let hBelgeler = belgelerMap.get(h.Id) || [];
+
+        const memMatch = memMap.get(h.Id);
+        if (memMatch && Array.isArray(memMatch.Belgeler) && memMatch.Belgeler.length > 0) {
+          const hasValidDbContent = hBelgeler.some(b => b.DosyaIcerigi && b.DosyaIcerigi.length > 20);
+          if (!hasValidDbContent) {
+            hBelgeler = memMatch.Belgeler;
+          }
+        }
+
+        if (hBelgeler.length === 0 && h._directPhoto && h._directPhoto.length > 20) {
+          hBelgeler.push({
+            BelgeId: 0,
+            HatirlaticiId: h.Id,
+            DosyaAdi: h._directPhotoName || 'foto.png',
+            DosyaBoyutu: h._directPhotoSize || '0 KB',
+            YuklemeTarihi: h.Tarih || '',
+            DosyaIcerigi: h._directPhoto,
+            base64: h._directPhoto,
+            DosyaVerisi: h._directPhoto
+          });
+        }
+
+        return {
+          ...h,
+          Belgeler: hBelgeler,
+          FotoSayisi: hBelgeler.length || h.FotoSayisi || 0
+        };
+      });
     } catch (err: any) {
       console.error('[DB HATIRLATICILAR ERROR]', err.message);
     }

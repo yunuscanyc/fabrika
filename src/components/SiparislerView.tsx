@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { MalzemeSiparisi, MalzemeSiparisBelgesi, MalzemeKatalogItem } from '../types';
 import { formatTarihTR } from '../utils/dateUtils';
+import { PageLoadingIndicator } from './PageLoadingIndicator';
 import { SiparisYazdirModal } from './SiparisYazdirModal';
 import { UstabasiUyariModal } from './UstabasiUyariModal';
 import { MalzemeKatalogModal } from './MalzemeKatalogModal';
@@ -43,6 +44,8 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
   const [siparisler, setSiparisler] = useState<MalzemeSiparisi[]>([]);
   const [katalog, setKatalog] = useState<MalzemeKatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [yuklenenCount, setYuklenenCount] = useState<number>(0);
+  const [toplamCount, setToplamCount] = useState<number>(0);
   const [filterDurum, setFilterDurum] = useState<string>('Aktifler');
   const [filterKategori, setFilterKategori] = useState<string>('Tumu');
   const [filterAciliyet, setFilterAciliyet] = useState<string>('Tumu');
@@ -94,14 +97,33 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
   const fetchSiparisler = async () => {
     try {
       setLoading(true);
+      setYuklenenCount(0);
+      setToplamCount(0);
       const res = await fetch('/api/siparisler');
       if (res.ok) {
         const data = await res.json();
-        setSiparisler(data);
+        const list = Array.isArray(data) ? data : [];
+        setToplamCount(list.length);
+        if (list.length === 0) {
+          setYuklenenCount(0);
+          setSiparisler([]);
+          setLoading(false);
+        } else {
+          let curr = 0;
+          const step = Math.max(1, Math.ceil(list.length / 8));
+          const timer = setInterval(() => {
+            curr = Math.min(list.length, curr + step);
+            setYuklenenCount(curr);
+            if (curr >= list.length) {
+              clearInterval(timer);
+              setSiparisler(list);
+              setLoading(false);
+            }
+          }, 25);
+        }
       }
     } catch (err) {
       console.error('Siparişler çekilemedi:', err);
-    } finally {
       setLoading(false);
     }
   };
@@ -771,10 +793,11 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
       {/* SİPARİŞ LİSTESİ */}
       <div className="space-y-4">
         {loading ? (
-          <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400">
-            <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-            <span className="text-sm font-medium">Malzeme siparişleri yükleniyor...</span>
-          </div>
+          <PageLoadingIndicator
+            baslik="Malzeme Siparişleri Yükleniyor..."
+            yuklenenCount={yuklenenCount}
+            toplamCount={toplamCount}
+          />
         ) : filteredList.length === 0 ? (
           <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
             <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-3 text-slate-400">
