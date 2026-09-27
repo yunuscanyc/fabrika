@@ -709,6 +709,37 @@ function normalizeHatirlatici(row: any) {
   };
 }
 
+function normalizeCeride(row: any) {
+  let fotolar: any[] = [];
+  const rawFotolar = getProp(row, 'Fotograflar', 'fotograflar', 'foto', 'resimler', 'belgeler', 'dosyalar');
+  try {
+    if (typeof rawFotolar === 'string') {
+      fotolar = JSON.parse(rawFotolar || '[]');
+    } else if (Array.isArray(rawFotolar)) {
+      fotolar = rawFotolar;
+    }
+  } catch {}
+
+  const rawId = getProp(row, 'Id', 'id', 'CerideId', 'cerideid');
+  const numId = Number(rawId);
+
+  return {
+    Id: isNaN(numId) ? Date.now() : numId,
+    Olay: String(getProp(row, 'Olay', 'olay', 'tanim', 'aciklama', 'baslik') || ''),
+    Tarih: String(formatDate(getProp(row, 'Tarih', 'tarih')) || getProp(row, 'Tarih', 'tarih') || getTurkiyeTarihStr()),
+    Saat: String(getProp(row, 'Saat', 'saat') || getTurkiyeSaatStr()),
+    IslenmeTarihi: String(getProp(row, 'IslenmeTarihi', 'islenmetarihi', 'islenme_tarihi', 'createdat', 'created_at', 'CreatedAt') || ''),
+    ProjeId: getProp(row, 'ProjeId', 'projeid', 'proje_id') ? Number(getProp(row, 'ProjeId', 'projeid', 'proje_id')) : null,
+    ProjeAdi: String(getProp(row, 'ProjeAdi', 'projeadi', 'proje_adi') || ''),
+    IsleyenKisi: String(getProp(row, 'IsleyenKisi', 'isleyenkisi', 'isleyen_kisi', 'kisi', 'kullanici') || 'Yönetici'),
+    Kategori: String(getProp(row, 'Kategori', 'kategori', 'tur') || 'Genel'),
+    Detay: String(getProp(row, 'Detay', 'detay', 'notlar', 'not') || ''),
+    Fotograflar: fotolar,
+    FotoSayisi: Number(getProp(row, 'FotoSayisi', 'fotosayisi', 'foto_sayisi')) || fotolar.length,
+    OtomatikMi: Boolean(getProp(row, 'OtomatikMi', 'otomatikmi', 'otomatik_mi') ?? false)
+  };
+}
+
 function getFileExtension(filename?: string, content?: string): string {
   if (filename && filename.includes('.')) {
     const parts = filename.split('.');
@@ -1924,7 +1955,8 @@ async function checkDbConnection() {
       malzemeSiparisleri: matchTable(['MalzemeSiparisleri', 'malzeme_siparisleri', 'Siparisler', 'siparisler']),
       malzemeSiparisBelgeler: matchTable(['MalzemeSiparisBelgeleri', 'malzeme_siparis_belgeleri', 'SiparisBelgeleri', 'siparis_belgeleri']),
       malzemeKatalog: matchTable(['MalzemeKatalog', 'malzeme_katalog', 'MalzemeKatalogu', 'malzeme_katalogu', 'MalzemeKataloglari']),
-      sehirDisiGorevler: matchTable(['SehirDisiGorevler', 'sehir_disi_gorevler', 'SehirDisiGorevlendirme', 'sehir_disi_gorevlendirme'])
+      sehirDisiGorevler: matchTable(['SehirDisiGorevler', 'sehir_disi_gorevler', 'SehirDisiGorevlendirme', 'sehir_disi_gorevlendirme']),
+      ceride: matchTable(['Ceride', 'ceride', 'Cerideler', 'cerideler', 'SantiyeCeridesi', 'santiye_ceridesi', 'GunlukVukuat', 'gunluk_vukuat', 'FaaliyetDefteri', 'faaliyet_defteri'])
     };
 
     if (!detectedTables.projeBelgeler) {
@@ -2747,12 +2779,34 @@ async function checkDbConnection() {
       }
     } else {
       try {
-        await pool.query(`
-          ALTER TABLE ${detectedTables.ceride} ADD COLUMN IF NOT EXISTS "Fotograflar" TEXT;
-          ALTER TABLE ${detectedTables.ceride} ADD COLUMN IF NOT EXISTS "FotoSayisi" INTEGER DEFAULT 0;
-        `);
+        const cols = await getTableColumns(detectedTables.ceride);
+        const hasCol = (name: string) => cols.some(c => c.toLowerCase() === name.toLowerCase());
+        if (!hasCol('Fotograflar') && !hasCol('fotograflar')) {
+          await pool.query(`ALTER TABLE ${detectedTables.ceride} ADD COLUMN IF NOT EXISTS "Fotograflar" TEXT`);
+        }
+        if (!hasCol('FotoSayisi') && !hasCol('fotosayisi')) {
+          await pool.query(`ALTER TABLE ${detectedTables.ceride} ADD COLUMN IF NOT EXISTS "FotoSayisi" INTEGER DEFAULT 0`);
+        }
+        if (!hasCol('Detay') && !hasCol('detay')) {
+          await pool.query(`ALTER TABLE ${detectedTables.ceride} ADD COLUMN IF NOT EXISTS "Detay" TEXT`);
+        }
+        if (!hasCol('OtomatikMi') && !hasCol('otomatikmi')) {
+          await pool.query(`ALTER TABLE ${detectedTables.ceride} ADD COLUMN IF NOT EXISTS "OtomatikMi" BOOLEAN DEFAULT false`);
+        }
+        if (!hasCol('ProjeAdi') && !hasCol('projeadi')) {
+          await pool.query(`ALTER TABLE ${detectedTables.ceride} ADD COLUMN IF NOT EXISTS "ProjeAdi" VARCHAR(255)`);
+        }
+        if (!hasCol('ProjeId') && !hasCol('projeid')) {
+          await pool.query(`ALTER TABLE ${detectedTables.ceride} ADD COLUMN IF NOT EXISTS "ProjeId" INTEGER`);
+        }
+        if (!hasCol('Kategori') && !hasCol('kategori')) {
+          await pool.query(`ALTER TABLE ${detectedTables.ceride} ADD COLUMN IF NOT EXISTS "Kategori" VARCHAR(50) DEFAULT 'Genel'`);
+        }
+        if (!hasCol('IslenmeTarihi') && !hasCol('islenmetarihi')) {
+          await pool.query(`ALTER TABLE ${detectedTables.ceride} ADD COLUMN IF NOT EXISTS "IslenmeTarihi" VARCHAR(50)`);
+        }
       } catch (e: any) {
-        console.log('[DB-MIGRATE] Ceride fotograf kolonu kontrolü:', e.message);
+        console.log('[DB-MIGRATE] Ceride kolon kontrolü:', e.message);
       }
     }
 
@@ -3523,37 +3577,61 @@ async function recordCerideEvent(eventData: {
 
   if (isDbConnected && detectedTables.ceride) {
     try {
-      await pool.query(`
-        INSERT INTO ${detectedTables.ceride} (
-          "Id", "Olay", "Tarih", "Saat", "IslenmeTarihi", "ProjeId", "ProjeAdi", "IsleyenKisi", "Kategori", "Detay", "Fotograflar", "FotoSayisi", "OtomatikMi", "CreatedAt"
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP)
-        ON CONFLICT ("Id") DO UPDATE SET
-          "Olay" = EXCLUDED."Olay",
-          "Tarih" = EXCLUDED."Tarih",
-          "Saat" = EXCLUDED."Saat",
-          "ProjeId" = EXCLUDED."ProjeId",
-          "ProjeAdi" = EXCLUDED."ProjeAdi",
-          "IsleyenKisi" = EXCLUDED."IsleyenKisi",
-          "Kategori" = EXCLUDED."Kategori",
-          "Detay" = EXCLUDED."Detay",
-          "Fotograflar" = EXCLUDED."Fotograflar",
-          "FotoSayisi" = EXCLUDED."FotoSayisi"
-      `, [
-        newRecord.Id,
-        newRecord.Olay,
-        newRecord.Tarih,
-        newRecord.Saat,
-        newRecord.IslenmeTarihi,
-        newRecord.ProjeId,
-        newRecord.ProjeAdi,
-        newRecord.IsleyenKisi,
-        newRecord.Kategori,
-        newRecord.Detay,
-        JSON.stringify(newRecord.Fotograflar || []),
-        newRecord.FotoSayisi || 0,
-        newRecord.OtomatikMi
-      ]);
+      const cols = await getTableColumns(detectedTables.ceride);
+      const mapCol = (candidates: string[]) => cols.find(c => candidates.some(cand => cand.toLowerCase() === c.toLowerCase()));
+
+      const rowData: Record<string, any> = {};
+
+      const olayCol = mapCol(['Olay', 'olay', 'tanim', 'aciklama', 'baslik']);
+      if (olayCol) rowData[olayCol] = newRecord.Olay;
+
+      const tarihCol = mapCol(['Tarih', 'tarih']);
+      if (tarihCol) rowData[tarihCol] = newRecord.Tarih;
+
+      const saatCol = mapCol(['Saat', 'saat']);
+      if (saatCol) rowData[saatCol] = newRecord.Saat;
+
+      const islenCol = mapCol(['IslenmeTarihi', 'islenmetarihi', 'islenme_tarihi']);
+      if (islenCol) rowData[islenCol] = newRecord.IslenmeTarihi;
+
+      const pIdCol = mapCol(['ProjeId', 'projeid', 'proje_id']);
+      if (pIdCol && newRecord.ProjeId) rowData[pIdCol] = newRecord.ProjeId;
+
+      const pAdCol = mapCol(['ProjeAdi', 'projeadi', 'proje_adi']);
+      if (pAdCol) rowData[pAdCol] = newRecord.ProjeAdi;
+
+      const kisiCol = mapCol(['IsleyenKisi', 'isleyenkisi', 'isleyen_kisi', 'kisi', 'kullanici']);
+      if (kisiCol) rowData[kisiCol] = newRecord.IsleyenKisi;
+
+      const katCol = mapCol(['Kategori', 'kategori', 'tur']);
+      if (katCol) rowData[katCol] = newRecord.Kategori;
+
+      const detayCol = mapCol(['Detay', 'detay', 'notlar', 'not']);
+      if (detayCol) rowData[detayCol] = newRecord.Detay;
+
+      const fotoCol = mapCol(['Fotograflar', 'fotograflar', 'foto']);
+      if (fotoCol) rowData[fotoCol] = JSON.stringify(newRecord.Fotograflar || []);
+
+      const fotoSayCol = mapCol(['FotoSayisi', 'fotosayisi', 'foto_sayisi']);
+      if (fotoSayCol) rowData[fotoSayCol] = newRecord.FotoSayisi || 0;
+
+      const otoCol = mapCol(['OtomatikMi', 'otomatikmi', 'otomatik_mi']);
+      if (otoCol) rowData[otoCol] = newRecord.OtomatikMi;
+
+      const keys = Object.keys(rowData);
+      if (keys.length > 0) {
+        const colsSql = keys.map(k => `"${k}"`).join(', ');
+        const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
+        const values = keys.map(k => rowData[k]);
+        const insRes = await pool.query(
+          `INSERT INTO ${detectedTables.ceride} (${colsSql}) VALUES (${placeholders}) RETURNING *`,
+          values
+        );
+        if (insRes.rows.length > 0) {
+          const inserted = normalizeCeride(insRes.rows[0]);
+          newRecord.Id = inserted.Id;
+        }
+      }
     } catch (e: any) {
       console.error('[DB SAVE CERIDE ERROR]', e.message);
     }
@@ -9906,51 +9984,41 @@ app.get('/api/ceride', async (req, res) => {
 
     if (isDbConnected && detectedTables.ceride) {
       try {
+        const cols = await getTableColumns(detectedTables.ceride);
+        const mapCol = (candidates: string[]) => cols.find(c => candidates.some(cand => cand.toLowerCase() === c.toLowerCase()));
+        const idCol = mapCol(['Id', 'id', 'CerideId', 'cerideid']) || 'Id';
+        const tarihCol = mapCol(['Tarih', 'tarih']) || 'Tarih';
+
         let whereClause = '';
         let queryParams: any[] = [];
 
         if (spesifikTarih) {
-          whereClause = 'WHERE "Tarih" = $1';
+          whereClause = `WHERE "${tarihCol}" = $1`;
           queryParams = [spesifikTarih];
         } else if (aralik === 'bugun') {
-          whereClause = 'WHERE "Tarih" = $1';
+          whereClause = `WHERE "${tarihCol}" = $1`;
           queryParams = [bugunStr];
         } else if (aralik === 'dun') {
-          whereClause = 'WHERE "Tarih" = $1';
+          whereClause = `WHERE "${tarihCol}" = $1`;
           queryParams = [dunStr];
         } else if (aralik === 'hafta') {
-          whereClause = 'WHERE "Tarih" >= $1';
+          whereClause = `WHERE "${tarihCol}" >= $1`;
           queryParams = [yediGunStr];
         } else if (aralik === 'ay') {
-          whereClause = 'WHERE "Tarih" >= $1';
+          whereClause = `WHERE "${tarihCol}" >= $1`;
           queryParams = [otuzGunStr];
         } else if (aralik === 'tumu') {
           whereClause = '';
           queryParams = [];
         } else {
-          // Varsayılan: Bugün (boşuna veri akışı olmasın)
-          whereClause = 'WHERE "Tarih" = $1';
+          whereClause = `WHERE "${tarihCol}" = $1`;
           queryParams = [bugunStr];
         }
 
-        const sql = `SELECT * FROM ${detectedTables.ceride} ${whereClause} ORDER BY "Id" DESC LIMIT 1000`;
+        const sql = `SELECT * FROM ${detectedTables.ceride} ${whereClause} ORDER BY "${idCol}" DESC LIMIT 1000`;
         const dbRes = await pool.query(sql, queryParams);
         
-        const list = dbRes.rows.map(r => {
-          let fotolar = [];
-          try {
-            if (typeof r.Fotograflar === 'string') {
-              fotolar = JSON.parse(r.Fotograflar || '[]');
-            } else if (Array.isArray(r.Fotograflar)) {
-              fotolar = r.Fotograflar;
-            }
-          } catch {}
-          return {
-            ...r,
-            Fotograflar: fotolar,
-            FotoSayisi: Number(r.FotoSayisi) || fotolar.length
-          };
-        });
+        const list = dbRes.rows.map(r => normalizeCeride(r));
         return res.json(list);
       } catch (dbErr: any) {
         console.error('[DB GET CERIDE ERROR]', dbErr.message);
@@ -10014,56 +10082,82 @@ app.put('/api/ceride/:id', async (req, res) => {
     const { Olay, Tarih, Saat, ProjeId, ProjeAdi, IsleyenKisi, Kategori, Detay, Fotograflar } = req.body;
     
     const index = memCeride.findIndex(c => Number(c.Id) === id);
-    if (index === -1) {
-      return res.status(404).json({ error: 'Ceride kaydı bulunamadı.' });
-    }
+    const existing = index !== -1 ? memCeride[index] : null;
 
-    const updatedFotolar = Array.isArray(Fotograflar) ? Fotograflar : (memCeride[index].Fotograflar || []);
+    const updatedFotolar = Array.isArray(Fotograflar) ? Fotograflar : (existing?.Fotograflar || []);
     const updated = {
-      ...memCeride[index],
-      Olay: Olay !== undefined ? String(Olay).trim() : memCeride[index].Olay,
-      Tarih: Tarih !== undefined ? Tarih : memCeride[index].Tarih,
-      Saat: Saat !== undefined ? Saat : memCeride[index].Saat,
-      ProjeId: ProjeId !== undefined ? (ProjeId ? Number(ProjeId) : null) : memCeride[index].ProjeId,
-      ProjeAdi: ProjeAdi !== undefined ? ProjeAdi : memCeride[index].ProjeAdi,
-      IsleyenKisi: IsleyenKisi !== undefined ? String(IsleyenKisi).trim() : memCeride[index].IsleyenKisi,
-      Kategori: Kategori !== undefined ? Kategori : memCeride[index].Kategori,
-      Detay: Detay !== undefined ? String(Detay).trim() : memCeride[index].Detay,
+      ...(existing || { Id: id, OtomatikMi: false, IslenmeTarihi: getTurkiyeTamZamanStr() }),
+      Id: id,
+      Olay: Olay !== undefined ? String(Olay).trim() : (existing?.Olay || ''),
+      Tarih: Tarih !== undefined ? Tarih : (existing?.Tarih || getTurkiyeTarihStr()),
+      Saat: Saat !== undefined ? Saat : (existing?.Saat || getTurkiyeSaatStr()),
+      ProjeId: ProjeId !== undefined ? (ProjeId ? Number(ProjeId) : null) : (existing?.ProjeId || null),
+      ProjeAdi: ProjeAdi !== undefined ? ProjeAdi : (existing?.ProjeAdi || ''),
+      IsleyenKisi: IsleyenKisi !== undefined ? String(IsleyenKisi).trim() : (existing?.IsleyenKisi || 'Yönetici'),
+      Kategori: Kategori !== undefined ? Kategori : (existing?.Kategori || 'Genel'),
+      Detay: Detay !== undefined ? String(Detay).trim() : (existing?.Detay || ''),
       Fotograflar: updatedFotolar,
       FotoSayisi: updatedFotolar.length
     };
 
-    memCeride[index] = updated;
+    if (index !== -1) {
+      memCeride[index] = updated;
+    } else {
+      memCeride.unshift(updated);
+    }
     saveMemCeride();
 
     if (isDbConnected && detectedTables.ceride) {
       try {
-        await pool.query(`
-          UPDATE ${detectedTables.ceride} SET
-            "Olay" = $1,
-            "Tarih" = $2,
-            "Saat" = $3,
-            "ProjeId" = $4,
-            "ProjeAdi" = $5,
-            "IsleyenKisi" = $6,
-            "Kategori" = $7,
-            "Detay" = $8,
-            "Fotograflar" = $9,
-            "FotoSayisi" = $10
-          WHERE "Id" = $11
-        `, [
-          updated.Olay,
-          updated.Tarih,
-          updated.Saat,
-          updated.ProjeId,
-          updated.ProjeAdi,
-          updated.IsleyenKisi,
-          updated.Kategori,
-          updated.Detay,
-          JSON.stringify(updated.Fotograflar || []),
-          updated.FotoSayisi || 0,
-          id
-        ]);
+        const cols = await getTableColumns(detectedTables.ceride);
+        const mapCol = (candidates: string[]) => cols.find(c => candidates.some(cand => cand.toLowerCase() === c.toLowerCase()));
+        const idCol = mapCol(['Id', 'id', 'CerideId', 'cerideid']) || 'Id';
+
+        const rowData: Record<string, any> = {};
+        const olayCol = mapCol(['Olay', 'olay', 'tanim', 'aciklama']);
+        if (olayCol) rowData[olayCol] = updated.Olay;
+
+        const tarihCol = mapCol(['Tarih', 'tarih']);
+        if (tarihCol) rowData[tarihCol] = updated.Tarih;
+
+        const saatCol = mapCol(['Saat', 'saat']);
+        if (saatCol) rowData[saatCol] = updated.Saat;
+
+        const pIdCol = mapCol(['ProjeId', 'projeid', 'proje_id']);
+        if (pIdCol) rowData[pIdCol] = updated.ProjeId;
+
+        const pAdCol = mapCol(['ProjeAdi', 'projeadi', 'proje_adi']);
+        if (pAdCol) rowData[pAdCol] = updated.ProjeAdi;
+
+        const kisiCol = mapCol(['IsleyenKisi', 'isleyenkisi', 'isleyen_kisi']);
+        if (kisiCol) rowData[kisiCol] = updated.IsleyenKisi;
+
+        const katCol = mapCol(['Kategori', 'kategori', 'tur']);
+        if (katCol) rowData[katCol] = updated.Kategori;
+
+        const detayCol = mapCol(['Detay', 'detay', 'notlar']);
+        if (detayCol) rowData[detayCol] = updated.Detay;
+
+        const fotoCol = mapCol(['Fotograflar', 'fotograflar', 'foto']);
+        if (fotoCol) rowData[fotoCol] = JSON.stringify(updated.Fotograflar || []);
+
+        const fotoSayCol = mapCol(['FotoSayisi', 'fotosayisi', 'foto_sayisi']);
+        if (fotoSayCol) rowData[fotoSayCol] = updated.FotoSayisi || 0;
+
+        const setClauses: string[] = [];
+        const values: any[] = [];
+        let pIdx = 1;
+
+        for (const [colName, val] of Object.entries(rowData)) {
+          setClauses.push(`"${colName}" = $${pIdx++}`);
+          values.push(val);
+        }
+
+        if (setClauses.length > 0) {
+          values.push(id);
+          const updateSql = `UPDATE ${detectedTables.ceride} SET ${setClauses.join(', ')} WHERE "${idCol}" = $${pIdx}`;
+          await pool.query(updateSql, values);
+        }
       } catch (dbErr: any) {
         console.error('[DB UPDATE CERIDE ERROR]', dbErr.message);
       }
@@ -10083,7 +10177,10 @@ app.delete('/api/ceride/:id', async (req, res) => {
 
     if (isDbConnected && detectedTables.ceride) {
       try {
-        await pool.query(`DELETE FROM ${detectedTables.ceride} WHERE "Id" = $1`, [id]);
+        const cols = await getTableColumns(detectedTables.ceride);
+        const mapCol = (candidates: string[]) => cols.find(c => candidates.some(cand => cand.toLowerCase() === c.toLowerCase()));
+        const idCol = mapCol(['Id', 'id', 'CerideId', 'cerideid']) || 'Id';
+        await pool.query(`DELETE FROM ${detectedTables.ceride} WHERE "${idCol}" = $1`, [id]);
       } catch (dbErr: any) {
         console.error('[DB DELETE CERIDE ERROR]', dbErr.message);
       }

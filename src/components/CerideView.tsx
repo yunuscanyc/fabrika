@@ -697,19 +697,34 @@ export const CerideView: React.FC<CerideViewProps> = ({
           <p className="text-sm font-semibold">Ceride kayıtları yükleniyor...</p>
         </div>
       ) : Object.keys(groupedByDate).length === 0 ? (
-        <div className="py-16 text-center text-slate-500 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 p-8">
-          <BookOpen className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-          <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">Kayıt Bulunamadı</h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
-            Arama veya filtre kriterlerinize uygun ceride kaydı bulunamadı. Yeni bir olay ekleyebilir veya filtreleri temizleyebilirsiniz.
+        <div className="py-16 text-center text-slate-500 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 p-8 space-y-3">
+          <BookOpen className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto" />
+          <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">
+            {tarihFilter === 'bugun' ? 'Bugün İçin Henüz Kayıt Yok' : 'Kayıt Bulunamadı'}
+          </h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+            {tarihFilter === 'bugun' 
+              ? 'Bugünün tarihine ait herhangi bir vukuat veya faaliyet henüz girilmemiş. Geçmiş tüm kayıtları görmek için aşağıdaki butona tıklayabilirsiniz.'
+              : 'Seçili filtre veya arama kriterlerinize uygun ceride kaydı bulunamadı.'}
           </p>
-          <button
-            onClick={handleOpenNewModal}
-            className="mt-4 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition shadow-sm"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Yeni Ceride Olayı Ekle</span>
-          </button>
+          <div className="flex items-center justify-center gap-2 pt-2 flex-wrap">
+            {tarihFilter !== 'tumu' && (
+              <button
+                onClick={() => handleFilterChange('tumu')}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition shadow-sm cursor-pointer"
+              >
+                <Search className="w-3.5 h-3.5 text-amber-400" />
+                <span>Tüm Geçmiş Kayıtları Göster</span>
+              </button>
+            )}
+            <button
+              onClick={handleOpenNewModal}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition shadow-sm cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Yeni Ceride Olayı Ekle</span>
+            </button>
+          </div>
         </div>
       ) : (
         <div className="space-y-6">
