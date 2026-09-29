@@ -3638,14 +3638,19 @@ async function recordCerideEvent(eventData: {
   }
 
   // Kullanıcı Talebi: "Sadece manuel ceride girildiğinde bildirim göndersin"
-  if (newRecord.OtomatikMi === false) {
+  if (!newRecord.OtomatikMi) {
     try {
       const projeStr = newRecord.ProjeAdi && newRecord.ProjeAdi !== 'Genel / Projesiz' ? ` [${newRecord.ProjeAdi}]` : '';
       const fotoEk = (newRecord.FotoSayisi && newRecord.FotoSayisi > 0) ? ` 📷 (${newRecord.FotoSayisi} Fotoğraf)` : '';
       sendWebPushNotification('', {
         title: `📜 Yeni Ceride Kaydı${projeStr}`,
         body: `${newRecord.IsleyenKisi} (${newRecord.Saat}): ${newRecord.Olay}${fotoEk}`,
-        url: '/'
+        url: '/',
+        data: {
+          cerideId: newRecord.Id,
+          islemTuru: 'eklendi',
+          yapanKisi: newRecord.IsleyenKisi
+        }
       }).catch(() => {});
     } catch (pushErr: any) {
       console.error('[CERIDE PUSH NOTIFICATION ERROR]', pushErr.message);
@@ -10055,7 +10060,7 @@ app.post('/api/ceride', async (req, res) => {
       Kategori: Kategori || 'Genel',
       Detay: Detay ? String(Detay).trim() : '',
       Fotograflar: Array.isArray(Fotograflar) ? Fotograflar : [],
-      OtomatikMi: Boolean(OtomatikMi)
+      OtomatikMi: OtomatikMi !== undefined ? Boolean(OtomatikMi) : false
     });
 
     return res.status(201).json(newRecord);
