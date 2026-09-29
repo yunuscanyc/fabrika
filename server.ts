@@ -3652,6 +3652,7 @@ async function recordCerideEvent(eventData: {
     }
   }
 
+  touchSyncTimestamp();
   return newRecord;
 }
 
@@ -5541,6 +5542,11 @@ interface PushSubRecord {
   adminId?: string;
 }
 
+let globalSyncTimestamp = Date.now();
+function touchSyncTimestamp() {
+  globalSyncTimestamp = Date.now();
+}
+
 let memPushSubscriptions: PushSubRecord[] = [];
 
 async function loadPushSubscriptionsFromDb(): Promise<PushSubRecord[]> {
@@ -5710,6 +5716,7 @@ async function recordAjandaNotification(notif: {
   const isAllowedAction = ['eklendi', 'duzenlendi', 'silindi'].includes(newNotif.IslemTuru);
   const isSystemAlarm = yapan === 'Sistem' || newNotif.Baslik.includes('Hatırlatıcı Zamanı Geldi');
 
+  touchSyncTimestamp();
   if (isAllowedAction && !isSystemAlarm) {
     let pushBody = `${yapan} ajandada işlem yaptı.`;
     if (newNotif.IslemTuru === 'eklendi') {
@@ -5789,6 +5796,10 @@ async function getAjandaNotificationsList(): Promise<AjandaNotification[]> {
   return memAjandaBildirimler;
 }
 
+app.get('/api/sync-status', (req, res) => {
+  res.json({ syncTimestamp: globalSyncTimestamp });
+});
+
 app.get('/api/ajanda/bildirimler', async (req, res) => {
   try {
     const list = await getAjandaNotificationsList();
@@ -5806,7 +5817,8 @@ app.get('/api/ajanda/bildirimler', async (req, res) => {
     res.json({
       success: true,
       bildirimler: formatted,
-      unreadCount
+      unreadCount,
+      syncTimestamp: globalSyncTimestamp
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -10139,6 +10151,7 @@ app.put('/api/ceride/:id', async (req, res) => {
       }
     }
 
+    touchSyncTimestamp();
     return res.json(updated);
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
@@ -10162,6 +10175,7 @@ app.delete('/api/ceride/:id', async (req, res) => {
       }
     }
 
+    touchSyncTimestamp();
     return res.json({ success: true, message: 'Ceride kaydı silindi.' });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });

@@ -184,7 +184,15 @@ export const CerideView: React.FC<CerideViewProps> = ({
   useEffect(() => {
     // İlk açılışta boşuna veri akışı olmaması için varsayılan olarak SADECE BUGÜN yüklenir
     fetchCeride('bugun');
-  }, []);
+
+    const handleSync = () => {
+      fetchCeride(tarihFilter);
+    };
+    window.addEventListener('DATA_SYNC_REFRESH', handleSync);
+    return () => {
+      window.removeEventListener('DATA_SYNC_REFRESH', handleSync);
+    };
+  }, [tarihFilter]);
 
   const handleFilterChange = (yeniAralik: 'bugun' | 'dun' | 'hafta' | 'ay' | 'tumu') => {
     setTarihFilter(yeniAralik);

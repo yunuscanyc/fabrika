@@ -66,6 +66,24 @@ export default function App() {
     } catch (e) {}
   };
 
+  const lastSyncTsRef = useRef<number>(0);
+
+  const triggerDataSync = () => {
+    fetch('/api/hatirlaticilar')
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setHatirlaticilar(data);
+          try {
+            localStorage.setItem('fabrika_hatirlaticilar_cache_v2', JSON.stringify(data));
+          } catch (e) {}
+        }
+      })
+      .catch(() => {});
+
+    window.dispatchEvent(new CustomEvent('DATA_SYNC_REFRESH'));
+  };
+
   // Service Worker ve sayfa içi olaylardan gelen anlık Push Bildirimlerini Ön Planda Canlı Toast Olarak Yakala
   useEffect(() => {
     const handlePushEvent = (payload: { title: string; body: string; url?: string }) => {
@@ -83,6 +101,7 @@ export default function App() {
     const handleSWMessage = (event: MessageEvent) => {
       if (event.data && event.data.type === 'PUSH_NOTIFICATION_RECEIVED' && event.data.payload) {
         handlePushEvent(event.data.payload);
+        triggerDataSync();
       }
     };
 
@@ -90,6 +109,7 @@ export default function App() {
       const customEvt = event as CustomEvent;
       if (customEvt.detail) {
         handlePushEvent(customEvt.detail);
+        triggerDataSync();
       }
     };
 
@@ -98,7 +118,7 @@ export default function App() {
     }
     window.addEventListener('SHOW_PUSH_TOAST', handleCustomToast);
 
-    // Canlı Bildirim Kontrolü (2.5 saniyede bir yeni ajanda/işlem bildirimlerini tara)
+    // Canlı Bildirim Kontrolü & Çoklu Cihaz Senkronizasyonu (2.5 saniyede bir tarama)
     const seenNotifKeys = new Set<string>();
     let isInitialized = false;
 
@@ -106,6 +126,16 @@ export default function App() {
       fetch('/api/ajanda/bildirimler')
         .then(res => res.json())
         .then((resData: any) => {
+          // Çoklu Cihaz Anlık Veri Senkronizasyonu Kontrolü
+          if (resData && typeof resData.syncTimestamp === 'number') {
+            if (lastSyncTsRef.current === 0) {
+              lastSyncTsRef.current = resData.syncTimestamp;
+            } else if (resData.syncTimestamp > lastSyncTsRef.current) {
+              lastSyncTsRef.current = resData.syncTimestamp;
+              triggerDataSync();
+            }
+          }
+
           const list = Array.isArray(resData) ? resData : (resData?.bildirimler || []);
           if (Array.isArray(list) && list.length > 0) {
             const newItems: any[] = [];
