@@ -1,6 +1,6 @@
 // Web Push Notification Manager for Rende Portal
 
-function urlBase64ToUint8Array(base64String: string) {
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding)
     .replace(/-/g, '+')
@@ -49,6 +49,7 @@ export async function registerServiceWorkerForPush(): Promise<ServiceWorkerRegis
     if (!reg) {
       reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
     }
+    await navigator.serviceWorker.ready;
     return reg;
   } catch (err) {
     console.error('Service Worker kayit hatasi:', err);
@@ -203,7 +204,11 @@ export async function sendTestPushNotification(userName: string): Promise<{ succ
     // 1. Aboneliği al veya hazırla
     let subRes = await subscribeToPushNotifications(userName, adminId, false);
     if (!subRes.success) {
-      return { success: false, error: subRes.error || 'Bildirim aboneliği oluşturulamadı.' };
+      // Doğrudan sıfırdan yenilemeyi dene
+      subRes = await subscribeToPushNotifications(userName, adminId, true);
+      if (!subRes.success) {
+        return { success: false, error: subRes.error || 'Bildirim aboneliği oluşturulamadı.' };
+      }
     }
 
     const reg = await registerServiceWorkerForPush();
@@ -220,21 +225,27 @@ export async function sendTestPushNotification(userName: string): Promise<{ succ
     
     let data = await res.json().catch(() => ({}));
 
-    // Eğer sunucu aboneliğin geçersiz olduğunu söylerse otomatik olarak sıfırdan yenile ve tekrar dene
+    // Eğer sunucu aboneliğin geçersiz olduğunu söylerse veya hata verirse otomatik sıfırla ve yeniden dene
     if (!res.ok || !data.success || data.needsResubscribe) {
       console.log('Push aboneliği eski/geçersiz tespit edildi, otomatik sıfırlanıp yenileniyor...');
-      subRes = await subscribeToPushNotifications(userName, adminId, true);
-      if (subRes.success) {
-        subscription = reg ? await reg.pushManager.getSubscription() : null;
-        res = await fetch('/api/push/test', {
+      const renewRes = await subscribeToPushNotifications(userName, adminId, true);
+      if (renewRes.success) {
+        const freshSub = reg ? await reg.pushManager.getSubscription() : null;
+        const retryRes = await fetch('/api/push/test', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            subscription: subscription ? subscription.toJSON() : null,
+            subscription: freshSub ? freshSub.toJSON() : null,
             userName
           })
         });
-        data = await res.json().catch(() => ({}));
+        const retryData = await retryRes.json().catch(() => ({}));
+        if (retryRes.ok && retryData.success) {
+          return { success: true, message: retryData.message || 'Abonelik yenilendi ve test bildirimi başarıyla iletildi!' };
+        }
+        if (retryData.error) {
+          return { success: false, error: retryData.error };
+        }
       }
     }
 
