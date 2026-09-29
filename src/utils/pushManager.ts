@@ -42,30 +42,28 @@ export function getNotificationPermission(): NotificationPermission | 'unsupport
   return Notification.permission;
 }
 
-export async function getCurrentPushSubscription(): Promise<PushSubscription | null> {
-  if (!isPushNotificationSupported()) return null;
-  try {
-    await registerServiceWorkerForPush();
-    const reg = await navigator.serviceWorker.ready;
-    return await reg.pushManager.getSubscription();
-  } catch (err) {
-    console.error('Push aboneliği kontrol hatası:', err);
-    return null;
-  }
-}
-
 export async function registerServiceWorkerForPush(): Promise<ServiceWorkerRegistration | null> {
-  if (!('serviceWorker' in navigator)) return null;
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return null;
   try {
-    // İlk olarak mevcut kaydı dene
     let reg = await navigator.serviceWorker.getRegistration();
     if (!reg) {
       reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
     }
-    await navigator.serviceWorker.ready;
     return reg;
   } catch (err) {
-    console.error('Service Worker kayıt hatası:', err);
+    console.error('Service Worker kayit hatasi:', err);
+    return null;
+  }
+}
+
+export async function getCurrentPushSubscription(): Promise<PushSubscription | null> {
+  if (!isPushNotificationSupported()) return null;
+  try {
+    const reg = await registerServiceWorkerForPush();
+    if (!reg) return null;
+    return await reg.pushManager.getSubscription();
+  } catch (err) {
+    console.error('Push aboneligi kontrol hatasi:', err);
     return null;
   }
 }
@@ -75,7 +73,7 @@ export async function subscribeToPushNotifications(userName: string, adminId: st
     if (isIOSDevice() && !isStandalonePWA()) {
       return { 
         success: false, 
-        error: 'iPhone (iOS 16.4+) Kuralı: Bildirim alabilmek için önce uygulamayı Safari altındaki Paylaş (📤) simgesine basıp "Ana Ekrana Ekle" (➕) yapmalı ve ardından Ana Ekrandan açmalısınız.' 
+        error: 'iPhone (iOS 16.4+) Kurulum Kuralı: Bildirim alabilmek için lütfen önce Safari alttaki Paylaş (📤) simgesine basıp "Ana Ekrana Ekle" (➕) yapın ve ardından Rende Portal\'ı Ana Ekrandan açın.' 
       };
     }
     return { success: false, error: 'Cihazınız veya tarayıcınız Web Push bildirimlerini desteklemiyor.' };
@@ -83,45 +81,63 @@ export async function subscribeToPushNotifications(userName: string, adminId: st
 
   try {
     // 1. Kullanıcıdan bildirim izni iste
-    const permission = await Notification.requestPermission();
+    let permission = Notification.permission;
+    if (permission !== 'granted') {
+      permission = await Notification.requestPermission();
+    }
     if (permission !== 'granted') {
       return { 
         success: false, 
         error: permission === 'denied' 
-          ? 'Bildirim izni reddedildi. Lütfen tarayıcı/telefon ayarlarından bildirim iznini açınız.' 
+          ? 'Bildirim izni engellenmiş. Lütfen tarayıcı veya telefon ayarlarından bildirimlere izin verin.' 
           : 'Bildirim izni verilmedi.' 
       };
     }
 
-    // 2. Sunucudan VAPID Public Key al
-    const keyRes = await fetch('/api/push/public-key');
-    if (!keyRes.ok) throw new Error('VAPID anahtarı alınamadı.');
-    const { publicKey } = await keyRes.json();
-    if (!publicKey) throw new Error('Geçersiz VAPID anahtarı.');
-
-    // 3. Service Worker hazırla
-    await registerServiceWorkerForPush();
-    const reg = await navigator.serviceWorker.ready;
-
-    // 4. Push Manager ile temiz ve güncel VAPID anahtarıyla abone ol
-    const convertedKey = urlBase64ToUint8Array(publicKey);
-    let subscription = await reg.pushManager.getSubscription();
-
-    // Eski/geçersiz anahtar kalıntısı varsa temizle ve sıfırdan abone ol
-    if (subscription) {
-      try {
-        await subscription.unsubscribe();
-      } catch (e) {}
+    // 2. Service Worker hazırla
+    const reg = await registerServiceWorkerForPush();
+    if (!reg) {
+      return { success: false, error: 'Service Worker başlatılamadı.' };
     }
 
-    subscription = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: convertedKey
-    });
+    // 3. Mevcut aboneliği kontrol et
+    let subscription = await reg.pushManager.getSubscription();
+
+    // 4. Eğer aktif abonelik yoksa VAPID ile yeni abonelik oluştur
+    if (!subscription) {
+      const keyRes = await fetch('/api/push/public-key');
+      if (!keyRes.ok) throw new Error('VAPID sunucu anahtarı alınamadı.');
+      const { publicKey } = await keyRes.json();
+      if (!publicKey) throw new Error('Geçersiz VAPID anahtarı.');
+
+      const convertedKey = urlBase64ToUint8Array(publicKey);
+      try {
+        subscription = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: convertedKey
+        });
+      } catch (subErr: any) {
+        // Eski anahtar uyuşmazlığı varsa temizleyip tekrar dene
+        try {
+          const oldSub = await reg.pushManager.getSubscription();
+          if (oldSub) await oldSub.unsubscribe();
+          subscription = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: convertedKey
+          });
+        } catch (retryErr: any) {
+          throw new Error(`Push aboneliği oluşturulamadı: ${retryErr.message || subErr.message}`);
+        }
+      }
+    }
+
+    if (!subscription) {
+      throw new Error('Abonelik nesnesi oluşturulamadı.');
+    }
 
     const subJson = subscription.toJSON();
     if (!subJson.endpoint || !subJson.keys) {
-      throw new Error('Push yöneticisinden geçerli şifreleme anahtarları alınamadı.');
+      throw new Error('Push servisinden geçerli anahtarlar temin edilemedi.');
     }
 
     // 5. Aboneliği sunucuya kaydet
@@ -149,17 +165,18 @@ export async function subscribeToPushNotifications(userName: string, adminId: st
 
 export async function unsubscribeFromPushNotifications(): Promise<{ success: boolean; error?: string }> {
   try {
-    await registerServiceWorkerForPush();
-    const reg = await navigator.serviceWorker.ready;
-    const subscription = await reg.pushManager.getSubscription();
-    if (subscription) {
-      const endpoint = subscription.endpoint;
-      await subscription.unsubscribe();
-      await fetch('/api/push/unsubscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ endpoint })
-      });
+    const reg = await registerServiceWorkerForPush();
+    if (reg) {
+      const subscription = await reg.pushManager.getSubscription();
+      if (subscription) {
+        const endpoint = subscription.endpoint;
+        await subscription.unsubscribe();
+        await fetch('/api/push/unsubscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint })
+        });
+      }
     }
     return { success: true };
   } catch (err: any) {
@@ -169,45 +186,33 @@ export async function unsubscribeFromPushNotifications(): Promise<{ success: boo
 
 export async function sendTestPushNotification(userName: string): Promise<{ success: boolean; message?: string; error?: string }> {
   try {
-    // 1. İzin kontrolü
-    if (typeof Notification !== 'undefined' && Notification.permission !== 'granted') {
-      const perm = await Notification.requestPermission();
-      if (perm !== 'granted') {
-        return { success: false, error: 'Bildirim izni verilmedi. Lütfen tarayıcı ayarlarından bildirimlere izin verin.' };
-      }
-    }
-
-    // 2. Her zaman güncel sunucu anahtarıyla aboneliği yenile/kaydet
     const adminId = userName?.includes('2') ? 'admin2' : 'admin1';
+    
+    // 1. Aboneliği hazırla/doğrula
     const subRes = await subscribeToPushNotifications(userName, adminId);
     if (!subRes.success) {
-      return { success: false, error: subRes.error || 'Abonelik yenilenemedi.' };
+      return { success: false, error: subRes.error || 'Bildirim aboneliği oluşturulamadı.' };
     }
 
-    // 3. Service Worker hazırla
-    await registerServiceWorkerForPush();
-    const reg = await navigator.serviceWorker.ready;
-    const subscription = await reg.pushManager.getSubscription();
+    // 2. Güncel abonelik bilgisini al
+    const reg = await registerServiceWorkerForPush();
+    const subscription = reg ? await reg.pushManager.getSubscription() : null;
 
-    if (!subscription) {
-      return { success: false, error: 'Push yöneticisinden abonelik alınamadı.' };
-    }
-    
     const res = await fetch('/api/push/test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        subscription: subscription.toJSON(),
+        subscription: subscription ? subscription.toJSON() : null,
         userName
       })
     });
     
     const data = await res.json().catch(() => ({}));
     if (res.ok && data.success) {
-      return { success: true, message: data.message || 'Test bildirimi cihazınıza başarıyla iletildi!' };
+      return { success: true, message: data.message || 'Test bildirimi başarıyla iletildi!' };
     }
-    return { success: false, error: data.error || `Test bildirimi gönderilemedi (HTTP ${res.status}).` };
+    return { success: false, error: data.error || `Test bildirimi iletilemedi (${res.status}).` };
   } catch (err: any) {
-    return { success: false, error: err.message || 'Bilinmeyen bağlantı hatası oluştu.' };
+    return { success: false, error: err.message || 'Sunucu bağlantı hatası oluştu.' };
   }
 }
