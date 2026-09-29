@@ -5601,13 +5601,20 @@ async function sendWebPushNotification(excludeUserName: string, payload: {
       return;
     }
 
+    const cleanData = payload.data ? { ...payload.data } : {};
+    Object.keys(cleanData).forEach(k => {
+      if (cleanData[k] === null || cleanData[k] === undefined) {
+        cleanData[k] = '';
+      }
+    });
+
     const payloadString = JSON.stringify({
       title: payload.title,
       body: payload.body,
       icon: payload.icon || '/pwa-192x192.png',
       badge: payload.badge || '/pwa-192x192.png',
       url: payload.url || '/',
-      data: payload.data || {}
+      data: cleanData
     });
 
     for (const sub of subs) {

@@ -36,7 +36,6 @@ self.addEventListener('push', (event) => {
   const showPromise = self.registration.showNotification(notifTitle, {
     body: notifBody,
     icon: '/pwa-192x192.png',
-    badge: '/pwa-192x192.png',
     data: { url: notifUrl }
   });
 
