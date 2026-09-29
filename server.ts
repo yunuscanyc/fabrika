@@ -5994,23 +5994,37 @@ app.post('/api/push/test', async (req, res) => {
     
     const payloadString = JSON.stringify({
       title: '🔔 Rende Portal - Test Bildirimi',
-      body: `Harika! ${targetName} için cep telefonu bildirimleri başarıyla aktif edildi.`,
+      body: `Harika! ${targetName} için bildirimler başarıyla aktif edildi.`,
       icon: '/pwa-192x192.png',
       badge: '/pwa-192x192.png',
       url: '/'
     });
 
     if (subscription && subscription.endpoint && subscription.keys) {
-      console.log(`[PUSH TEST GÖNDERİLİYOR] -> ${targetName}`);
-      await webpush.sendNotification({
-        endpoint: subscription.endpoint,
-        keys: subscription.keys
-      }, payloadString, {
-        TTL: 86400,
-        urgency: 'high'
-      });
-      console.log(`[PUSH TEST BAŞARIYLA İLETİLDİ] -> ${targetName}`);
-      return res.json({ success: true, message: 'Test bildirimi cihazınıza başarıyla iletildi!' });
+      try {
+        console.log(`[PUSH TEST GÖNDERİLİYOR] -> ${targetName} (${subscription.endpoint.slice(0, 35)}...)`);
+        await webpush.sendNotification({
+          endpoint: subscription.endpoint,
+          keys: subscription.keys
+        }, payloadString, {
+          TTL: 86400,
+          urgency: 'high'
+        });
+        console.log(`[PUSH TEST BAŞARIYLA İLETİLDİ] -> ${targetName}`);
+        return res.json({ success: true, message: 'Test bildirimi cihazınıza başarıyla iletildi!' });
+      } catch (directErr: any) {
+        console.error(`[PUSH TEST DIRECT ERROR] ${targetName}:`, directErr.statusCode, directErr.message, directErr.body);
+        if (directErr.statusCode === 404 || directErr.statusCode === 410) {
+          memPushSubscriptions = memPushSubscriptions.filter(s => s.endpoint !== subscription.endpoint);
+          if (isDbConnected) {
+            pool.query(`DELETE FROM "PushSubscriptions" WHERE "Endpoint" = $1`, [subscription.endpoint]).catch(() => {});
+          }
+        }
+        return res.status(directErr.statusCode || 500).json({
+          success: false,
+          error: `Push servisi uyarısı (${directErr.statusCode || 500}): ${directErr.message || 'Cihaza iletilemedi, lütfen bildirimleri kapatıp tekrar açın.'}`
+        });
+      }
     }
 
     // Aksi halde kayıtlı olan kullanıcılara test gönder
@@ -6031,7 +6045,7 @@ app.post('/api/push/test', async (req, res) => {
     res.json({ success: true, message: `Test bildirimi kayıtlı ${subs.length} cihaza gönderildi!` });
   } catch (err: any) {
     console.error('[PUSH TEST ERROR]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message || 'Bilinmeyen sunucu hatası.' });
   }
 });
 

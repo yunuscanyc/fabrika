@@ -88,7 +88,7 @@ export async function subscribeToPushNotifications(userName: string, adminId: st
       return { 
         success: false, 
         error: permission === 'denied' 
-          ? 'Bildirim izni reddedildi. iPhone Ayarlar > Bildirimler > Rende Portal veya tarayıcı ayarlarından izin veriniz.' 
+          ? 'Bildirim izni reddedildi. Lütfen tarayıcı/telefon ayarlarından bildirim iznini açınız.' 
           : 'Bildirim izni verilmedi.' 
       };
     }
@@ -103,27 +103,25 @@ export async function subscribeToPushNotifications(userName: string, adminId: st
     await registerServiceWorkerForPush();
     const reg = await navigator.serviceWorker.ready;
 
-    // 4. Push Manager ile abone ol (Mevcut varsa kontrol et, yoksa veya geçersizse yenile)
-    let subscription = await reg.pushManager.getSubscription();
+    // 4. Push Manager ile temiz ve güncel VAPID anahtarıyla abone ol
     const convertedKey = urlBase64ToUint8Array(publicKey);
+    let subscription = await reg.pushManager.getSubscription();
 
-    if (!subscription) {
-      subscription = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: convertedKey
-      });
-    }
-
-    const subJson = subscription.toJSON();
-    if (!subJson.endpoint || !subJson.keys) {
-      // Yeniden temiz abonelik al
+    // Eski/geçersiz anahtar kalıntısı varsa temizle ve sıfırdan abone ol
+    if (subscription) {
       try {
         await subscription.unsubscribe();
       } catch (e) {}
-      subscription = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: convertedKey
-      });
+    }
+
+    subscription = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: convertedKey
+    });
+
+    const subJson = subscription.toJSON();
+    if (!subJson.endpoint || !subJson.keys) {
+      throw new Error('Push yöneticisinden geçerli şifreleme anahtarları alınamadı.');
     }
 
     // 5. Aboneliği sunucuya kaydet
@@ -131,7 +129,7 @@ export async function subscribeToPushNotifications(userName: string, adminId: st
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        subscription: subscription.toJSON(),
+        subscription: subJson,
         userName: userName || '1. Yönetici',
         adminId: adminId || 'admin1'
       })
@@ -175,40 +173,41 @@ export async function sendTestPushNotification(userName: string): Promise<{ succ
     if (typeof Notification !== 'undefined' && Notification.permission !== 'granted') {
       const perm = await Notification.requestPermission();
       if (perm !== 'granted') {
-        return { success: false, error: 'Bildirim izni verilmedi. Lütfen tarayıcı ayarlarından izin verin.' };
+        return { success: false, error: 'Bildirim izni verilmedi. Lütfen tarayıcı ayarlarından bildirimlere izin verin.' };
       }
     }
 
-    // 2. Service Worker hazırla
+    // 2. Her zaman güncel sunucu anahtarıyla aboneliği yenile/kaydet
+    const adminId = userName?.includes('2') ? 'admin2' : 'admin1';
+    const subRes = await subscribeToPushNotifications(userName, adminId);
+    if (!subRes.success) {
+      return { success: false, error: subRes.error || 'Abonelik yenilenemedi.' };
+    }
+
+    // 3. Service Worker hazırla
     await registerServiceWorkerForPush();
     const reg = await navigator.serviceWorker.ready;
-    let subscription = await reg.pushManager.getSubscription();
-    
-    // Eğer abonelik henüz yoksa oluştur
+    const subscription = await reg.pushManager.getSubscription();
+
     if (!subscription) {
-      const subRes = await subscribeToPushNotifications(userName, userName?.includes('2') ? 'admin2' : 'admin1');
-      if (subRes.success) {
-        subscription = await reg.pushManager.getSubscription();
-      } else {
-        return { success: false, error: subRes.error || 'Abonelik oluşturulamadı.' };
-      }
+      return { success: false, error: 'Push yöneticisinden abonelik alınamadı.' };
     }
     
     const res = await fetch('/api/push/test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        subscription: subscription ? subscription.toJSON() : null,
+        subscription: subscription.toJSON(),
         userName
       })
     });
     
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (res.ok && data.success) {
-      return { success: true, message: data.message };
+      return { success: true, message: data.message || 'Test bildirimi cihazınıza başarıyla iletildi!' };
     }
-    return { success: false, error: data.error || 'Test bildirimi gönderilemedi.' };
+    return { success: false, error: data.error || `Test bildirimi gönderilemedi (HTTP ${res.status}).` };
   } catch (err: any) {
-    return { success: false, error: err.message };
+    return { success: false, error: err.message || 'Bilinmeyen bağlantı hatası oluştu.' };
   }
 }
