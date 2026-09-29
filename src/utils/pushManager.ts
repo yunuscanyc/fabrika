@@ -45,6 +45,7 @@ export function getNotificationPermission(): NotificationPermission | 'unsupport
 export async function getCurrentPushSubscription(): Promise<PushSubscription | null> {
   if (!isPushNotificationSupported()) return null;
   try {
+    await registerServiceWorkerForPush();
     const reg = await navigator.serviceWorker.ready;
     return await reg.pushManager.getSubscription();
   } catch (err) {
@@ -150,6 +151,7 @@ export async function subscribeToPushNotifications(userName: string, adminId: st
 
 export async function unsubscribeFromPushNotifications(): Promise<{ success: boolean; error?: string }> {
   try {
+    await registerServiceWorkerForPush();
     const reg = await navigator.serviceWorker.ready;
     const subscription = await reg.pushManager.getSubscription();
     if (subscription) {
@@ -169,14 +171,26 @@ export async function unsubscribeFromPushNotifications(): Promise<{ success: boo
 
 export async function sendTestPushNotification(userName: string): Promise<{ success: boolean; message?: string; error?: string }> {
   try {
+    // 1. İzin kontrolü
+    if (typeof Notification !== 'undefined' && Notification.permission !== 'granted') {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') {
+        return { success: false, error: 'Bildirim izni verilmedi. Lütfen tarayıcı ayarlarından izin verin.' };
+      }
+    }
+
+    // 2. Service Worker hazırla
+    await registerServiceWorkerForPush();
     const reg = await navigator.serviceWorker.ready;
     let subscription = await reg.pushManager.getSubscription();
     
-    // Eğer abonelik yok ama izin varsa hemen abone yap
-    if (!subscription && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+    // Eğer abonelik henüz yoksa oluştur
+    if (!subscription) {
       const subRes = await subscribeToPushNotifications(userName, userName?.includes('2') ? 'admin2' : 'admin1');
       if (subRes.success) {
         subscription = await reg.pushManager.getSubscription();
+      } else {
+        return { success: false, error: subRes.error || 'Abonelik oluşturulamadı.' };
       }
     }
     

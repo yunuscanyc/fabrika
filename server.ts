@@ -5655,11 +5655,7 @@ async function sendWebPushNotification(excludeUserName: string, payload: {
           keys: sub.keys
         }, payloadString, {
           TTL: 86400, // 24 saat
-          urgency: 'high',
-          headers: {
-            'Urgency': 'high',
-            'Topic': 'rende-portal'
-          }
+          urgency: 'high'
         });
         console.log(`[PUSH BAŞARIYLA İLETİLDİ] -> ${sub.userName || 'Yönetici'}`);
       } catch (err: any) {
@@ -6011,14 +6007,10 @@ app.post('/api/push/test', async (req, res) => {
         keys: subscription.keys
       }, payloadString, {
         TTL: 86400,
-        urgency: 'high',
-        headers: {
-          'Urgency': 'high',
-          'Topic': 'rende-portal'
-        }
+        urgency: 'high'
       });
       console.log(`[PUSH TEST BAŞARIYLA İLETİLDİ] -> ${targetName}`);
-      return res.json({ success: true, message: 'Test bildirimi iPhone/cihazınıza iletildi!' });
+      return res.json({ success: true, message: 'Test bildirimi cihazınıza başarıyla iletildi!' });
     }
 
     // Aksi halde kayıtlı olan kullanıcılara test gönder

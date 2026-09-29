@@ -1,18 +1,23 @@
-// Service Worker for Rende Portal PWA & Push Notifications
-const CACHE_NAME = 'rende-portal-v6';
+/// <reference lib="webworker" />
+import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching';
+import { clientsClaim } from 'workbox-core';
 
-self.addEventListener('install', (event) => {
-  self.skipWaiting();
-});
+declare let self: ServiceWorkerGlobalScope;
 
-self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
-});
+cleanupOutdatedCaches();
+precacheAndRoute(self.__WB_MANIFEST || []);
 
-self.addEventListener('push', (event) => {
-  let data = {
+self.skipWaiting();
+clientsClaim();
+
+// ==========================================
+// PUSH BİLDİRİM VE KİLİT EKRANI UYARILARI
+// (Firefox PC, iOS Safari 16.4+, Android Chrome & Edge)
+// ==========================================
+self.addEventListener('push', (event: PushEvent) => {
+  let data: any = {
     title: '🔔 Rende Portal Bildirimi',
-    body: 'Yeni bir işlem veya bildirim kaydedildi.',
+    body: 'Yeni bir işlem kaydedildi.',
     url: '/',
     data: {}
   };
@@ -28,17 +33,18 @@ self.addEventListener('push', (event) => {
   }
 
   const notifTitle = data.title || '🔔 Rende Portal';
-  const notifBody = data.body || 'Yeni bir işlem kaydedildi.';
+  const notifBody = data.body || 'Yeni bir işlem veya bildirim kaydedildi.';
   const notifUrl = (data.data && data.data.url) || data.url || '/';
 
-  const options = {
+  const notifOptions: NotificationOptions = {
     body: notifBody,
     icon: '/pwa-192x192.png',
     badge: '/pwa-192x192.png',
-    tag: data.tag || 'rende-push-' + Date.now(),
+    tag: data.tag || 'rende-notification-' + Date.now(),
     data: { url: notifUrl }
   };
 
+  // Açık olan pencerelere anlık CANLI mesaj gönder (ön planda aktifse toast kartı açılır)
   if (self.clients && self.clients.matchAll) {
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
       if (Array.isArray(windowClients)) {
@@ -58,8 +64,9 @@ self.addEventListener('push', (event) => {
     }).catch(() => {});
   }
 
+  // Tarayıcı ve işletim sistemi bildirim merkezinde göster
   event.waitUntil(
-    self.registration.showNotification(notifTitle, options).catch((err) => {
+    self.registration.showNotification(notifTitle, notifOptions).catch((err) => {
       console.warn('[SW Push] Detaylı gösterim hatası, sade fallback deneniyor:', err);
       return self.registration.showNotification(notifTitle, {
         body: notifBody,
@@ -69,7 +76,7 @@ self.addEventListener('push', (event) => {
   );
 });
 
-self.addEventListener('notificationclick', (event) => {
+self.addEventListener('notificationclick', (event: NotificationEvent) => {
   try {
     event.notification.close();
   } catch (e) {}
@@ -79,11 +86,11 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
       for (const client of windowClients) {
-        if (client.url && 'focus' in client) {
+        if ('focus' in client) {
           if ('navigate' in client) {
-            client.navigate(targetUrl).catch(() => {});
+            (client as any).navigate(targetUrl).catch(() => {});
           }
-          return client.focus();
+          return (client as any).focus();
         }
       }
       if (self.clients.openWindow) {
