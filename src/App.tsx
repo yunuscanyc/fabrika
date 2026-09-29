@@ -17,6 +17,7 @@ import { OfflineIndicator } from './components/OfflineIndicator';
 import { LoginScreen } from './components/LoginScreen';
 import { LockScreen } from './components/LockScreen';
 import { SecuritySettingsModal } from './components/SecuritySettingsModal';
+import { PushPromptBanner } from './components/PushPromptBanner';
 import { PageLoadingIndicator } from './components/PageLoadingIndicator';
 import { Proje, Arac, BakimKaydi, Hatirlatici, OzetIstatistikler, Personel, IzinKaydi, Makine, Departman, Gorev, AjandaBildirimi } from './types';
 
@@ -1017,6 +1018,9 @@ export default function App() {
         unreadAjandaCount={unreadAjandaCount}
         currentUserName={currentUserName}
       />
+
+      {/* Cep Telefonu & Web Push Bildirim Kurulum Bildirimi */}
+      <PushPromptBanner currentUserName={currentUserName} />
 
       {/* Admin için Ustabaşı Yeni Sipariş Canlı Bildirimi */}
       {userRole === 'admin' && (

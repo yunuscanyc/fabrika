@@ -36,7 +36,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   return (
     <header 
-      className="sticky top-0 z-30 bg-slate-900 text-white border-b border-slate-800 shadow-md transition-all"
+      className="sticky top-0 z-30 bg-slate-900 text-white border-b border-slate-800 shadow-md transition-all ios-pwa-header safe-top"
       style={{
         paddingTop: 'env(safe-area-inset-top, 0px)'
       }}

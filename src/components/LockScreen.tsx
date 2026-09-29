@@ -107,7 +107,13 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock, onLogout, auto
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-2xl p-4 select-none animate-fadeIn">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-2xl p-4 select-none animate-fadeIn safe-top safe-bottom"
+      style={{
+        paddingTop: 'max(env(safe-area-inset-top, 0px), 1rem)',
+        paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 1rem)'
+      }}
+    >
       {/* Arka Plan Hareketli / Parlak Efektler */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-1/4 left-1/3 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl"></div>
