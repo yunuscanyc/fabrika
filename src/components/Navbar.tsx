@@ -1,5 +1,5 @@
 import React from 'react';
-import { Factory, Lock, Shield, LogOut } from 'lucide-react';
+import { Factory, Lock, Shield, LogOut, BellRing } from 'lucide-react';
 import { DbStatusData } from './DatabaseStatusModal';
 import { PWAInstallPrompt } from './PWAInstallPrompt';
 
@@ -13,6 +13,7 @@ interface NavbarProps {
   onOpenDbModal?: () => void;
   onLock?: () => void;
   onOpenSecuritySettings?: () => void;
+  onOpenNotificationSettings?: () => void;
   onLogout?: () => void;
   userRole?: 'admin' | 'ustabasi';
   unreadOrdersCount?: number;
@@ -28,6 +29,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenDbModal,
   onLock,
   onOpenSecuritySettings,
+  onOpenNotificationSettings,
   onLogout,
   userRole = 'admin',
   unreadOrdersCount = 0,
@@ -186,6 +188,17 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <Lock className="w-3.5 h-3.5 text-amber-400" />
                 <span className="hidden lg:inline">Kilitle</span>
+              </button>
+            )}
+
+            {userRole === 'admin' && onOpenNotificationSettings && (
+              <button
+                type="button"
+                onClick={onOpenNotificationSettings}
+                className="p-1.5 bg-slate-800/90 hover:bg-amber-500/20 text-slate-300 hover:text-amber-300 border border-slate-700 hover:border-amber-500/30 rounded-xl text-xs transition-all shadow-xs cursor-pointer"
+                title="Bildirim Tercihleri Merkezi (Hangileri Gönderilsin)"
+              >
+                <BellRing className="w-4 h-4 text-amber-400" />
               </button>
             )}
 

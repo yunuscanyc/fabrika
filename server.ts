@@ -5635,7 +5635,7 @@ async function sendWebPushNotification(excludeUserName: string, payload: {
         console.log(`[PUSH BAŞARIYLA İLETİLDİ] -> ${sub.userName || 'Yönetici'}`);
       } catch (err: any) {
         console.warn(`[PUSH DENE HATA] ${sub.userName || 'Yönetici'}:`, err.statusCode || err.message);
-        if (err.statusCode === 404 || err.statusCode === 410 || err.statusCode === 401 || err.statusCode === 403) {
+        if (err.statusCode === 404 || err.statusCode === 410) {
           memPushSubscriptions = memPushSubscriptions.filter(s => s.endpoint !== sub.endpoint);
           if (isDbConnected) {
             pool.query(`DELETE FROM "PushSubscriptions" WHERE "Endpoint" = $1`, [sub.endpoint]).catch(() => {});
@@ -5659,6 +5659,70 @@ interface AjandaNotification {
   OkuyanKisiler: string[];
 }
 
+let memNotificationSettings: Record<string, boolean> = {
+  hatirlatici_eklendi: true,
+  hatirlatici_duzenlendi: true,
+  hatirlatici_silindi: true,
+
+  ceride_eklendi: true,
+  ceride_duzenlendi: true,
+  ceride_silindi: true,
+
+  proje_eklendi: true,
+  proje_duzenlendi: true,
+  proje_silindi: true,
+
+  bakim_eklendi: true,
+  bakim_duzenlendi: true,
+
+  personel_eklendi: true,
+  puantaj_girildi: true,
+
+  siparis_eklendi: true,
+  siparis_durum_degisti: true,
+  siparis_silindi: true
+};
+
+async function loadNotificationSettingsFromDb() {
+  if (isDbConnected) {
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS "NotificationSettings" (
+          "Id" INT PRIMARY KEY DEFAULT 1,
+          "Settings" TEXT
+        )
+      `);
+      const res = await pool.query(`SELECT "Settings" FROM "NotificationSettings" WHERE "Id" = 1`);
+      if (res.rows.length > 0 && res.rows[0].Settings) {
+        try {
+          memNotificationSettings = { ...memNotificationSettings, ...JSON.parse(res.rows[0].Settings) };
+        } catch {}
+      }
+    } catch (e: any) {
+      console.error('[DB LOAD NOTIF SETTINGS ERROR]', e.message);
+    }
+  }
+}
+
+async function saveNotificationSettingsToDb() {
+  if (isDbConnected) {
+    try {
+      await pool.query(`
+        INSERT INTO "NotificationSettings" ("Id", "Settings")
+        VALUES (1, $1)
+        ON CONFLICT ("Id") DO UPDATE SET "Settings" = EXCLUDED."Settings"
+      `, [JSON.stringify(memNotificationSettings)]);
+    } catch (e: any) {
+      console.error('[DB SAVE NOTIF SETTINGS ERROR]', e.message);
+    }
+  }
+}
+
+function isNotificationAllowed(eventKey?: string): boolean {
+  if (!eventKey) return true;
+  return memNotificationSettings[eventKey] !== false;
+}
+
 let memAjandaBildirimler: AjandaNotification[] = [];
 
 async function recordAjandaNotification(notif: {
@@ -5667,7 +5731,21 @@ async function recordAjandaNotification(notif: {
   IslemTuru: 'eklendi' | 'duzenlendi' | 'silindi' | 'tamamlandi' | 'devam_ediyor';
   YapanKisi?: string;
   Detay?: string;
+  EventKey?: string;
 }) {
+  const eventKey = notif.EventKey || (
+    notif.Baslik.startsWith('📜')
+      ? (notif.IslemTuru === 'eklendi' ? 'ceride_eklendi' : notif.IslemTuru === 'duzenlendi' ? 'ceride_duzenlendi' : 'ceride_silindi')
+      : (notif.IslemTuru === 'eklendi' ? 'hatirlatici_eklendi' : notif.IslemTuru === 'duzenlendi' ? 'hatirlatici_duzenlendi' : 'hatirlatici_silindi')
+  );
+
+  touchSyncTimestamp();
+
+  if (!isNotificationAllowed(eventKey)) {
+    console.log(`[BİLDİRİM ENGELENDİ] "${eventKey}" kapalı olduğu için bildirim atlandı.`);
+    return;
+  }
+
   const yapan = notif.YapanKisi || '1. Yönetici';
   const newNotif: AjandaNotification = {
     Id: Date.now() + Math.floor(Math.random() * 1000),
@@ -5804,6 +5882,23 @@ async function getAjandaNotificationsList(): Promise<AjandaNotification[]> {
   }
   return memAjandaBildirimler;
 }
+
+app.get('/api/notification-settings', async (req, res) => {
+  await loadNotificationSettingsFromDb();
+  res.json(memNotificationSettings);
+});
+
+app.post('/api/notification-settings', async (req, res) => {
+  try {
+    if (req.body && typeof req.body === 'object') {
+      memNotificationSettings = { ...memNotificationSettings, ...req.body };
+      await saveNotificationSettingsToDb();
+    }
+    res.json({ success: true, settings: memNotificationSettings });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.get('/api/sync-status', (req, res) => {
   res.json({ syncTimestamp: globalSyncTimestamp });

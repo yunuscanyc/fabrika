@@ -18,6 +18,7 @@ import { OfflineIndicator } from './components/OfflineIndicator';
 import { LoginScreen } from './components/LoginScreen';
 import { LockScreen } from './components/LockScreen';
 import { SecuritySettingsModal } from './components/SecuritySettingsModal';
+import { NotificationSettingsModal } from './components/NotificationSettingsModal';
 import { PushPromptBanner } from './components/PushPromptBanner';
 import { PageLoadingIndicator } from './components/PageLoadingIndicator';
 import { Proje, Arac, BakimKaydi, Hatirlatici, OzetIstatistikler, Personel, IzinKaydi, Makine, Departman, Gorev, AjandaBildirimi } from './types';
@@ -41,6 +42,7 @@ export default function App() {
   });
   const [autoLockMinutes, setAutoLockMinutes] = useState<number>(15);
   const [securityModalOpen, setSecurityModalOpen] = useState<boolean>(false);
+  const [notifModalOpen, setNotifModalOpen] = useState<boolean>(false);
   const [authChecking, setAuthChecking] = useState<boolean>(true);
   const [activePushToast, setActivePushToast] = useState<{ title: string; body: string; url?: string } | null>(null);
   const pushToastTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -78,6 +80,13 @@ export default function App() {
             localStorage.setItem('fabrika_hatirlaticilar_cache_v2', JSON.stringify(data));
           } catch (e) {}
         }
+      })
+      .catch(() => {});
+
+    fetch('/api/ozet')
+      .then(r => r.json())
+      .then(data => {
+        if (data) setOzet(data);
       })
       .catch(() => {});
 
@@ -1143,6 +1152,7 @@ export default function App() {
         onOpenDbModal={() => setDbModalOpen(true)}
         onLock={handleManualLock}
         onOpenSecuritySettings={() => setSecurityModalOpen(true)}
+        onOpenNotificationSettings={() => setNotifModalOpen(true)}
         onLogout={handleLogout}
         userRole={userRole}
         unreadOrdersCount={unreadOrdersCount}
@@ -1322,6 +1332,14 @@ export default function App() {
           onClose={() => setSecurityModalOpen(false)}
           onSettingsUpdated={(newMin) => setAutoLockMinutes(newMin)}
           currentUserName={currentUserName}
+        />
+      )}
+
+      {/* Bildirim Tercihleri Yönetim Modalı */}
+      {userRole === 'admin' && (
+        <NotificationSettingsModal
+          isOpen={notifModalOpen}
+          onClose={() => setNotifModalOpen(false)}
         />
       )}
 
