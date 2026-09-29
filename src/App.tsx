@@ -93,19 +93,28 @@ export default function App() {
     }
     window.addEventListener('SHOW_PUSH_TOAST', handleCustomToast);
 
-    // Canlı Bildirim Kontrolü (3 saniyede bir yeni ajanda/işlem bildirimlerini tara)
-    let lastSeenNotifId = -1;
+    // Canlı Bildirim Kontrolü (2.5 saniyede bir yeni ajanda/işlem bildirimlerini tara)
+    const seenNotifKeys = new Set<string>();
+    let isInitialized = false;
+
     const pollInterval = setInterval(() => {
       fetch('/api/ajanda/bildirimler')
         .then(res => res.json())
         .then((list: any[]) => {
           if (Array.isArray(list) && list.length > 0) {
-            const maxId = Math.max(...list.map((item: any) => Number(item.Id) || 0));
-            if (lastSeenNotifId === -1) {
-              lastSeenNotifId = maxId;
-            } else if (maxId > lastSeenNotifId) {
-              const newItems = list.filter((item: any) => (Number(item.Id) || 0) > lastSeenNotifId);
-              lastSeenNotifId = maxId;
+            const newItems: any[] = [];
+            for (const item of list) {
+              const key = `${item.Id || ''}-${item.Tarih || ''}-${item.Baslik || ''}`;
+              if (!seenNotifKeys.has(key)) {
+                seenNotifKeys.add(key);
+                if (isInitialized) {
+                  newItems.push(item);
+                }
+              }
+            }
+            if (!isInitialized) {
+              isInitialized = true;
+            } else if (newItems.length > 0) {
               for (const latest of newItems) {
                 handlePushEvent({
                   title: `🔔 ${latest.Baslik || 'Rende Portal Bildirimi'}`,
@@ -116,7 +125,7 @@ export default function App() {
           }
         })
         .catch(() => {});
-    }, 3000);
+    }, 2500);
 
     return () => {
       if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {

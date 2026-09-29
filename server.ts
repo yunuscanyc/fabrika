@@ -5773,30 +5773,12 @@ setInterval(async () => {
           if (!notifiedDueSet.has(alarmKey)) {
             notifiedDueSet.add(alarmKey);
             console.log(`[ALARM TETİKLENDİ] Hatırlatıcı Zamanı Geldi: "${h.Baslik}"`);
-            sendWebPushNotification('', {
-              title: `⏰ Hatırlatıcı Zamanı Geldi: ${h.Baslik}`,
-              body: h.Aciklama ? `${h.Aciklama} (Tarih: ${h.Tarih})` : `Hatırlatmanız için belirlenen tarih geldi: ${h.Tarih}`,
-              url: '/',
-              data: { hatirlaticiId: h.Id }
-            }).catch(() => {});
-          }
-        }
-      }
-    }
-
-    // Araç Muayene / Bakım Zamanı
-    const araclar = memAraclar.length > 0 ? memAraclar : await getAraclarList();
-    if (Array.isArray(araclar)) {
-      for (const a of araclar) {
-        if (a.MuayeneTarihi && a.MuayeneTarihi <= bugunStr) {
-          const alarmKey = `arac-muayene-${a.Id}-${a.MuayeneTarihi}`;
-          if (!notifiedDueSet.has(alarmKey)) {
-            notifiedDueSet.add(alarmKey);
-            sendWebPushNotification('', {
-              title: `🚜 Araç Muayene Zamanı: ${a.Plaka}`,
-              body: `${a.Marka || ''} ${a.Model || ''} (${a.Plaka}) muayene tarihi geldi: ${a.MuayeneTarihi}`,
-              url: '/',
-              data: { aracId: a.Id }
+            recordAjandaNotification({
+              HatirlaticiId: h.Id,
+              Baslik: `⏰ Hatırlatıcı Zamanı Geldi: ${h.Baslik}`,
+              IslemTuru: 'eklendi',
+              YapanKisi: 'Sistem',
+              Detay: h.Aciklama ? `${h.Aciklama} (Tarih: ${h.Tarih})` : `Hatırlatma tarihi geldi: ${h.Tarih}`
             }).catch(() => {});
           }
         }
@@ -10112,6 +10094,15 @@ app.post('/api/ceride', async (req, res) => {
       Fotograflar: Array.isArray(Fotograflar) ? Fotograflar : [],
       OtomatikMi: Boolean(OtomatikMi)
     });
+
+    if (!OtomatikMi) {
+      recordAjandaNotification({
+        Baslik: `📖 Ceride Kaydı: ${newRecord.Olay}`,
+        IslemTuru: 'eklendi',
+        YapanKisi: String(isleyen),
+        Detay: `${isleyen} ceride günlüğüne kayır ekledi: "${newRecord.Olay}"`
+      }).catch(() => {});
+    }
 
     return res.status(201).json(newRecord);
   } catch (err: any) {

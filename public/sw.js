@@ -31,11 +31,13 @@ self.addEventListener('push', (event) => {
   const notifBody = data.body || 'Yeni bir işlem kaydedildi.';
   const notifUrl = (data.data && data.data.url) || data.url || '/';
 
+  const uniqueTag = (data.tag || 'rende-push') + '-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
+
   const showPromise = self.registration.showNotification(notifTitle, {
     body: notifBody,
     icon: '/pwa-192x192.png',
     badge: '/pwa-192x192.png',
-    tag: data.tag || 'rende-push-' + Date.now(),
+    tag: uniqueTag,
     data: { url: notifUrl }
   }).catch(() => {
     return self.registration.showNotification(notifTitle, {

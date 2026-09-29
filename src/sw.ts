@@ -40,7 +40,7 @@ self.addEventListener('push', (event: PushEvent) => {
     body: notifBody,
     icon: '/pwa-192x192.png',
     badge: '/pwa-192x192.png',
-    tag: data.tag || 'rende-notification-' + Date.now(),
+    tag: (data.tag || 'rende-notification') + '-' + Date.now() + '-' + Math.floor(Math.random() * 10000),
     data: { url: notifUrl }
   };
 
