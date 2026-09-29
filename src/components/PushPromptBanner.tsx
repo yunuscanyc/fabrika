@@ -108,7 +108,7 @@ export const PushPromptBanner: React.FC<PushPromptBannerProps> = ({ currentUserN
             <p className="text-[11px] text-slate-300 leading-snug">
               {isIOS && !isStandalone
                 ? "iPhone'da anlık kilit ekranı bildirimlerini almak için Safari'den 'Ana Ekrana Ekle' yapmanız gerekmektedir."
-                : "Projeler, siparişler, araç/makine bakımları ve ajanda kayıtlarında anlık kilit ekranı bildirimi gelsin mi?"}
+                : "Ceride günlüğü ve ajanda hatırlatma kayıtlarında anlık kilit ekranı bildirimi gelsin mi?"}
             </p>
           </div>
         </div>

@@ -43,6 +43,7 @@ export default function App() {
   const [securityModalOpen, setSecurityModalOpen] = useState<boolean>(false);
   const [authChecking, setAuthChecking] = useState<boolean>(true);
   const [activePushToast, setActivePushToast] = useState<{ title: string; body: string; url?: string } | null>(null);
+  const pushToastTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastActiveRef = useRef<number>(Date.now());
 
   // Sesli bildirim çalma yardımcısı (Web Audio API)
@@ -70,7 +71,11 @@ export default function App() {
     const handlePushEvent = (payload: { title: string; body: string; url?: string }) => {
       setActivePushToast(payload);
       playPushNotificationSound();
-      setTimeout(() => {
+
+      if (pushToastTimerRef.current) {
+        clearTimeout(pushToastTimerRef.current);
+      }
+      pushToastTimerRef.current = setTimeout(() => {
         setActivePushToast(null);
       }, 7000);
     };
@@ -100,7 +105,8 @@ export default function App() {
     const pollInterval = setInterval(() => {
       fetch('/api/ajanda/bildirimler')
         .then(res => res.json())
-        .then((list: any[]) => {
+        .then((resData: any) => {
+          const list = Array.isArray(resData) ? resData : (resData?.bildirimler || []);
           if (Array.isArray(list) && list.length > 0) {
             const newItems: any[] = [];
             for (const item of list) {
@@ -116,10 +122,12 @@ export default function App() {
               isInitialized = true;
             } else if (newItems.length > 0) {
               for (const latest of newItems) {
-                handlePushEvent({
-                  title: `🔔 ${latest.Baslik || 'Rende Portal Bildirimi'}`,
-                  body: latest.Detay || `${latest.YapanKisi || 'Yönetici'} işlem yaptı.`
-                });
+                if (latest.YapanKisi !== 'Sistem' && !latest.Baslik?.includes('Hatırlatıcı Zamanı Geldi')) {
+                  handlePushEvent({
+                    title: `🔔 ${latest.Baslik || 'Rende Portal Bildirimi'}`,
+                    body: latest.Detay || `${latest.YapanKisi || 'Yönetici'} işlem yaptı.`
+                  });
+                }
               }
             }
           }

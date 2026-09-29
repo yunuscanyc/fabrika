@@ -4704,12 +4704,6 @@ app.post('/api/projeler', async (req, res) => {
             }
           }
           
-          sendWebPushNotification('', {
-            title: '🏗️ Yeni Proje Eklendi',
-            body: `"${inserted.ProjeAdi}" (${inserted.MusteriFirma || 'Müşteri Belirtilmedi'}) sisteme kaydedildi.`,
-            url: '/'
-          }).catch(() => {});
-
           const yapanKisi = req.body.YapanKisi || req.headers['x-user-name'] || 'Yönetici';
           recordCerideEvent({
             Olay: `Yeni Proje Başlatıldı: ${inserted.ProjeAdi}`,
@@ -4729,12 +4723,6 @@ app.post('/api/projeler', async (req, res) => {
     }
 
     memProjeler.unshift(yeniProje);
-    sendWebPushNotification('', {
-      title: '🏗️ Yeni Proje Eklendi',
-      body: `"${yeniProje.ProjeAdi}" (${yeniProje.MusteriFirma || 'Müşteri Belirtilmedi'}) sisteme kaydedildi.`,
-      url: '/'
-    }).catch(() => {});
-
     const yapanKisi = req.body.YapanKisi || req.headers['x-user-name'] || 'Yönetici';
     recordCerideEvent({
       Olay: `Yeni Proje Başlatıldı: ${yeniProje.ProjeAdi}`,
@@ -4793,11 +4781,6 @@ app.put('/api/projeler/:id', async (req, res) => {
           }
         }
         
-        sendWebPushNotification('', {
-          title: '📐 Proje Güncellendi',
-          body: `"${updatedProje.ProjeAdi}" projesinde değişiklik yapıldı.`,
-          url: '/'
-        }).catch(() => {});
         return res.json(updatedProje);
       }
     } catch (err: any) {
@@ -4850,11 +4833,6 @@ app.put('/api/projeler/:id', async (req, res) => {
     }
 
     memProjeler[index] = { ...memProjeler[index], ...bodyProje };
-    sendWebPushNotification('', {
-      title: '📐 Proje Güncellendi',
-      body: `"${memProjeler[index].ProjeAdi}" projesinde değişiklik yapıldı.`,
-      url: '/'
-    }).catch(() => {});
     return res.json(memProjeler[index]);
   }
   res.status(404).json({ error: 'Proje bulunamadı' });
@@ -5134,12 +5112,6 @@ app.post('/api/araclar', async (req, res) => {
     }
 
     memAraclar.push(yeniArac);
-    sendWebPushNotification('', {
-      title: '🚗 Yeni Araç Eklendi',
-      body: `${yeniArac.PlakaVeyaKod} (${yeniArac.MarkaModel || 'Araç'}) filoya eklendi.`,
-      url: '/'
-    }).catch(() => {});
-
     const yapanAracKisi = req.body.YapanKisi || req.headers['x-user-name'] || 'Yönetici';
     recordCerideEvent({
       Olay: `Yeni Araç Eklendi: ${yeniArac.PlakaVeyaKod} (${yeniArac.MarkaModel || 'Araç'})`,
@@ -5234,11 +5206,6 @@ app.put('/api/araclar/:id', async (req, res) => {
     const guncel = { ...memAraclar[index], ...req.body };
     if (guncel.Durum === 'Elden Çıkarıldı / Satıldı') guncel.AktifMi = false;
     memAraclar[index] = guncel;
-    sendWebPushNotification('', {
-      title: '🔧 Araç Güncellendi',
-      body: `${guncel.PlakaVeyaKod} bilgileri güncellendi.`,
-      url: '/'
-    }).catch(() => {});
     return res.json(memAraclar[index]);
   }
   res.status(404).json({ error: 'Araç bulunamadı' });
@@ -5441,11 +5408,6 @@ app.post('/api/araclar/:id/bakimlar', async (req, res) => {
   if (yeniBakim.YapilanKmVeyaSaat > (arac.GuncelKmVeyaSaat || 0)) {
     arac.GuncelKmVeyaSaat = yeniBakim.YapilanKmVeyaSaat;
   }
-  sendWebPushNotification('', {
-    title: '🛠️ Yeni Araç Bakımı Yapıldı',
-    body: `${yeniBakim.BakimTarihi} tarihinde araç bakımı işlendi (${yeniBakim.Aciklama}).`,
-    url: '/'
-  }).catch(() => {});
 
   const yapanBakimKisi = req.body.YapanKisi || req.headers['x-user-name'] || 'Yönetici';
   recordCerideEvent({
@@ -5595,20 +5557,18 @@ async function loadPushSubscriptionsFromDb(): Promise<PushSubRecord[]> {
         )
       `);
       const res = await pool.query(`SELECT * FROM "PushSubscriptions"`);
-      if (res.rows.length > 0) {
-        memPushSubscriptions = res.rows.map(r => {
-          let keys = { p256dh: '', auth: '' };
-          try {
-            keys = typeof r.Keys === 'string' ? JSON.parse(r.Keys) : (r.Keys || keys);
-          } catch {}
-          return {
-            endpoint: r.Endpoint,
-            keys,
-            userName: r.UserName,
-            adminId: r.AdminId
-          };
-        });
-      }
+      memPushSubscriptions = res.rows.map(r => {
+        let keys = { p256dh: '', auth: '' };
+        try {
+          keys = typeof r.Keys === 'string' ? JSON.parse(r.Keys) : (r.Keys || keys);
+        } catch {}
+        return {
+          endpoint: r.Endpoint,
+          keys,
+          userName: r.UserName,
+          adminId: r.AdminId
+        };
+      });
     } catch (e: any) {
       console.error('[DB LOAD PUSH SUBS ERROR]', e.message);
     }
@@ -5650,14 +5610,28 @@ async function sendWebPushNotification(excludeUserName: string, payload: {
         console.log(`[PUSH GÖNDERİLİYOR] -> ${sub.userName || 'Yönetici'} (${sub.endpoint.slice(0, 30)}...)`);
         await webpush.sendNotification({
           endpoint: sub.endpoint,
-          keys: sub.keys
+          keys: {
+            p256dh: String(sub.keys.p256dh).trim(),
+            auth: String(sub.keys.auth).trim()
+          }
         }, payloadString, {
           TTL: 86400, // 24 saat
-          urgency: 'high'
+          urgency: 'high',
+          vapidDetails: {
+            subject: VAPID_EMAIL,
+            publicKey: VAPID_PUBLIC_KEY,
+            privateKey: VAPID_PRIVATE_KEY
+          }
         });
         console.log(`[PUSH BAŞARIYLA İLETİLDİ] -> ${sub.userName || 'Yönetici'}`);
       } catch (err: any) {
-        console.warn(`[PUSH DENE] ${sub.userName || 'Yönetici'}:`, err.statusCode || err.message);
+        console.warn(`[PUSH DENE HATA] ${sub.userName || 'Yönetici'}:`, err.statusCode || err.message);
+        if (err.statusCode === 404 || err.statusCode === 410 || err.statusCode === 401 || err.statusCode === 403) {
+          memPushSubscriptions = memPushSubscriptions.filter(s => s.endpoint !== sub.endpoint);
+          if (isDbConnected) {
+            pool.query(`DELETE FROM "PushSubscriptions" WHERE "Endpoint" = $1`, [sub.endpoint]).catch(() => {});
+          }
+        }
       }
     }
   } catch (globalPushErr: any) {
@@ -5731,30 +5705,32 @@ async function recordAjandaNotification(notif: {
     }
   }
 
-  // Cep Telefonlarına Anlık Push Bildirimi Gönder (Yapan dahil tüm cihazlara)
-  let pushBody = `${yapan} ajandada işlem yaptı.`;
-  if (newNotif.IslemTuru === 'eklendi') {
-    pushBody = `${yapan} yeni hatırlatma ekledi: "${newNotif.Baslik}"`;
-  } else if (newNotif.IslemTuru === 'duzenlendi') {
-    pushBody = `${yapan} "${newNotif.Baslik}" hatırlatmasını güncelledi.`;
-  } else if (newNotif.IslemTuru === 'silindi') {
-    pushBody = `${yapan} "${newNotif.Baslik}" hatırlatmasını sildi.`;
-  } else if (newNotif.IslemTuru === 'tamamlandi') {
-    pushBody = `${yapan} "${newNotif.Baslik}" hatırlatmasını tamamlandı olarak işaretledi.`;
-  } else if (newNotif.IslemTuru === 'devam_ediyor') {
-    pushBody = `${yapan} "${newNotif.Baslik}" hatırlatmasını tekrar devam edene çevirdi.`;
-  }
+  // Kullanıcı Talebi: Sadece hatırlatma girildiğinde (eklendi), silindiğinde (silindi) ve değiştirildiğinde (duzenlendi) bildirim gönderilsin.
+  // Hatırlatıcı zamanı geldi alarmı ve araç/bakım/proje vb. bildirimleri gönderilmeyecek.
+  const isAllowedAction = ['eklendi', 'duzenlendi', 'silindi'].includes(newNotif.IslemTuru);
+  const isSystemAlarm = yapan === 'Sistem' || newNotif.Baslik.includes('Hatırlatıcı Zamanı Geldi');
 
-  sendWebPushNotification('', {
-    title: `🔔 Rende Portal: ${newNotif.Baslik}`,
-    body: pushBody,
-    url: '/',
-    data: {
-      hatirlaticiId: newNotif.HatirlaticiId,
-      islemTuru: newNotif.IslemTuru,
-      yapanKisi: yapan
+  if (isAllowedAction && !isSystemAlarm) {
+    let pushBody = `${yapan} ajandada işlem yaptı.`;
+    if (newNotif.IslemTuru === 'eklendi') {
+      pushBody = `${yapan} yeni hatırlatma ekledi: "${newNotif.Baslik}"`;
+    } else if (newNotif.IslemTuru === 'duzenlendi') {
+      pushBody = `${yapan} "${newNotif.Baslik}" hatırlatmasını güncelledi.`;
+    } else if (newNotif.IslemTuru === 'silindi') {
+      pushBody = `${yapan} "${newNotif.Baslik}" hatırlatmasını sildi.`;
     }
-  }).catch(() => {});
+
+    sendWebPushNotification('', {
+      title: `🔔 Ajanda: ${newNotif.Baslik}`,
+      body: pushBody,
+      url: '/',
+      data: {
+        hatirlaticiId: newNotif.HatirlaticiId,
+        islemTuru: newNotif.IslemTuru,
+        yapanKisi: yapan
+      }
+    }).catch(() => {});
+  }
 }
 
 // ==========================================
@@ -6945,12 +6921,6 @@ app.post('/api/makineler', async (req, res) => {
     }
 
     memMakineler.unshift(yeni);
-    sendWebPushNotification('', {
-      title: '⚙️ Yeni Makine Eklendi',
-      body: `${yeni.MakineAdi} (${yeni.MakineKodu}) makine parkuruna eklendi.`,
-      url: '/'
-    }).catch(() => {});
-
     const yapanMakineKisi = req.body.YapanKisi || req.headers['x-user-name'] || 'Yönetici';
     recordCerideEvent({
       Olay: `Yeni Makine Eklendi: ${yeni.MakineAdi} (${yeni.MakineKodu})`,
@@ -9081,12 +9051,6 @@ app.post('/api/siparisler', async (req, res) => {
       }
     }
 
-    sendWebPushNotification('', {
-      title: '📦 Yeni Malzeme Siparişi',
-      body: `${newSiparis.ProjeAdi} için "${newSiparis.MalzemeAdi}" sipariş talebi açıldı.`,
-      url: '/'
-    }).catch(() => {});
-
     const talepKisi = newSiparis.TalepEden || req.headers['x-user-name'] || 'Ustabaşı';
     recordCerideEvent({
       Olay: `Yeni Sipariş Girildi: ${newSiparis.SiparisNo} - ${newSiparis.MalzemeAdi}`,
@@ -9222,12 +9186,6 @@ app.put('/api/siparisler/:id', async (req, res) => {
         console.error('[DB SIPARIS UPDATE ERROR]', dbErr.message);
       }
     }
-
-    sendWebPushNotification('', {
-      title: '🚚 Sipariş Güncellendi',
-      body: `${updatedSiparis.SiparisNo} (${updatedSiparis.ProjeAdi}) durumu: ${updatedSiparis.Durum}`,
-      url: '/'
-    }).catch(() => {});
 
     // Cerideye Durum Değişikliği Kaydı (Fabrikaya Geldi, Kısmen Teslim Alındı, Sipariş Verildi):
     if (body.Durum && body.Durum !== currentSiparis.Durum) {
