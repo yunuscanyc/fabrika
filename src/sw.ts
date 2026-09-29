@@ -45,35 +45,35 @@ self.addEventListener('push', (event: PushEvent) => {
   };
 
   // Açık olan pencerelere anlık CANLI mesaj gönder (ön planda aktifse toast kartı açılır)
-  if (self.clients && self.clients.matchAll) {
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-      if (Array.isArray(windowClients)) {
-        windowClients.forEach((client) => {
-          try {
-            client.postMessage({
-              type: 'PUSH_NOTIFICATION_RECEIVED',
-              payload: {
-                title: notifTitle,
-                body: notifBody,
-                url: notifUrl
-              }
-            });
-          } catch (err) {}
-        });
-      }
-    }).catch(() => {});
-  }
+  const clientPromise = (self.clients && self.clients.matchAll)
+    ? self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+        if (Array.isArray(windowClients)) {
+          windowClients.forEach((client) => {
+            try {
+              client.postMessage({
+                type: 'PUSH_NOTIFICATION_RECEIVED',
+                payload: {
+                  title: notifTitle,
+                  body: notifBody,
+                  url: notifUrl
+                }
+              });
+            } catch (err) {}
+          });
+        }
+      }).catch(() => {})
+    : Promise.resolve();
 
   // Tarayıcı ve işletim sistemi bildirim merkezinde göster
-  event.waitUntil(
-    self.registration.showNotification(notifTitle, notifOptions).catch((err) => {
-      console.warn('[SW Push] Detaylı gösterim hatası, sade fallback deneniyor:', err);
-      return self.registration.showNotification(notifTitle, {
-        body: notifBody,
-        icon: '/pwa-192x192.png'
-      });
-    })
-  );
+  const showPromise = self.registration.showNotification(notifTitle, notifOptions).catch((err) => {
+    console.warn('[SW Push] Detaylı gösterim hatası, sade fallback deneniyor:', err);
+    return self.registration.showNotification(notifTitle, {
+      body: notifBody,
+      icon: '/pwa-192x192.png'
+    });
+  });
+
+  event.waitUntil(Promise.all([showPromise, clientPromise]));
 });
 
 self.addEventListener('notificationclick', (event: NotificationEvent) => {

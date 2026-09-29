@@ -31,16 +31,21 @@ self.addEventListener('push', (event) => {
   const notifBody = data.body || 'Yeni bir işlem kaydedildi.';
   const notifUrl = (data.data && data.data.url) || data.url || '/';
 
-  const options = {
+  const showPromise = self.registration.showNotification(notifTitle, {
     body: notifBody,
     icon: '/pwa-192x192.png',
     badge: '/pwa-192x192.png',
     tag: data.tag || 'rende-push-' + Date.now(),
     data: { url: notifUrl }
-  };
+  }).catch(() => {
+    return self.registration.showNotification(notifTitle, {
+      body: notifBody,
+      icon: '/pwa-192x192.png'
+    });
+  });
 
-  if (self.clients && self.clients.matchAll) {
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+  const clientPromise = self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    .then((windowClients) => {
       if (Array.isArray(windowClients)) {
         windowClients.forEach((client) => {
           try {
@@ -56,17 +61,8 @@ self.addEventListener('push', (event) => {
         });
       }
     }).catch(() => {});
-  }
 
-  event.waitUntil(
-    self.registration.showNotification(notifTitle, options).catch((err) => {
-      console.warn('[SW Push] Detaylı gösterim hatası, sade fallback deneniyor:', err);
-      return self.registration.showNotification(notifTitle, {
-        body: notifBody,
-        icon: '/pwa-192x192.png'
-      });
-    })
-  );
+  event.waitUntil(Promise.all([showPromise, clientPromise]));
 });
 
 self.addEventListener('notificationclick', (event) => {

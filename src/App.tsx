@@ -45,22 +45,59 @@ export default function App() {
   const [activePushToast, setActivePushToast] = useState<{ title: string; body: string; url?: string } | null>(null);
   const lastActiveRef = useRef<number>(Date.now());
 
-  // Service Worker'dan gelen anlık Push Bildirimlerini Ön Planda Canlı Toast Olarak Yakala
+  // Sesli bildirim çalma yardımcısı (Web Audio API)
+  const playPushNotificationSound = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+      osc.frequency.setValueAtTime(880, ctx.currentTime + 0.1); // A5
+      gain.gain.setValueAtTime(0.2, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.35);
+    } catch (e) {}
+  };
+
+  // Service Worker ve sayfa içi olaylardan gelen anlık Push Bildirimlerini Ön Planda Canlı Toast Olarak Yakala
   useEffect(() => {
-    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+    const handlePushEvent = (payload: { title: string; body: string; url?: string }) => {
+      setActivePushToast(payload);
+      playPushNotificationSound();
+      setTimeout(() => {
+        setActivePushToast(null);
+      }, 7000);
+    };
 
     const handleSWMessage = (event: MessageEvent) => {
       if (event.data && event.data.type === 'PUSH_NOTIFICATION_RECEIVED' && event.data.payload) {
-        setActivePushToast(event.data.payload);
-        setTimeout(() => {
-          setActivePushToast(null);
-        }, 6000);
+        handlePushEvent(event.data.payload);
       }
     };
 
-    navigator.serviceWorker.addEventListener('message', handleSWMessage);
+    const handleCustomToast = (event: Event) => {
+      const customEvt = event as CustomEvent;
+      if (customEvt.detail) {
+        handlePushEvent(customEvt.detail);
+      }
+    };
+
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleSWMessage);
+    }
+    window.addEventListener('SHOW_PUSH_TOAST', handleCustomToast);
+
     return () => {
-      navigator.serviceWorker.removeEventListener('message', handleSWMessage);
+      if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleSWMessage);
+      }
+      window.removeEventListener('SHOW_PUSH_TOAST', handleCustomToast);
     };
   }, []);
 
@@ -1046,7 +1083,7 @@ export default function App() {
       {/* Ön Planda Canlı Gelen Push Bildirim Bannerı */}
       {activePushToast && (
         <div 
-          className="fixed left-1/2 -translate-x-1/2 z-50 max-w-md w-[calc(100vw-1.5rem)] bg-slate-900/95 border-2 border-blue-500 text-white p-3.5 rounded-2xl shadow-2xl backdrop-blur-md flex items-start justify-between gap-3 animate-slideDown"
+          className="fixed left-1/2 -translate-x-1/2 z-[99999] max-w-md w-[calc(100vw-1.5rem)] bg-slate-900/98 border-2 border-blue-500 text-white p-4 rounded-2xl shadow-2xl backdrop-blur-xl flex items-start justify-between gap-3 animate-slideDown"
           style={{ top: 'calc(1rem + env(safe-area-inset-top, 0px))' }}
         >
           <div className="flex items-start gap-3">

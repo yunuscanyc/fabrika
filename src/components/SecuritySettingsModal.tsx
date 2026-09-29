@@ -143,7 +143,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
       const res = await sendTestPushNotification(currentUserName);
       if (res.success) {
         setPushSubscribed(true);
-        setPushMsg('✅ Test bildirimi başarıyla gönderildi! (iPhone kilit ekranında veya açıkken üst canlı kart olarak belirir.)');
+        setPushMsg(res.message || '✅ Test bildirimi başarıyla gönderildi! (Masaüstü ve ekran bildiriminiz tetiklendi)');
       } else {
         setPushMsg(`❌ ${res.error || 'Test bildirimi gönderilemedi.'}`);
       }
