@@ -68,7 +68,11 @@ export async function getCurrentPushSubscription(): Promise<PushSubscription | n
   }
 }
 
-export async function subscribeToPushNotifications(userName: string, adminId: string): Promise<{ success: boolean; error?: string }> {
+export async function subscribeToPushNotifications(
+  userName: string, 
+  adminId: string, 
+  forceRenew: boolean = false
+): Promise<{ success: boolean; error?: string; subscription?: PushSubscription }> {
   if (!isPushNotificationSupported()) {
     if (isIOSDevice() && !isStandalonePWA()) {
       return { 
@@ -103,21 +107,29 @@ export async function subscribeToPushNotifications(userName: string, adminId: st
     // 3. Mevcut aboneliği kontrol et
     let subscription = await reg.pushManager.getSubscription();
 
-    // 4. Eğer aktif abonelik yoksa VAPID ile yeni abonelik oluştur
-    if (!subscription) {
+    // 4. forceRenew istendiyse veya abonelik yoksa veya anahtarları eksikse sıfırdan abone ol
+    const needsNewSub = forceRenew || !subscription || !subscription.toJSON().keys;
+
+    if (needsNewSub) {
       const keyRes = await fetch('/api/push/public-key');
       if (!keyRes.ok) throw new Error('VAPID sunucu anahtarı alınamadı.');
       const { publicKey } = await keyRes.json();
       if (!publicKey) throw new Error('Geçersiz VAPID anahtarı.');
 
       const convertedKey = urlBase64ToUint8Array(publicKey);
+
+      if (subscription) {
+        try {
+          await subscription.unsubscribe();
+        } catch (e) {}
+      }
+
       try {
         subscription = await reg.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: convertedKey
         });
       } catch (subErr: any) {
-        // Eski anahtar uyuşmazlığı varsa temizleyip tekrar dene
         try {
           const oldSub = await reg.pushManager.getSubscription();
           if (oldSub) await oldSub.unsubscribe();
@@ -156,7 +168,7 @@ export async function subscribeToPushNotifications(userName: string, adminId: st
       throw new Error(errTxt || 'Abonelik sunucuya kaydedilemedi.');
     }
 
-    return { success: true };
+    return { success: true, subscription };
   } catch (err: any) {
     console.error('Push bildirim abonelik hatası:', err);
     return { success: false, error: err.message || 'Bilinmeyen bir hata oluştu.' };
@@ -188,17 +200,16 @@ export async function sendTestPushNotification(userName: string): Promise<{ succ
   try {
     const adminId = userName?.includes('2') ? 'admin2' : 'admin1';
     
-    // 1. Aboneliği hazırla/doğrula
-    const subRes = await subscribeToPushNotifications(userName, adminId);
+    // 1. Aboneliği al veya hazırla
+    let subRes = await subscribeToPushNotifications(userName, adminId, false);
     if (!subRes.success) {
       return { success: false, error: subRes.error || 'Bildirim aboneliği oluşturulamadı.' };
     }
 
-    // 2. Güncel abonelik bilgisini al
     const reg = await registerServiceWorkerForPush();
-    const subscription = reg ? await reg.pushManager.getSubscription() : null;
+    let subscription = reg ? await reg.pushManager.getSubscription() : null;
 
-    const res = await fetch('/api/push/test', {
+    let res = await fetch('/api/push/test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -207,7 +218,26 @@ export async function sendTestPushNotification(userName: string): Promise<{ succ
       })
     });
     
-    const data = await res.json().catch(() => ({}));
+    let data = await res.json().catch(() => ({}));
+
+    // Eğer sunucu aboneliğin geçersiz olduğunu söylerse otomatik olarak sıfırdan yenile ve tekrar dene
+    if (!res.ok || !data.success || data.needsResubscribe) {
+      console.log('Push aboneliği eski/geçersiz tespit edildi, otomatik sıfırlanıp yenileniyor...');
+      subRes = await subscribeToPushNotifications(userName, adminId, true);
+      if (subRes.success) {
+        subscription = reg ? await reg.pushManager.getSubscription() : null;
+        res = await fetch('/api/push/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            subscription: subscription ? subscription.toJSON() : null,
+            userName
+          })
+        });
+        data = await res.json().catch(() => ({}));
+      }
+    }
+
     if (res.ok && data.success) {
       return { success: true, message: data.message || 'Test bildirimi başarıyla iletildi!' };
     }

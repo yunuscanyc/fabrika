@@ -6014,15 +6014,16 @@ app.post('/api/push/test', async (req, res) => {
         return res.json({ success: true, message: 'Test bildirimi cihazınıza başarıyla iletildi!' });
       } catch (directErr: any) {
         console.error(`[PUSH TEST DIRECT ERROR] ${targetName}:`, directErr.statusCode, directErr.message, directErr.body);
-        if (directErr.statusCode === 404 || directErr.statusCode === 410) {
+        if (directErr.statusCode === 404 || directErr.statusCode === 410 || directErr.statusCode === 401 || directErr.statusCode === 403) {
           memPushSubscriptions = memPushSubscriptions.filter(s => s.endpoint !== subscription.endpoint);
           if (isDbConnected) {
             pool.query(`DELETE FROM "PushSubscriptions" WHERE "Endpoint" = $1`, [subscription.endpoint]).catch(() => {});
           }
         }
-        return res.status(directErr.statusCode || 500).json({
+        return res.json({
           success: false,
-          error: `Push servisi uyarısı (${directErr.statusCode || 500}): ${directErr.message || 'Cihaza iletilemedi, lütfen bildirimleri kapatıp tekrar açın.'}`
+          needsResubscribe: true,
+          error: `Push servisi uyarısı: ${directErr.message || 'Cihaz aboneliği geçersiz, otomatik yenileniyor...'}`
         });
       }
     }
@@ -6038,7 +6039,8 @@ app.post('/api/push/test', async (req, res) => {
     if (!subs || subs.length === 0) {
       return res.json({ 
         success: false, 
-        error: 'Cihaz aboneliği bulunamadı. Lütfen "Bildirimleri Aç" butonuna basarak tekrar abone olunuz.' 
+        needsResubscribe: true,
+        error: 'Cihaz aboneliği bulunamadı. Bildirimleri Kapatıp tekrar Açınız.' 
       });
     }
 

@@ -121,10 +121,10 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
         setPushSubscribed(false);
         setPushMsg('Bu cihazdaki push bildirim aboneliği kapatıldı.');
       } else {
-        const res = await subscribeToPushNotifications(currentUserName, currentUserName.includes('2') ? 'admin2' : 'admin1');
+        const res = await subscribeToPushNotifications(currentUserName, currentUserName.includes('2') ? 'admin2' : 'admin1', true);
         if (res.success) {
           setPushSubscribed(true);
-          setPushMsg('✅ Tebrikler! Cep telefonu bildirimleri başarıyla aktifleştirildi.');
+          setPushMsg('✅ Tebrikler! Bildirimler başarıyla aktifleştirildi.');
         } else {
           setPushMsg(`❌ ${res.error || 'Bildirim izni verilemedi.'}`);
         }
