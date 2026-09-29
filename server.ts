@@ -10046,15 +10046,6 @@ app.post('/api/ceride', async (req, res) => {
       OtomatikMi: Boolean(OtomatikMi)
     });
 
-    if (!OtomatikMi) {
-      recordAjandaNotification({
-        Baslik: `📖 Ceride Kaydı: ${newRecord.Olay}`,
-        IslemTuru: 'eklendi',
-        YapanKisi: String(isleyen),
-        Detay: `${isleyen} ceride günlüğüne kayır ekledi: "${newRecord.Olay}"`
-      }).catch(() => {});
-    }
-
     return res.status(201).json(newRecord);
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
