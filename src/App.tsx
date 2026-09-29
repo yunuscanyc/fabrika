@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Bell, X } from 'lucide-react';
 import { Navbar, TabType } from './components/Navbar';
 import { BottomNav } from './components/BottomNav';
 import { DashboardView } from './components/DashboardView';
@@ -41,7 +42,27 @@ export default function App() {
   const [autoLockMinutes, setAutoLockMinutes] = useState<number>(15);
   const [securityModalOpen, setSecurityModalOpen] = useState<boolean>(false);
   const [authChecking, setAuthChecking] = useState<boolean>(true);
+  const [activePushToast, setActivePushToast] = useState<{ title: string; body: string; url?: string } | null>(null);
   const lastActiveRef = useRef<number>(Date.now());
+
+  // Service Worker'dan gelen anlık Push Bildirimlerini Ön Planda Canlı Toast Olarak Yakala
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+
+    const handleSWMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'PUSH_NOTIFICATION_RECEIVED' && event.data.payload) {
+        setActivePushToast(event.data.payload);
+        setTimeout(() => {
+          setActivePushToast(null);
+        }, 6000);
+      }
+    };
+
+    navigator.serviceWorker.addEventListener('message', handleSWMessage);
+    return () => {
+      navigator.serviceWorker.removeEventListener('message', handleSWMessage);
+    };
+  }, []);
 
   const handleNavigateTab = (
     tab: string,
@@ -1021,6 +1042,34 @@ export default function App() {
 
       {/* Cep Telefonu & Web Push Bildirim Kurulum Bildirimi */}
       <PushPromptBanner currentUserName={currentUserName} />
+
+      {/* Ön Planda Canlı Gelen Push Bildirim Bannerı */}
+      {activePushToast && (
+        <div 
+          className="fixed left-1/2 -translate-x-1/2 z-50 max-w-md w-[calc(100vw-1.5rem)] bg-slate-900/95 border-2 border-blue-500 text-white p-3.5 rounded-2xl shadow-2xl backdrop-blur-md flex items-start justify-between gap-3 animate-slideDown"
+          style={{ top: 'calc(1rem + env(safe-area-inset-top, 0px))' }}
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center shrink-0 shadow-lg">
+              <Bell className="w-5 h-5 text-white animate-bounce" />
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-white tracking-tight flex items-center gap-1.5">
+                <span>{activePushToast.title}</span>
+                <span className="text-[9px] bg-blue-500/30 text-blue-300 font-bold px-1.5 py-0.5 rounded border border-blue-400/30">CANLI</span>
+              </h4>
+              <p className="text-xs text-slate-300 mt-0.5 leading-snug">{activePushToast.body}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActivePushToast(null)}
+            className="text-slate-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Admin için Ustabaşı Yeni Sipariş Canlı Bildirimi */}
       {userRole === 'admin' && (

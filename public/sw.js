@@ -1,5 +1,5 @@
 // Service Worker for Rende Portal PWA & Push Notifications
-const CACHE_NAME = 'rende-portal-v4';
+const CACHE_NAME = 'rende-portal-v5';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -68,13 +68,12 @@ self.addEventListener('fetch', (event) => {
 
 // ==========================================
 // PUSH BİLDİRİM VE TELEFON EKRANI UYARILARI
+// (iOS 16.4+, Android Chrome, Firefox & Desktop tam uyumlu)
 // ==========================================
 self.addEventListener('push', (event) => {
   let data = {
-    title: '🔔 Rende Ahşap Portal',
-    body: 'Yeni bir işlem kaydedildi.',
-    icon: '/pwa-192x192.png',
-    badge: '/pwa-192x192.png',
+    title: '🔔 Rende Portal Bildirimi',
+    body: 'Yeni bir işlem veya bildirim kaydedildi.',
     url: '/',
     data: {}
   };
@@ -83,59 +82,75 @@ self.addEventListener('push', (event) => {
     try {
       data = event.data.json();
     } catch (e) {
-      data.body = event.data.text();
+      try {
+        data.body = event.data.text();
+      } catch (e2) {}
     }
   }
 
-  // iOS Safari ve Android Chrome ile %100 uyumlu bildirim parametreleri
-  const options = {
-    body: data.body || 'Yeni bir işlem kaydedildi.',
+  const notifTitle = data.title || '🔔 Rende Portal';
+  const notifBody = data.body || 'Yeni bir işlem kaydedildi.';
+  const notifUrl = (data.data && data.data.url) || data.url || '/';
+
+  // iOS Safari ve Android için optimize edilmiş, hata vermeyen bildirim seçenekleri
+  const safeOptions = {
+    body: notifBody,
     icon: '/pwa-192x192.png',
-    badge: '/pwa-192x192.png',
-    data: data.data || { url: data.url || '/' },
-    tag: data.tag || 'rende-push-' + Date.now(),
-    renotify: true
+    data: { url: notifUrl }
   };
 
-  // Açık olan ekranlara mesaj gönder (Uygulama açıksa anında haberdar olsun)
-  clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-    windowClients.forEach((client) => {
-      client.postMessage({
-        type: 'PUSH_NOTIFICATION_RECEIVED',
-        payload: data
-      });
-    });
-  }).catch(() => {});
+  // Açık olan tarayıcı pencerelerine anlık mesaj gönder
+  if (self.clients && self.clients.matchAll) {
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      if (Array.isArray(windowClients)) {
+        windowClients.forEach((client) => {
+          try {
+            client.postMessage({
+              type: 'PUSH_NOTIFICATION_RECEIVED',
+              payload: {
+                title: notifTitle,
+                body: notifBody,
+                url: notifUrl
+              }
+            });
+          } catch (err) {}
+        });
+      }
+    }).catch(() => {});
+  }
 
+  // Bildirimi ekranda göster
   event.waitUntil(
-    self.registration.showNotification(data.title || '🔔 Rende Ahşap Portal', options)
+    self.registration.showNotification(notifTitle, safeOptions)
       .catch((err) => {
-        console.error('showNotification ilk deneme hatası, sade fallback deneniyor:', err);
-        return self.registration.showNotification(data.title || '🔔 Rende Ahşap Portal', {
-          body: data.body || 'Yeni bir işlem kaydedildi.',
-          icon: '/pwa-192x192.png'
+        console.warn('[SW Push] Detaylı gösterim hatası, sade metin ile tekrar deneniyor:', err);
+        return self.registration.showNotification(notifTitle, {
+          body: notifBody
         });
       })
   );
 });
 
 self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-  const targetUrl = (event.notification.data && event.notification.data.url) || '/';
+  try {
+    event.notification.close();
+  } catch (e) {}
+
+  const targetUrl = (event.notification && event.notification.data && event.notification.data.url) || '/';
 
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
       for (const client of windowClients) {
         if (client.url && 'focus' in client) {
           if ('navigate' in client) {
-            client.navigate(targetUrl);
+            client.navigate(targetUrl).catch(() => {});
           }
           return client.focus();
         }
       }
-      if (clients.openWindow) {
-        return clients.openWindow(targetUrl);
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
       }
-    })
+    }).catch(() => {})
   );
 });

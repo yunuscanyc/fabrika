@@ -87,7 +87,7 @@ export async function subscribeToPushNotifications(userName: string, adminId: st
       return { 
         success: false, 
         error: permission === 'denied' 
-          ? 'Bildirim izni reddedildi. Telefonunuzun tarayıcı ayarlarından site bildirimlerine izin veriniz.' 
+          ? 'Bildirim izni reddedildi. iPhone Ayarlar > Bildirimler > Rende Portal veya tarayıcı ayarlarından izin veriniz.' 
           : 'Bildirim izni verilmedi.' 
       };
     }
@@ -102,10 +102,23 @@ export async function subscribeToPushNotifications(userName: string, adminId: st
     await registerServiceWorkerForPush();
     const reg = await navigator.serviceWorker.ready;
 
-    // 4. Push Manager ile abone ol
+    // 4. Push Manager ile abone ol (Mevcut varsa kontrol et, yoksa veya geçersizse yenile)
     let subscription = await reg.pushManager.getSubscription();
+    const convertedKey = urlBase64ToUint8Array(publicKey);
+
     if (!subscription) {
-      const convertedKey = urlBase64ToUint8Array(publicKey);
+      subscription = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: convertedKey
+      });
+    }
+
+    const subJson = subscription.toJSON();
+    if (!subJson.endpoint || !subJson.keys) {
+      // Yeniden temiz abonelik al
+      try {
+        await subscription.unsubscribe();
+      } catch (e) {}
       subscription = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: convertedKey
@@ -157,7 +170,15 @@ export async function unsubscribeFromPushNotifications(): Promise<{ success: boo
 export async function sendTestPushNotification(userName: string): Promise<{ success: boolean; message?: string; error?: string }> {
   try {
     const reg = await navigator.serviceWorker.ready;
-    const subscription = await reg.pushManager.getSubscription();
+    let subscription = await reg.pushManager.getSubscription();
+    
+    // Eğer abonelik yok ama izin varsa hemen abone yap
+    if (!subscription && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      const subRes = await subscribeToPushNotifications(userName, userName?.includes('2') ? 'admin2' : 'admin1');
+      if (subRes.success) {
+        subscription = await reg.pushManager.getSubscription();
+      }
+    }
     
     const res = await fetch('/api/push/test', {
       method: 'POST',

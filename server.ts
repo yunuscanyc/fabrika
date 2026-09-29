@@ -5654,7 +5654,12 @@ async function sendWebPushNotification(excludeUserName: string, payload: {
           endpoint: sub.endpoint,
           keys: sub.keys
         }, payloadString, {
-          TTL: 60 * 60 * 24 // 24 saat
+          TTL: 86400, // 24 saat
+          urgency: 'high',
+          headers: {
+            'Urgency': 'high',
+            'Topic': 'rende-portal'
+          }
         });
         console.log(`[PUSH BAŞARIYLA İLETİLDİ] -> ${sub.userName || 'Yönetici'}`);
       } catch (err: any) {
@@ -6004,9 +6009,16 @@ app.post('/api/push/test', async (req, res) => {
       await webpush.sendNotification({
         endpoint: subscription.endpoint,
         keys: subscription.keys
-      }, payloadString, { TTL: 60 });
+      }, payloadString, {
+        TTL: 86400,
+        urgency: 'high',
+        headers: {
+          'Urgency': 'high',
+          'Topic': 'rende-portal'
+        }
+      });
       console.log(`[PUSH TEST BAŞARIYLA İLETİLDİ] -> ${targetName}`);
-      return res.json({ success: true, message: 'Test bildirimi cihazınıza başarıyla gönderildi!' });
+      return res.json({ success: true, message: 'Test bildirimi iPhone/cihazınıza iletildi!' });
     }
 
     // Aksi halde kayıtlı olan kullanıcılara test gönder
@@ -6016,7 +6028,15 @@ app.post('/api/push/test', async (req, res) => {
       url: '/'
     });
 
-    res.json({ success: true, message: 'Test bildirimi tüm kayıtlı cihazlara gönderildi.' });
+    const subs = await loadPushSubscriptionsFromDb();
+    if (!subs || subs.length === 0) {
+      return res.json({ 
+        success: false, 
+        error: 'Cihaz aboneliği bulunamadı. Lütfen "Bildirimleri Aç" butonuna basarak tekrar abone olunuz.' 
+      });
+    }
+
+    res.json({ success: true, message: `Test bildirimi kayıtlı ${subs.length} cihaza gönderildi!` });
   } catch (err: any) {
     console.error('[PUSH TEST ERROR]', err.message);
     res.status(500).json({ error: err.message });

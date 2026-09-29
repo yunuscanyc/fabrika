@@ -140,9 +140,15 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
     setPushLoading(true);
     setPushMsg(null);
     try {
+      if (!pushSubscribed) {
+        const subRes = await subscribeToPushNotifications(currentUserName, currentUserName.includes('2') ? 'admin2' : 'admin1');
+        if (subRes.success) {
+          setPushSubscribed(true);
+        }
+      }
       const res = await sendTestPushNotification(currentUserName);
       if (res.success) {
-        setPushMsg('📱 Test bildirimi telefonunuza/cihazınıza gönderildi! Bildirim çubuğunu kontrol ediniz.');
+        setPushMsg('✅ Test bildirimi telefonunuza gönderildi! (iPhone kilitliyken veya ana ekrandayken kilit ekranında gösterilir; uygulama açıkken üstte canlı kart olarak belirir.)');
       } else {
         setPushMsg(`❌ ${res.error || 'Test bildirimi gönderilemedi.'}`);
       }
