@@ -93,11 +93,37 @@ export default function App() {
     }
     window.addEventListener('SHOW_PUSH_TOAST', handleCustomToast);
 
+    // Canlı Bildirim Kontrolü (3 saniyede bir yeni ajanda/işlem bildirimlerini tara)
+    let lastSeenNotifId = -1;
+    const pollInterval = setInterval(() => {
+      fetch('/api/ajanda/bildirimler')
+        .then(res => res.json())
+        .then((list: any[]) => {
+          if (Array.isArray(list) && list.length > 0) {
+            const maxId = Math.max(...list.map((item: any) => Number(item.Id) || 0));
+            if (lastSeenNotifId === -1) {
+              lastSeenNotifId = maxId;
+            } else if (maxId > lastSeenNotifId) {
+              const newItems = list.filter((item: any) => (Number(item.Id) || 0) > lastSeenNotifId);
+              lastSeenNotifId = maxId;
+              for (const latest of newItems) {
+                handlePushEvent({
+                  title: `🔔 ${latest.Baslik || 'Rende Portal Bildirimi'}`,
+                  body: latest.Detay || `${latest.YapanKisi || 'Yönetici'} işlem yaptı.`
+                });
+              }
+            }
+          }
+        })
+        .catch(() => {});
+    }, 3000);
+
     return () => {
       if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
         navigator.serviceWorker.removeEventListener('message', handleSWMessage);
       }
       window.removeEventListener('SHOW_PUSH_TOAST', handleCustomToast);
+      clearInterval(pollInterval);
     };
   }, []);
 

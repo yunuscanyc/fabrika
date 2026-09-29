@@ -5626,9 +5626,9 @@ async function sendWebPushNotification(excludeUserName: string, payload: {
 }) {
   try {
     const subs = await loadPushSubscriptionsFromDb();
-    console.log(`[PUSH TETİKLENDİ] Başlık: "${payload.title}", Veritabanındaki Abone Sayısı: ${subs?.length || 0}`);
+    console.log(`[PUSH TETİKLENDİ] Başlık: "${payload.title}", Kayıtlı Cihaz Sayısı: ${subs?.length || 0}`);
     if (!subs || subs.length === 0) {
-      console.log('[PUSH UYARI] Bildirim gönderilecek kayıtlı cihaz/abone bulunamadı.');
+      console.log('[PUSH UYARI] Bildirim gönderilecek kayıtlı cihaz bulunamadı.');
       return;
     }
 
@@ -5640,8 +5640,6 @@ async function sendWebPushNotification(excludeUserName: string, payload: {
       url: payload.url || '/',
       data: payload.data || {}
     });
-
-    const deadEndpoints: string[] = [];
 
     for (const sub of subs) {
       if (!sub.endpoint || !sub.keys || !sub.keys.p256dh || !sub.keys.auth) {
@@ -5659,19 +5657,7 @@ async function sendWebPushNotification(excludeUserName: string, payload: {
         });
         console.log(`[PUSH BAŞARIYLA İLETİLDİ] -> ${sub.userName || 'Yönetici'}`);
       } catch (err: any) {
-        console.error(`[PUSH HATA] ${sub.userName || 'Yönetici'}:`, err.statusCode || err.message);
-        if (err.statusCode === 404 || err.statusCode === 410) {
-          deadEndpoints.push(sub.endpoint);
-        }
-      }
-    }
-
-    if (deadEndpoints.length > 0) {
-      memPushSubscriptions = memPushSubscriptions.filter(s => !deadEndpoints.includes(s.endpoint));
-      if (isDbConnected) {
-        try {
-          await pool.query(`DELETE FROM "PushSubscriptions" WHERE "Endpoint" = ANY($1)`, [deadEndpoints]);
-        } catch (e) {}
+        console.warn(`[PUSH DENE] ${sub.userName || 'Yönetici'}:`, err.statusCode || err.message);
       }
     }
   } catch (globalPushErr: any) {
@@ -5745,7 +5731,7 @@ async function recordAjandaNotification(notif: {
     }
   }
 
-  // Cep Telefonlarına Anlık Push Bildirimi Gönder
+  // Cep Telefonlarına Anlık Push Bildirimi Gönder (Yapan dahil tüm cihazlara)
   let pushBody = `${yapan} ajandada işlem yaptı.`;
   if (newNotif.IslemTuru === 'eklendi') {
     pushBody = `${yapan} yeni hatırlatma ekledi: "${newNotif.Baslik}"`;
@@ -5759,8 +5745,8 @@ async function recordAjandaNotification(notif: {
     pushBody = `${yapan} "${newNotif.Baslik}" hatırlatmasını tekrar devam edene çevirdi.`;
   }
 
-  sendWebPushNotification(yapan, {
-    title: `🔔 Rende Portal: ${yapan}`,
+  sendWebPushNotification('', {
+    title: `🔔 Rende Portal: ${newNotif.Baslik}`,
     body: pushBody,
     url: '/',
     data: {
@@ -5770,6 +5756,56 @@ async function recordAjandaNotification(notif: {
     }
   }).catch(() => {});
 }
+
+// ==========================================
+// Zamanı Gelen Hatırlatıcı Arka Plan Alarm Kontrolü (30 sn bir)
+// ==========================================
+const notifiedDueSet = new Set<string>();
+
+setInterval(async () => {
+  try {
+    const bugunStr = getBugunStr(); // "YYYY-MM-DD"
+    const list = memHatirlaticilar.length > 0 ? memHatirlaticilar : await getHatirlaticilarList();
+    if (Array.isArray(list)) {
+      for (const h of list) {
+        if (!h.TamamlandiMi && h.Tarih && h.Tarih <= bugunStr) {
+          const alarmKey = `hatirlatici-${h.Id}-${h.Tarih}`;
+          if (!notifiedDueSet.has(alarmKey)) {
+            notifiedDueSet.add(alarmKey);
+            console.log(`[ALARM TETİKLENDİ] Hatırlatıcı Zamanı Geldi: "${h.Baslik}"`);
+            sendWebPushNotification('', {
+              title: `⏰ Hatırlatıcı Zamanı Geldi: ${h.Baslik}`,
+              body: h.Aciklama ? `${h.Aciklama} (Tarih: ${h.Tarih})` : `Hatırlatmanız için belirlenen tarih geldi: ${h.Tarih}`,
+              url: '/',
+              data: { hatirlaticiId: h.Id }
+            }).catch(() => {});
+          }
+        }
+      }
+    }
+
+    // Araç Muayene / Bakım Zamanı
+    const araclar = memAraclar.length > 0 ? memAraclar : await getAraclarList();
+    if (Array.isArray(araclar)) {
+      for (const a of araclar) {
+        if (a.MuayeneTarihi && a.MuayeneTarihi <= bugunStr) {
+          const alarmKey = `arac-muayene-${a.Id}-${a.MuayeneTarihi}`;
+          if (!notifiedDueSet.has(alarmKey)) {
+            notifiedDueSet.add(alarmKey);
+            sendWebPushNotification('', {
+              title: `🚜 Araç Muayene Zamanı: ${a.Plaka}`,
+              body: `${a.Marka || ''} ${a.Model || ''} (${a.Plaka}) muayene tarihi geldi: ${a.MuayeneTarihi}`,
+              url: '/',
+              data: { aracId: a.Id }
+            }).catch(() => {});
+          }
+        }
+      }
+    }
+  } catch (err: any) {
+    console.error('[ARKA PLAN ALARM ERROR]', err.message);
+  }
+}, 30000);
 
 async function getAjandaNotificationsList(): Promise<AjandaNotification[]> {
   if (isDbConnected) {
