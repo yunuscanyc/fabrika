@@ -27,7 +27,12 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   }
 
   return (
-    <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur border-t border-slate-800 px-1 py-1 shadow-2xl safe-area-bottom">
+    <div 
+      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur border-t border-slate-800 px-1 py-1 shadow-2xl safe-area-bottom"
+      style={{
+        paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.25rem)'
+      }}
+    >
       <div className="grid grid-cols-8 gap-0.5 text-center">
         <button
           onClick={() => setActiveTab('dashboard')}

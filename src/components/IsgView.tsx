@@ -1748,11 +1748,11 @@ export const IsgView: React.FC<IsgViewProps> = ({
               <div>
                 <label className="block text-slate-400 mb-1 font-semibold">Açıklama / Hekim Notu:</label>
                 <textarea
-                  rows={2}
+                  rows={4}
                   value={saglikForm.Aciklama}
                   onChange={(e) => setSaglikForm({ ...saglikForm, Aciklama: e.target.value })}
-                  placeholder="İşyeri hekimi veya OSGB doktor notları..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-rose-500 resize-none"
+                  placeholder="İşyeri hekimi veya OSGB doktor notları, tahlil sonuçları, dikkat edilmesi gereken hususlar..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-rose-500 min-h-[90px]"
                 />
               </div>
 
@@ -1967,11 +1967,11 @@ export const IsgView: React.FC<IsgViewProps> = ({
               <div>
                 <label className="block text-slate-400 mb-1 font-semibold">Açıklama / Not:</label>
                 <textarea
-                  rows={2}
+                  rows={4}
                   value={egitimForm.Aciklama}
                   onChange={(e) => setEgitimForm({ ...egitimForm, Aciklama: e.target.value })}
-                  placeholder="Sertifika no veya eğitim notları..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-blue-500 resize-none"
+                  placeholder="Sertifika no, eğitim konuları, sınav sonucu veya eğitim notları..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-blue-500 min-h-[90px]"
                 />
               </div>
 

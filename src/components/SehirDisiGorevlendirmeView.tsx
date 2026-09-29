@@ -672,8 +672,9 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
                 <textarea
                   value={formData.GorevAmaci || ''}
                   onChange={(e) => setFormData({ ...formData, GorevAmaci: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white h-16 resize-none"
-                  placeholder="Görevin tanımını yazınız..."
+                  rows={4}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white text-xs sm:text-sm min-h-[100px] resize-y"
+                  placeholder="Görevin kapsamı, montaj/kontrol detayları, iş sağlığı kuralları ve talimatlar..."
                 />
               </div>
 

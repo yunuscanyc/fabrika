@@ -1872,11 +1872,11 @@ export const ProjelerView: React.FC<ProjelerViewProps> = ({
                   Açıklama &amp; Görev Notu (İsteğe Bağlı):
                 </label>
                 <textarea
-                  rows={2}
+                  rows={4}
                   value={seciliAtaNotlar}
                   onChange={e => setSeciliAtaNotlar(e.target.value)}
-                  placeholder="Örn: Şantiye montaj süreçleri ve mimari koordinasyon sorumlusu..."
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-blue-500 focus:bg-white"
+                  placeholder="Örn: Şantiye montaj süreçleri, mimari koordinasyon sorumlusu veya özel talimatlar..."
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:border-blue-500 focus:bg-white min-h-[90px]"
                 />
               </div>
 

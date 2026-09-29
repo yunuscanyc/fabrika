@@ -680,167 +680,179 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
 
       {/* DETAY VE ÇOKLU FOTOĞRAF MODALI */}
       {secilenHatirlatici && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[85vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl max-w-xl md:max-w-4xl lg:max-w-5xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
               <div className="flex items-center gap-2">
                 <Bell className="w-5 h-5 text-blue-600" />
-                <h3 className="font-extrabold text-slate-900 text-base">Ajanda Notu Detayları &amp; Görseller</h3>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-base">Ajanda Notu Detayları &amp; Görseller</h3>
+                  <p className="text-[11px] text-slate-500 hidden sm:block">Görev detaylarını güncelleyin, geniş açıklama girin ve fotoğraf/belge ekleyin</p>
+                </div>
               </div>
               <button onClick={() => setSecilenHatirlatici(null)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-4 py-4 overflow-y-auto flex-1 text-xs sm:text-sm">
-              {/* Form Alanları */}
-              <div className="space-y-3">
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Başlık / Görev Adı:</label>
-                  <input
-                    value={editBaslik}
-                    onChange={(e) => setEditBaslik(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs focus:ring-2 focus:ring-blue-500 outline-none"
-                    required
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
+            <div className="py-4 overflow-y-auto flex-1 text-xs sm:text-sm">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* SOL SÜTUN: Form Alanları & Geniş Açıklama */}
+                <div className="space-y-3 flex flex-col">
                   <div>
-                    <label className="font-bold text-slate-700 block mb-1">Tarih:</label>
+                    <label className="font-bold text-slate-700 block mb-1">Başlık / Görev Adı:</label>
                     <input
-                      type="date"
-                      value={editTarih}
-                      onChange={(e) => setEditTarih(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                      value={editBaslik}
+                      onChange={(e) => setEditBaslik(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                       required
                     />
                   </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">Tarih:</label>
+                      <input
+                        type="date"
+                        value={editTarih}
+                        onChange={(e) => setEditTarih(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">Kategori:</label>
+                      <select 
+                        value={editKategori} 
+                        onChange={(e) => setEditKategori(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                      >
+                        <option value="Bakim">Bakım &amp; Muayene</option>
+                        <option value="Proje">Proje &amp; Montaj</option>
+                        <option value="Evrak">Evrak &amp; Teklif</option>
+                        <option value="Gorev">Genel Görev</option>
+                      </select>
+                    </div>
+                  </div>
+
                   <div>
-                    <label className="font-bold text-slate-700 block mb-1">Kategori:</label>
+                    <label className="font-bold text-slate-700 block mb-1">Önem Derecesi:</label>
                     <select 
-                      value={editKategori} 
-                      onChange={(e) => setEditKategori(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                      value={editOnem} 
+                      onChange={(e) => setEditOnem(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
                     >
-                      <option value="Bakim">Bakım &amp; Muayene</option>
-                      <option value="Proje">Proje &amp; Montaj</option>
-                      <option value="Evrak">Evrak &amp; Teklif</option>
-                      <option value="Gorev">Genel Görev</option>
+                      <option value="Normal">Normal</option>
+                      <option value="Onemli">Önemli</option>
+                      <option value="Kritik">Kritik / Acil</option>
                     </select>
                   </div>
-                </div>
 
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Önem Derecesi:</label>
-                  <select 
-                    value={editOnem} 
-                    onChange={(e) => setEditOnem(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white focus:ring-2 focus:ring-blue-500 outline-none"
-                  >
-                    <option value="Normal">Normal</option>
-                    <option value="Onemli">Önemli</option>
-                    <option value="Kritik">Kritik / Acil</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Açıklama / Detaylı Not:</label>
-                  <textarea
-                    value={editAciklama}
-                    onChange={(e) => setEditAciklama(e.target.value)}
-                    rows={2}
-                    className="w-full p-2.5 rounded-lg border border-slate-200 text-xs focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
-                </div>
-              </div>
-
-              {/* Fotoğraflar / Belgeler Bölümü */}
-              <div className="border-t border-slate-100 pt-3">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-extrabold text-slate-900 text-xs flex items-center gap-1.5">
-                    <ImageIcon className="w-4 h-4 text-blue-500" />
-                    Çoklu Fotoğraf ve Belge Ekleri ({editBelgeler.length})
-                  </span>
-                  
-                  {/* Dosya Seçme Butonu */}
-                  <div className="flex items-center gap-2">
-                    {isProcessingFiles && (
-                      <span className="text-[11px] text-blue-600 flex items-center gap-1 font-semibold animate-pulse">
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                        Görsel işleniyor...
-                      </span>
-                    )}
-                    <label className="cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors">
-                      <Upload className="w-3.5 h-3.5" />
-                      Görsel Ekle
-                      <input
-                        type="file"
-                        multiple
-                        accept="image/*"
-                        onChange={(e) => handleDosyaYukle(e, true)}
-                        className="hidden"
-                      />
-                    </label>
+                  <div className="flex-1 flex flex-col pt-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="font-bold text-slate-700 block">Açıklama / Detaylı Not:</label>
+                      <span className="text-[10px] text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded">Geniş Metin Alanı</span>
+                    </div>
+                    <textarea
+                      value={editAciklama}
+                      onChange={(e) => setEditAciklama(e.target.value)}
+                      rows={6}
+                      placeholder="Görevin tüm detayları, montaj notları, irtibat telefonları, adres veya özel yönergeler..."
+                      className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 outline-none flex-1 min-h-[140px] resize-y"
+                    />
                   </div>
                 </div>
 
-                {/* Hata Bildirimi */}
-                {guncellemeHatasi && (
-                  <div className="mb-2 p-2.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start gap-1.5">
-                    <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-                    <span>{guncellemeHatasi}</span>
+                {/* SAĞ SÜTUN: Fotoğraflar / Belgeler Bölümü */}
+                <div className="space-y-3 flex flex-col md:border-l md:border-slate-100 md:pl-5 border-t md:border-t-0 pt-4 md:pt-0">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-extrabold text-slate-900 text-xs sm:text-sm flex items-center gap-1.5">
+                      <ImageIcon className="w-4 h-4 text-blue-500" />
+                      Fotoğraf ve Belge Ekleri ({editBelgeler.length})
+                    </span>
+                    
+                    {/* Dosya Seçme Butonu */}
+                    <div className="flex items-center gap-2">
+                      {isProcessingFiles && (
+                        <span className="text-[11px] text-blue-600 flex items-center gap-1 font-semibold animate-pulse">
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          Görsel işleniyor...
+                        </span>
+                      )}
+                      <label className="cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1.5 rounded-xl border border-blue-200 flex items-center gap-1.5 transition-colors">
+                        <Upload className="w-3.5 h-3.5" />
+                        Görsel Ekle
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/*"
+                          onChange={(e) => handleDosyaYukle(e, true)}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
                   </div>
-                )}
 
-                {/* Dosya Önizleme Izgarası */}
-                {editBelgeler.length === 0 ? (
-                  <div className="border-2 border-dashed border-slate-200 rounded-xl p-5 text-center text-slate-400 text-xs">
-                    <ImageIcon className="w-8 h-8 text-slate-300 mx-auto mb-1" />
-                    Eklenmiş fotoğraf bulunmuyor. Yukarıdaki butondan fotoğraf ekleyebilirsiniz.
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                    {editBelgeler.map((file, idx) => (
-                      <div key={idx} className="relative group rounded-xl border border-slate-200 overflow-hidden bg-slate-50 h-28 flex flex-col justify-between">
-                        {/* Resim Önizleme */}
-                        {getBelgeDosyaIcerigi(file) ? (
-                          <div className="w-full h-20 overflow-hidden relative cursor-zoom-in" onClick={() => setLightboxDosya(file)}>
-                            <img
-                              src={getBelgeDosyaIcerigi(file)}
-                              alt={file.DosyaAdi}
-                              referrerPolicy="no-referrer"
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                            />
-                            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                              <Eye className="w-5 h-5 text-white" />
+                  {/* Hata Bildirimi */}
+                  {guncellemeHatasi && (
+                    <div className="p-2.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start gap-1.5">
+                      <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                      <span>{guncellemeHatasi}</span>
+                    </div>
+                  )}
+
+                  {/* Dosya Önizleme Izgarası */}
+                  <div className="flex-1 overflow-y-auto max-h-[420px]">
+                    {editBelgeler.length === 0 ? (
+                      <div className="border-2 border-dashed border-slate-200 hover:border-blue-400 rounded-2xl p-6 text-center text-slate-400 text-xs flex flex-col items-center justify-center h-48 bg-slate-50/50 transition-colors">
+                        <ImageIcon className="w-10 h-10 text-slate-300 mb-2" />
+                        <span className="font-semibold text-slate-600">Eklenmiş fotoğraf bulunmuyor</span>
+                        <span className="text-[11px] text-slate-400 mt-1">Görsel Ekle butonuna basarak fotoğraf ekleyebilirsiniz.</span>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                        {editBelgeler.map((file, idx) => (
+                          <div key={idx} className="relative group rounded-xl border border-slate-200 overflow-hidden bg-slate-50 h-32 flex flex-col justify-between shadow-2xs">
+                            {/* Resim Önizleme */}
+                            {getBelgeDosyaIcerigi(file) ? (
+                              <div className="w-full h-24 overflow-hidden relative cursor-zoom-in" onClick={() => setLightboxDosya(file)}>
+                                <img
+                                  src={getBelgeDosyaIcerigi(file)}
+                                  alt={file.DosyaAdi}
+                                  referrerPolicy="no-referrer"
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                />
+                                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                  <Eye className="w-5 h-5 text-white" />
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="w-full h-24 flex flex-col items-center justify-center text-slate-400 bg-slate-100 p-2">
+                                <FileText className="w-6 h-6 text-slate-400 mb-1" />
+                                <span className="text-[9px] text-slate-500 font-medium">Belge / Dosya</span>
+                              </div>
+                            )}
+
+                            {/* Alt Dosya Bilgileri ve Silme */}
+                            <div className="px-2 py-1 bg-white border-t border-slate-100 flex items-center justify-between text-[10px] shrink-0">
+                              <span className="truncate font-semibold max-w-[70%] text-slate-700" title={file.DosyaAdi}>
+                                {file.DosyaAdi}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => dosyaSil(idx, true)}
+                                className="p-1 text-slate-400 hover:text-red-600 rounded transition-colors"
+                                title="Dosyayı Kaldır"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           </div>
-                        ) : (
-                          <div className="w-full h-20 flex flex-col items-center justify-center text-slate-400 bg-slate-100 p-2">
-                            <FileText className="w-6 h-6 text-slate-400 mb-1" />
-                            <span className="text-[9px] text-slate-500 font-medium">Belge / Dosya</span>
-                          </div>
-                        )}
-
-                        {/* Alt Dosya Bilgileri ve Silme */}
-                        <div className="px-2 py-1 bg-white border-t border-slate-100 flex items-center justify-between text-[10px] shrink-0">
-                          <span className="truncate font-semibold max-w-[70%] text-slate-700" title={file.DosyaAdi}>
-                            {file.DosyaAdi}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => dosyaSil(idx, true)}
-                            className="p-1 text-slate-400 hover:text-red-600 rounded transition-colors"
-                            title="Dosyayı Kaldır"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
                   </div>
-                )}
+                </div>
               </div>
             </div>
 
@@ -861,7 +873,6 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                 >
                   {secilenHatirlatici.TamamlandiMi ? 'Açık Göreve Çevir' : 'Tamamlandı Olarak İşaretle'}
                 </button>
-
                 <button
                   type="button"
                   onClick={() => setSilinecekHatirlatici(secilenHatirlatici)}
@@ -908,7 +919,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                       setSecilenHatirlatici(null);
                     }
                   }}
-                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 disabled:opacity-50 transition-colors"
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 disabled:opacity-50 transition-colors"
                 >
                   {guncelleniyor ? (
                     <>
@@ -927,17 +938,23 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
 
       {/* YENİ HATIRLATICI MODALI */}
       {modalAcik && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-extrabold text-slate-900 text-base">Yeni Görev / Hatırlatıcı Ekle</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl max-w-xl md:max-w-4xl lg:max-w-5xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
+              <div className="flex items-center gap-2">
+                <Bell className="w-5 h-5 text-blue-600" />
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-base">Yeni Görev / Hatırlatıcı Ekle</h3>
+                  <p className="text-[11px] text-slate-500 hidden sm:block">Görevin detaylarını belirleyin, geniş açıklama girin ve evrak/fotoğrafları ekleyin</p>
+                </div>
+              </div>
               <button 
                 onClick={() => {
                   setModalAcik(false);
                   setKayitHatasi(null);
                   setYeniBelgeler([]);
                 }} 
-                className="text-slate-400 hover:text-slate-600"
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -945,7 +962,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
 
             {/* Hata Bildirimi */}
             {kayitHatasi && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start gap-2">
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start gap-2 shrink-0">
                 <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
                 <div>
                   <p className="font-bold">Kayıt Başarısız Oldu</p>
@@ -978,130 +995,146 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                   setKaydediliyor(false);
                 }
               }}
-              className="space-y-4 text-xs sm:text-sm"
+              className="py-4 overflow-y-auto flex-1 text-xs sm:text-sm flex flex-col"
             >
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Görev / Not Başlığı:</label>
-                <input
-                  name="baslik"
-                  placeholder="Örn: Megane Muayene Randevusu Alınacak"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs focus:ring-2 focus:ring-blue-500 outline-none"
-                  required
-                />
-              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 flex-1">
+                {/* SOL SÜTUN: Form Alanları & Geniş Açıklama */}
+                <div className="space-y-3 flex flex-col">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Görev / Not Başlığı:</label>
+                    <input
+                      name="baslik"
+                      placeholder="Örn: Megane Muayene Randevusu Alınacak"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      required
+                    />
+                  </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Tarih:</label>
-                  <input
-                    type="date"
-                    name="tarih"
-                    defaultValue={bugunStr}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs focus:ring-2 focus:ring-blue-500 outline-none"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Kategori:</label>
-                  <select name="kategori" className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white focus:ring-2 focus:ring-blue-500 outline-none">
-                    <option value="Bakim">Bakım &amp; Muayene</option>
-                    <option value="Proje">Proje &amp; Montaj</option>
-                    <option value="Evrak">Evrak &amp; Teklif</option>
-                    <option value="Gorev">Genel Görev</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Önem Derecesi:</label>
-                <select name="onem" className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white focus:ring-2 focus:ring-blue-500 outline-none">
-                  <option value="Normal">Normal</option>
-                  <option value="Onemli">Önemli</option>
-                  <option value="Kritik">Kritik / Acil</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Açıklama / Detay:</label>
-                <textarea
-                  name="aciklama"
-                  rows={2}
-                  placeholder="İlgili kişi, istasyon veya not..."
-                  className="w-full p-2 rounded-lg border border-slate-200 text-xs focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-
-              {/* Çoklu Fotoğraf Ekleme Alanı */}
-              <div className="border-t border-slate-100 pt-3">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-bold text-slate-700 text-xs flex items-center gap-1">
-                    <ImageIcon className="w-4 h-4 text-slate-500" />
-                    Fotoğraf / Belge Ekle ({yeniBelgeler.length})
-                  </span>
-                  <div className="flex items-center gap-2">
-                    {isProcessingFiles && (
-                      <span className="text-[11px] text-blue-600 flex items-center gap-1 font-semibold animate-pulse">
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                        Görsel işleniyor...
-                      </span>
-                    )}
-                    <label className="cursor-pointer bg-slate-50 hover:bg-slate-100 text-slate-600 text-[11px] font-bold px-2 py-1 rounded-lg border border-slate-200 flex items-center gap-1">
-                      <Upload className="w-3 h-3" />
-                      Görsel Seç
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">Tarih:</label>
                       <input
-                        type="file"
-                        multiple
-                        accept="image/*"
-                        onChange={(e) => handleDosyaYukle(e, false)}
-                        className="hidden"
+                        type="date"
+                        name="tarih"
+                        defaultValue={bugunStr}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        required
                       />
-                    </label>
+                    </div>
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">Kategori:</label>
+                      <select name="kategori" className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="Bakim">Bakım &amp; Muayene</option>
+                        <option value="Proje">Proje &amp; Montaj</option>
+                        <option value="Evrak">Evrak &amp; Teklif</option>
+                        <option value="Gorev">Genel Görev</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Önem Derecesi:</label>
+                    <select name="onem" className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                      <option value="Normal">Normal</option>
+                      <option value="Onemli">Önemli</option>
+                      <option value="Kritik">Kritik / Acil</option>
+                    </select>
+                  </div>
+
+                  <div className="flex-1 flex flex-col pt-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="font-bold text-slate-700 block">Açıklama / Detaylı Not:</label>
+                      <span className="text-[10px] text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded">Geniş Metin Alanı</span>
+                    </div>
+                    <textarea
+                      name="aciklama"
+                      rows={6}
+                      placeholder="İlgili kişi, istasyon, fatura detayları veya özel talimatlar..."
+                      className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 outline-none flex-1 min-h-[140px] resize-y"
+                    />
                   </div>
                 </div>
 
-                {yeniBelgeler.length > 0 && (
-                  <div className="grid grid-cols-3 gap-2">
-                    {yeniBelgeler.map((file, idx) => (
-                      <div key={idx} className="relative group rounded-lg border border-slate-200 overflow-hidden bg-slate-50 h-20 flex flex-col justify-between">
-                        <div 
-                          className="w-full h-14 overflow-hidden relative cursor-zoom-in"
-                          onClick={() => setLightboxDosya(file)}
-                          title="Önizlemeyi Büyüt"
-                        >
-                          {getBelgeDosyaIcerigi(file) ? (
-                            <img
-                              src={getBelgeDosyaIcerigi(file)}
-                              alt={file.DosyaAdi}
-                              referrerPolicy="no-referrer"
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-400">
-                              <FileText className="w-4 h-4" />
-                            </div>
-                          )}
-                          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                            <Eye className="w-3.5 h-3.5 text-white" />
-                          </div>
-                        </div>
-                        <div className="px-1.5 py-0.5 bg-white border-t border-slate-100 flex items-center justify-between text-[8px] truncate text-slate-700">
-                          <span className="truncate max-w-[70%] font-medium">{file.DosyaAdi}</span>
-                          <button
-                            type="button"
-                            onClick={() => dosyaSil(idx, false)}
-                            className="text-slate-400 hover:text-red-600 p-0.5 rounded"
-                            title="Kaldır"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                {/* SAĞ SÜTUN: Çoklu Fotoğraf Ekleme Alanı */}
+                <div className="space-y-3 flex flex-col md:border-l md:border-slate-100 md:pl-5 border-t md:border-t-0 pt-4 md:pt-0">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-extrabold text-slate-900 text-xs sm:text-sm flex items-center gap-1.5">
+                      <ImageIcon className="w-4 h-4 text-blue-500" />
+                      Fotoğraf / Belge Ekle ({yeniBelgeler.length})
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {isProcessingFiles && (
+                        <span className="text-[11px] text-blue-600 flex items-center gap-1 font-semibold animate-pulse">
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          Görsel işleniyor...
+                        </span>
+                      )}
+                      <label className="cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1.5 rounded-xl border border-blue-200 flex items-center gap-1.5 transition-colors">
+                        <Upload className="w-3.5 h-3.5" />
+                        Görsel Seç
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/*"
+                          onChange={(e) => handleDosyaYukle(e, false)}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
                   </div>
-                )}
+
+                  <div className="flex-1 overflow-y-auto max-h-[420px]">
+                    {yeniBelgeler.length === 0 ? (
+                      <div className="border-2 border-dashed border-slate-200 hover:border-blue-400 rounded-2xl p-6 text-center text-slate-400 text-xs flex flex-col items-center justify-center h-48 bg-slate-50/50 transition-colors">
+                        <ImageIcon className="w-10 h-10 text-slate-300 mb-2" />
+                        <span className="font-semibold text-slate-600">Henüz görsel eklenmedi</span>
+                        <span className="text-[11px] text-slate-400 mt-1">Görsel Seç butonuna basarak dosya veya fotoğraf ekleyebilirsiniz.</span>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                        {yeniBelgeler.map((file, idx) => (
+                          <div key={idx} className="relative group rounded-xl border border-slate-200 overflow-hidden bg-slate-50 h-32 flex flex-col justify-between shadow-2xs">
+                            <div 
+                              className="w-full h-24 overflow-hidden relative cursor-zoom-in"
+                              onClick={() => setLightboxDosya(file)}
+                              title="Önizlemeyi Büyüt"
+                            >
+                              {getBelgeDosyaIcerigi(file) ? (
+                                <img
+                                  src={getBelgeDosyaIcerigi(file)}
+                                  alt={file.DosyaAdi}
+                                  referrerPolicy="no-referrer"
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-400">
+                                  <FileText className="w-6 h-6" />
+                                </div>
+                              )}
+                              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                <Eye className="w-4 h-4 text-white" />
+                              </div>
+                            </div>
+                            <div className="px-2 py-1 bg-white border-t border-slate-100 flex items-center justify-between text-[10px] truncate text-slate-700">
+                              <span className="truncate max-w-[70%] font-semibold">{file.DosyaAdi}</span>
+                              <button
+                                type="button"
+                                onClick={() => dosyaSil(idx, false)}
+                                className="text-slate-400 hover:text-red-600 p-0.5 rounded"
+                                title="Kaldır"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2 shrink-0">
                 <button
                   type="button"
                   disabled={kaydediliyor}
@@ -1110,14 +1143,14 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                     setKayitHatasi(null);
                     setYeniBelgeler([]);
                   }}
-                  className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100 text-xs font-semibold"
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 text-xs font-semibold"
                 >
                   İptal
                 </button>
                 <button
                   type="submit"
                   disabled={kaydediliyor || isProcessingFiles}
-                  className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 disabled:opacity-50 transition-colors"
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 disabled:opacity-50 transition-colors"
                 >
                   {kaydediliyor ? (
                     <>

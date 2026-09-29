@@ -792,7 +792,7 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
       {/* ARAÇ EKLEME / DÜZENLEME MODALI */}
       {aracFormAcik && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-5 sm:p-7 shadow-2xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-2xl md:max-w-5xl w-full p-5 sm:p-7 shadow-2xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <h3 className="font-extrabold text-slate-900 text-base sm:text-lg flex items-center gap-2">
@@ -849,280 +849,289 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
               }}
               className="space-y-4 text-xs sm:text-sm"
             >
-              {/* 1. BÖLÜM: TEMEL KİMLİK BİLGİLERİ */}
-              <div className="bg-slate-50/70 p-3.5 rounded-2xl border border-slate-200 space-y-3">
-                <span className="text-xs font-black text-slate-800 uppercase tracking-wider block">
-                  1. Temel Araç &amp; Kimlik Bilgileri
-                </span>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Plaka / Ekipman Kodu:</label>
-                    <input
-                      name="plaka"
-                      defaultValue={duzenlenenArac?.PlakaVeyaKod || ''}
-                      placeholder="Örn: 07 RND 45 veya FK-01"
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-mono font-bold bg-white"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Araç / Ekipman Türü:</label>
-                    <select
-                      name="tur"
-                      defaultValue={duzenlenenArac?.AracTipi || 'Kamyonet / Sevkiyat'}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white font-medium"
-                    >
-                      <option value="Kamyonet / Sevkiyat">Kamyonet / Sevkiyat</option>
-                      <option value="Kamyon (Ağır Vasıta)">Kamyon (Ağır Vasıta)</option>
-                      <option value="Forklift (Dizel/Elektrik)">Forklift (Dizel/Elektrik)</option>
-                      <option value="Otomobil (Binek)">Otomobil (Binek)</option>
-                      <option value="Transpalet / Yükleyici">Transpalet / Yükleyici</option>
-                      <option value="Personel Servisi">Personel Servisi</option>
-                      <option value="Tavan Vinci / Makine">Tavan Vinci / Makine</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Model Yılı:</label>
-                    <input
-                      name="yil"
-                      defaultValue={duzenlenenArac?.ModelYili || new Date().getFullYear()}
-                      onKeyDown={sadeceRakamGiris}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-mono bg-white"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="sm:col-span-2">
-                    <label className="font-semibold text-slate-700 block mb-1">Marka &amp; Model:</label>
-                    <input
-                      name="marka"
-                      defaultValue={duzenlenenArac?.MarkaModel || ''}
-                      placeholder="Örn: Ford Transit 350L Panelvan"
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Şasi / Seri No (Opsiyonel):</label>
-                    <input
-                      name="sasi"
-                      defaultValue={duzenlenenArac?.SasiSeriNo || ''}
-                      placeholder="Şasi No"
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-mono bg-white"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <PersonelCombobox
-                      name="zimmet"
-                      label="Zimmetli Personel / Sürücü:"
-                      personeller={yerelPersoneller}
-                      value={formZimmetli}
-                      onChange={(val) => setFormZimmetli(val)}
-                      placeholder="Personel seçin veya yazın..."
-                      helperText="Aracın ana sorumlusu veya şoförü"
-                    />
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Araç Durumu:</label>
-                    <select
-                      name="durum"
-                      defaultValue={duzenlenenArac?.Durum || 'Faal'}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white font-medium"
-                    >
-                      <option value="Faal">Faal (Filoda Aktif)</option>
-                      <option value="Bakımda / Serviste">Bakımda / Serviste</option>
-                      <option value="Arızalı">Arızalı</option>
-                      <option value="Elden Çıkarıldı / Satıldı">Elden Çıkarıldı / Satıldı</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* 2. BÖLÜM: TÜVTÜRK ARAÇ MUAYENE TAKİP SİSTEMİ (ÖZEL VURGULU) */}
-              <div className="bg-blue-50/60 p-4 rounded-2xl border-2 border-blue-200 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-black text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
-                    <FileCheck2 className="w-4 h-4 text-blue-600" />
-                    2. TÜVTÜRK Araç Muayene Takip Sistemi
-                  </span>
-                  {formMuayeneBitisTarihi && (
-                    <span className={`text-[11px] px-2.5 py-0.5 rounded-full border ${tarihDurumuHesapla(formMuayeneBitisTarihi).badgeClass}`}>
-                      {tarihDurumuHesapla(formMuayeneBitisTarihi).metin}
+              {/* Web Üzerinde 2 Sütunlu Grid Düzeni */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* SOL SÜTUN: 1. KİMLİK & 2. TÜVTÜRK */}
+                <div className="space-y-4">
+                  {/* 1. BÖLÜM: TEMEL KİMLİK BİLGİLERİ */}
+                  <div className="bg-slate-50/70 p-3.5 rounded-2xl border border-slate-200 space-y-3">
+                    <span className="text-xs font-black text-slate-800 uppercase tracking-wider block">
+                      1. Temel Araç &amp; Kimlik Bilgileri
                     </span>
-                  )}
-                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Son Muayene Tarihi:</label>
-                    <input
-                      type="date"
-                      value={formMuayeneTarihi}
-                      onChange={(e) => handleMuayeneTarihiChange(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white font-medium"
-                    />
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="font-semibold text-slate-700 block mb-1">Plaka / Ekipman Kodu:</label>
+                        <input
+                          name="plaka"
+                          defaultValue={duzenlenenArac?.PlakaVeyaKod || ''}
+                          placeholder="Örn: 07 RND 45 veya FK-01"
+                          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-mono font-bold bg-white"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="font-semibold text-slate-700 block mb-1">Araç / Ekipman Türü:</label>
+                        <select
+                          name="tur"
+                          defaultValue={duzenlenenArac?.AracTipi || 'Kamyonet / Sevkiyat'}
+                          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white font-medium"
+                        >
+                          <option value="Kamyonet / Sevkiyat">Kamyonet / Sevkiyat</option>
+                          <option value="Kamyon (Ağır Vasıta)">Kamyon (Ağır Vasıta)</option>
+                          <option value="Forklift (Dizel/Elektrik)">Forklift (Dizel/Elektrik)</option>
+                          <option value="Otomobil (Binek)">Otomobil (Binek)</option>
+                          <option value="Transpalet / Yükleyici">Transpalet / Yükleyici</option>
+                          <option value="Personel Servisi">Personel Servisi</option>
+                          <option value="Tavan Vinci / Makine">Tavan Vinci / Makine</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="font-semibold text-slate-700 block mb-1">Model Yılı:</label>
+                        <input
+                          name="yil"
+                          defaultValue={duzenlenenArac?.ModelYili || new Date().getFullYear()}
+                          onKeyDown={sadeceRakamGiris}
+                          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-mono bg-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="sm:col-span-2">
+                        <label className="font-semibold text-slate-700 block mb-1">Marka &amp; Model:</label>
+                        <input
+                          name="marka"
+                          defaultValue={duzenlenenArac?.MarkaModel || ''}
+                          placeholder="Örn: Ford Transit 350L Panelvan"
+                          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="font-semibold text-slate-700 block mb-1">Şasi / Seri No (Opsiyonel):</label>
+                        <input
+                          name="sasi"
+                          defaultValue={duzenlenenArac?.SasiSeriNo || ''}
+                          placeholder="Şasi No"
+                          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-mono bg-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <PersonelCombobox
+                          name="zimmet"
+                          label="Zimmetli Personel / Sürücü:"
+                          personeller={yerelPersoneller}
+                          value={formZimmetli}
+                          onChange={(val) => setFormZimmetli(val)}
+                          placeholder="Personel seçin veya yazın..."
+                          helperText="Aracın ana sorumlusu veya şoförü"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-semibold text-slate-700 block mb-1">Araç Durumu:</label>
+                        <select
+                          name="durum"
+                          defaultValue={duzenlenenArac?.Durum || 'Faal'}
+                          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white font-medium"
+                        >
+                          <option value="Faal">Faal (Filoda Aktif)</option>
+                          <option value="Bakımda / Serviste">Bakımda / Serviste</option>
+                          <option value="Arızalı">Arızalı</option>
+                          <option value="Elden Çıkarıldı / Satıldı">Elden Çıkarıldı / Satıldı</option>
+                        </select>
+                      </div>
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Geçerlilik Süresi:</label>
-                    <select
-                      value={formMuayeneGecerlilik}
-                      onChange={(e) => handleMuayeneGecerlilikChange(Number(e.target.value))}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white font-bold text-blue-900"
-                    >
-                      <option value={1}>1 Yıl (Ticari / Kamyonet / Ağır Vasıta)</option>
-                      <option value={2}>2 Yıl (Binek Otomobil / Hususi)</option>
-                      <option value={0.5}>6 Ay (Özel İzinli / Ticari Servis)</option>
-                      <option value={3}>3 Yıl (Sıfır Araç İlk Muayene)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1 flex items-center justify-between">
-                      <span>Muayene Bitiş Tarihi:</span>
-                      <span className="text-[10px] text-blue-600 font-normal">Otomatik / Manuel</span>
-                    </label>
-                    <input
-                      type="date"
-                      value={formMuayeneBitisTarihi}
-                      onChange={(e) => setFormMuayeneBitisTarihi(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg border-2 border-blue-300 text-xs bg-white font-bold text-slate-900"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* 3. BÖLÜM: TRAFİK SİGORTASI & KASKO TAKİBİ */}
-              <div className="bg-purple-50/50 p-4 rounded-2xl border-2 border-purple-200 space-y-3">
-                <span className="text-xs font-black text-purple-950 uppercase tracking-wider flex items-center gap-1.5">
-                  <ShieldAlert className="w-4 h-4 text-purple-600" />
-                  3. Zorunlu Trafik Sigortası &amp; Kasko Poliçe Takibi
-                </span>
-
-                {/* Trafik Sigortası Bilgileri */}
-                <div className="bg-white p-3 rounded-xl border border-purple-100 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-purple-900">Zorunlu Trafik Sigortası:</span>
-                    {formSigortaBitisTarihi && (
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full border ${tarihDurumuHesapla(formSigortaBitisTarihi).badgeClass}`}>
-                        {tarihDurumuHesapla(formSigortaBitisTarihi).metin}
+                  {/* 2. BÖLÜM: TÜVTÜRK ARAÇ MUAYENE TAKİP SİSTEMİ */}
+                  <div className="bg-blue-50/60 p-4 rounded-2xl border-2 border-blue-200 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
+                        <FileCheck2 className="w-4 h-4 text-blue-600" />
+                        2. TÜVTÜRK Araç Muayene Takip Sistemi
                       </span>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className="text-[11px] font-semibold text-slate-600 block mb-1">Sigorta Şirketi:</label>
-                      <input
-                        name="sigortaSirketi"
-                        defaultValue={duzenlenenArac?.SigortaSirketi || ''}
-                        placeholder="Örn: Türkiye Sigorta / Anadolu"
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs"
-                      />
+                      {formMuayeneBitisTarihi && (
+                        <span className={`text-[11px] px-2.5 py-0.5 rounded-full border ${tarihDurumuHesapla(formMuayeneBitisTarihi).badgeClass}`}>
+                          {tarihDurumuHesapla(formMuayeneBitisTarihi).metin}
+                        </span>
+                      )}
                     </div>
-                    <div>
-                      <label className="text-[11px] font-semibold text-slate-600 block mb-1">Poliçe No:</label>
-                      <input
-                        name="sigortaPoliceNo"
-                        defaultValue={duzenlenenArac?.SigortaPoliceNo || ''}
-                        placeholder="Poliçe No"
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-semibold text-slate-600 block mb-1">Sigorta Bitiş Tarihi:</label>
-                      <input
-                        type="date"
-                        value={formSigortaBitisTarihi}
-                        onChange={(e) => setFormSigortaBitisTarihi(e.target.value)}
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-purple-300 text-xs font-bold"
-                      />
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="font-semibold text-slate-700 block mb-1">Son Muayene Tarihi:</label>
+                        <input
+                          type="date"
+                          value={formMuayeneTarihi}
+                          onChange={(e) => handleMuayeneTarihiChange(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white font-medium"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="font-semibold text-slate-700 block mb-1">Geçerlilik Süresi:</label>
+                        <select
+                          value={formMuayeneGecerlilik}
+                          onChange={(e) => handleMuayeneGecerlilikChange(Number(e.target.value))}
+                          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white font-bold text-blue-900"
+                        >
+                          <option value={1}>1 Yıl (Ticari / Kamyonet / Ağır Vasıta)</option>
+                          <option value={2}>2 Yıl (Binek Otomobil / Hususi)</option>
+                          <option value={0.5}>6 Ay (Özel İzinli / Ticari Servis)</option>
+                          <option value={3}>3 Yıl (Sıfır Araç İlk Muayene)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="font-semibold text-slate-700 block mb-1 flex items-center justify-between">
+                          <span>Muayene Bitiş:</span>
+                          <span className="text-[10px] text-blue-600 font-normal">Otomatik</span>
+                        </label>
+                        <input
+                          type="date"
+                          value={formMuayeneBitisTarihi}
+                          onChange={(e) => setFormMuayeneBitisTarihi(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border-2 border-blue-300 text-xs bg-white font-bold text-slate-900"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Kasko Bilgileri */}
-                <div className="bg-white p-3 rounded-xl border border-purple-100 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-800">Kasko Poliçesi (Opsiyonel):</span>
-                    {formKaskoBitisTarihi && (
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full border ${tarihDurumuHesapla(formKaskoBitisTarihi).badgeClass}`}>
-                        {tarihDurumuHesapla(formKaskoBitisTarihi).metin}
-                      </span>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className="text-[11px] font-semibold text-slate-600 block mb-1">Kasko Şirketi:</label>
-                      <input
-                        name="kaskoSirketi"
-                        defaultValue={duzenlenenArac?.KaskoSirketi || ''}
-                        placeholder="Örn: Allianz / Axa Kasko"
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-semibold text-slate-600 block mb-1">Kasko Poliçe No:</label>
-                      <input
-                        name="kaskoPoliceNo"
-                        defaultValue={duzenlenenArac?.KaskoPoliceNo || ''}
-                        placeholder="Kasko No"
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-semibold text-slate-600 block mb-1">Kasko Bitiş Tarihi:</label>
-                      <input
-                        type="date"
-                        value={formKaskoBitisTarihi}
-                        onChange={(e) => setFormKaskoBitisTarihi(e.target.value)}
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-bold"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
+                {/* SAĞ SÜTUN: 3. SİGORTA & 4. SAYAÇ/BAKIM */}
+                <div className="space-y-4">
+                  {/* 3. BÖLÜM: TRAFİK SİGORTASI & KASKO TAKİBİ */}
+                  <div className="bg-purple-50/50 p-4 rounded-2xl border-2 border-purple-200 space-y-3">
+                    <span className="text-xs font-black text-purple-950 uppercase tracking-wider flex items-center gap-1.5">
+                      <ShieldAlert className="w-4 h-4 text-purple-600" />
+                      3. Zorunlu Trafik Sigortası &amp; Kasko Takibi
+                    </span>
 
-              {/* 4. BÖLÜM: PERİYODİK SAYAÇ & KM BAKIM AYARLARI */}
-              <div className="bg-slate-50/70 p-3.5 rounded-2xl border border-slate-200 space-y-3">
-                <span className="text-xs font-black text-slate-800 uppercase tracking-wider block">
-                  4. Periyodik Sayaç &amp; Bakım Ayarları
-                </span>
+                    {/* Trafik Sigortası Bilgileri */}
+                    <div className="bg-white p-3 rounded-xl border border-purple-100 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-purple-900">Zorunlu Trafik Sigortası:</span>
+                        {formSigortaBitisTarihi && (
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full border ${tarihDurumuHesapla(formSigortaBitisTarihi).badgeClass}`}>
+                            {tarihDurumuHesapla(formSigortaBitisTarihi).metin}
+                          </span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-600 block mb-1">Şirket:</label>
+                          <input
+                            name="sigortaSirketi"
+                            defaultValue={duzenlenenArac?.SigortaSirketi || ''}
+                            placeholder="Örn: Türkiye Sigorta"
+                            className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-600 block mb-1">Poliçe No:</label>
+                          <input
+                            name="sigortaPoliceNo"
+                            defaultValue={duzenlenenArac?.SigortaPoliceNo || ''}
+                            placeholder="Poliçe No"
+                            className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-600 block mb-1">Bitiş Tarihi:</label>
+                          <input
+                            type="date"
+                            value={formSigortaBitisTarihi}
+                            onChange={(e) => setFormSigortaBitisTarihi(e.target.value)}
+                            className="w-full px-2.5 py-1.5 rounded-lg border border-purple-300 text-xs font-bold"
+                          />
+                        </div>
+                      </div>
+                    </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Takip Birimi:</label>
-                    <select
-                      name="takipTuru"
-                      defaultValue={duzenlenenArac?.SaatTakibiMi ? 'saat' : 'km'}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white font-bold"
-                    >
-                      <option value="km">Kilometre (KM - Araçlar)</option>
-                      <option value="saat">Çalışma Saati (Saat - Forklift / Vinç)</option>
-                    </select>
+                    {/* Kasko Bilgileri */}
+                    <div className="bg-white p-3 rounded-xl border border-purple-100 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-800">Kasko Poliçesi (Opsiyonel):</span>
+                        {formKaskoBitisTarihi && (
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full border ${tarihDurumuHesapla(formKaskoBitisTarihi).badgeClass}`}>
+                            {tarihDurumuHesapla(formKaskoBitisTarihi).metin}
+                          </span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-600 block mb-1">Kasko Şirketi:</label>
+                          <input
+                            name="kaskoSirketi"
+                            defaultValue={duzenlenenArac?.KaskoSirketi || ''}
+                            placeholder="Örn: Allianz"
+                            className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-600 block mb-1">Poliçe No:</label>
+                          <input
+                            name="kaskoPoliceNo"
+                            defaultValue={duzenlenenArac?.KaskoPoliceNo || ''}
+                            placeholder="Kasko No"
+                            className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-600 block mb-1">Bitiş Tarihi:</label>
+                          <input
+                            type="date"
+                            value={formKaskoBitisTarihi}
+                            onChange={(e) => setFormKaskoBitisTarihi(e.target.value)}
+                            className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-bold"
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Güncel Sayaç (KM / Saat):</label>
-                    <input
-                      name="guncelSayac"
-                      defaultValue={duzenlenenArac?.GuncelKmVeyaSaat ?? 0}
-                      onKeyDown={sadeceRakamGiris}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-mono font-bold bg-white"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Bakım Periyodu (KM / Saat):</label>
-                    <input
-                      name="aralikSayac"
-                      defaultValue={duzenlenenArac?.BakimAraligiKmVeyaSaat ?? 10000}
-                      onKeyDown={sadeceRakamGiris}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-mono bg-white"
-                    />
+
+                  {/* 4. BÖLÜM: PERİYODİK SAYAÇ & KM BAKIM AYARLARI */}
+                  <div className="bg-slate-50/70 p-3.5 rounded-2xl border border-slate-200 space-y-3">
+                    <span className="text-xs font-black text-slate-800 uppercase tracking-wider block">
+                      4. Periyodik Sayaç &amp; Bakım Ayarları
+                    </span>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="font-semibold text-slate-700 block mb-1">Takip Birimi:</label>
+                        <select
+                          name="takipTuru"
+                          defaultValue={duzenlenenArac?.SaatTakibiMi ? 'saat' : 'km'}
+                          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white font-bold"
+                        >
+                          <option value="km">Kilometre (KM - Araçlar)</option>
+                          <option value="saat">Çalışma Saati (Saat - Forklift / Vinç)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="font-semibold text-slate-700 block mb-1">Güncel Sayaç (KM/Saat):</label>
+                        <input
+                          name="guncelSayac"
+                          defaultValue={duzenlenenArac?.GuncelKmVeyaSaat ?? 0}
+                          onKeyDown={sadeceRakamGiris}
+                          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-mono font-bold bg-white"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="font-semibold text-slate-700 block mb-1">Bakım Periyodu:</label>
+                        <input
+                          name="aralikSayac"
+                          defaultValue={duzenlenenArac?.BakimAraligiKmVeyaSaat ?? 10000}
+                          onKeyDown={sadeceRakamGiris}
+                          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-mono bg-white"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1130,14 +1139,20 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
               <input type="hidden" name="aralikAy" defaultValue={duzenlenenArac?.BakimAraligiAy || 12} />
               <input type="hidden" name="sonBakimTarihi" defaultValue={duzenlenenArac?.SonBakimTarihi || ''} />
 
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">Araç &amp; Bakım Notları:</label>
+              {/* Araç & Bakım Notları - Geniş Alan */}
+              <div className="pt-1">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold text-slate-700 block text-xs">
+                    📝 Araç, Donanım &amp; Bakım Notları:
+                  </label>
+                  <span className="text-[10px] text-slate-400">Gözlemler, parça değişimleri, yedek anahtar bilgisi</span>
+                </div>
                 <textarea
                   name="notlar"
-                  rows={2}
+                  rows={4}
                   defaultValue={duzenlenenArac?.Notlar || ''}
-                  placeholder="Kritik parça değişimleri, lastik durumu, yedek anahtar veya özel notlar..."
-                  className="w-full p-2.5 rounded-lg border border-slate-200 text-xs"
+                  placeholder="Kritik parça değişimleri, lastik durumu, yedek anahtar konumu, ruhsat notları veya özel araç uyarıları..."
+                  className="w-full p-3 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 />
               </div>
 
@@ -1289,12 +1304,13 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                 </div>
                 <div>
                   <label className="font-semibold text-slate-700 block mb-1">Yapılan İşlemler / Açıklama:</label>
-                  <input
-                    type="text"
+                  <textarea
+                    rows={3}
                     name="aciklama"
                     disabled={bakimKaydediliyor}
                     defaultValue={duzenlenenBakim?.Aciklama || 'Periyodik Bakım, Yağ & Filtre Değişimi'}
-                    className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white disabled:opacity-60"
+                    placeholder="Değişen parçalar, motor yağı viskozitesi, mekanik kontroller ve servis notları..."
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white disabled:opacity-60 text-xs sm:text-sm"
                     required
                   />
                 </div>

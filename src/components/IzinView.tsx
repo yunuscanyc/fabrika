@@ -855,11 +855,11 @@ export const IzinView: React.FC<IzinViewProps> = ({
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Açıklama / İzin Nedeni</label>
                 <textarea
-                  rows={2}
+                  rows={4}
                   value={formAciklama}
                   onChange={(e) => setFormAciklama(e.target.value)}
-                  placeholder="İsteğe bağlı detay not..."
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-emerald-500"
+                  placeholder="İzin gerekçesi, yol izni, acil durum veya ilgili detay not..."
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-emerald-500 min-h-[90px]"
                 />
               </div>
 
@@ -964,11 +964,11 @@ export const IzinView: React.FC<IzinViewProps> = ({
               <div className="space-y-1">
                 <label className="block text-[11px] font-semibold text-slate-400">Erken Dönüş Nedeni / Açıklama</label>
                 <textarea
-                  rows={2}
+                  rows={3}
                   value={erkenDonusNot}
                   onChange={(e) => setErkenDonusNot(e.target.value)}
                   placeholder="Gerekçe veya açıklama giriniz..."
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-emerald-500"
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-emerald-500 min-h-[75px]"
                 />
               </div>
 

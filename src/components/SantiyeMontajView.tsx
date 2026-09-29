@@ -1591,10 +1591,10 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
       {/* ========================================================================= */}
       {notModalAcik && notHedefUye && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md p-5 shadow-2xl space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg p-5 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-sm font-black text-white">
-                📝 Yoklama Notu: {notHedefUye.uyeAd}
+                📝 Yoklama &amp; Mesai Notu: {notHedefUye.uyeAd}
               </h3>
               <button onClick={() => setNotModalAcik(false)} className="text-slate-400 hover:text-white">
                 <X className="w-5 h-5" />
@@ -1602,11 +1602,11 @@ export const SantiyeMontajView: React.FC<SantiyeMontajViewProps> = ({
             </div>
 
             <textarea
-              rows={3}
-              placeholder="Örn: 2 saat geç geldi, mesai yaptı veya özel durum notu..."
+              rows={4}
+              placeholder="Örn: 2 saat geç geldi, mesai yaptı, montaj alanı veya özel durum notu..."
               value={notHedefUye.not}
               onChange={(e) => setNotHedefUye({ ...notHedefUye, not: e.target.value })}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-blue-500"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs sm:text-sm text-white focus:outline-none focus:border-blue-500 min-h-[100px]"
             />
 
             <div className="flex justify-end gap-2">

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Shield, Key, Lock, Clock, CheckCircle2, AlertCircle, Save, Hash, Bell, Smartphone, Send, Radio } from 'lucide-react';
+import { X, Shield, Key, Lock, Clock, CheckCircle2, AlertCircle, Save, Hash, Bell, Smartphone, Send, Radio, Share2, PlusSquare, HelpCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { 
   isPushNotificationSupported, 
+  isIOSDevice,
+  isStandalonePWA,
   getNotificationPermission, 
   getCurrentPushSubscription, 
   subscribeToPushNotifications, 
@@ -32,6 +34,9 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
   const [pushSubscribed, setPushSubscribed] = useState<boolean>(false);
   const [pushLoading, setPushLoading] = useState<boolean>(false);
   const [pushMsg, setPushMsg] = useState<string | null>(null);
+  const [isIOS, setIsIOS] = useState<boolean>(false);
+  const [isStandalone, setIsStandalone] = useState<boolean>(false);
+  const [showIosGuide, setShowIosGuide] = useState<boolean>(false);
 
   // Mevcut Ayarlar Bilgisi
   const [currentSavedAdminPin, setCurrentSavedAdminPin] = useState<string>('');
@@ -69,6 +74,15 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
       setConfirmUstabasiPin('');
       setFetching(true);
 
+      const ios = isIOSDevice();
+      const standalone = isStandalonePWA();
+      setIsIOS(ios);
+      setIsStandalone(standalone);
+
+      if (ios && !standalone) {
+        setShowIosGuide(true);
+      }
+
       setPushSupported(isPushNotificationSupported());
       getCurrentPushSubscription().then(sub => {
         setPushSubscribed(Boolean(sub));
@@ -93,6 +107,12 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
   }, [isOpen]);
 
   const handleTogglePush = async () => {
+    if (isIOS && !isStandalone) {
+      setShowIosGuide(true);
+      setPushMsg('📱 iPhone kuralı: Önce Safari Paylaş menüsünden "Ana Ekrana Ekle" yapmalı ve Ana Ekrandan açmalısınız.');
+      return;
+    }
+
     setPushLoading(true);
     setPushMsg(null);
     try {
@@ -532,6 +552,51 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                   )}
                 </div>
 
+                {/* iPhone / iOS İçin Özel Bilgilendirme ve Rehber Kartı */}
+                {isIOS && !isStandalone && (
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-amber-900 flex items-center gap-1.5 text-xs">
+                        <span>🍎 iPhone (iOS) Bildirim Kuralı</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowIosGuide(!showIosGuide)}
+                        className="text-[11px] text-amber-800 font-bold flex items-center gap-0.5 hover:underline cursor-pointer"
+                      >
+                        <span>{showIosGuide ? 'Rehberi Gizle' : 'Nasıl Kurulur?'}</span>
+                        {showIosGuide ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-amber-900/90 leading-relaxed">
+                      Apple güvenlik politikası gereğince iPhone'da bildirimler Safari tarayıcısı içinde çalışmaz. Bildirimleri açmak için uygulamayı önce <strong>"Ana Ekrana Ekle"</strong> yapıp oradan açmalısınız.
+                    </p>
+
+                    {showIosGuide && (
+                      <div className="pt-2 border-t border-amber-500/20 space-y-2 text-[11px] text-slate-800">
+                        <div className="flex items-start gap-2 bg-white/80 p-2 rounded-lg border border-amber-200">
+                          <span className="w-5 h-5 rounded-full bg-amber-600 text-white font-bold flex items-center justify-center shrink-0 text-[10px]">1</span>
+                          <div>
+                            Safari'nin en alt ortasındaki <strong>Paylaş (📤 Kare ve Yukarı Ok)</strong> butonuna dokunun.
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-2 bg-white/80 p-2 rounded-lg border border-amber-200">
+                          <span className="w-5 h-5 rounded-full bg-amber-600 text-white font-bold flex items-center justify-center shrink-0 text-[10px]">2</span>
+                          <div>
+                            Menüyü aşağı kaydırıp <strong>"Ana Ekrana Ekle" (➕)</strong> seçeneğine basın ve sağ üstten <strong>"Ekle"</strong> deyin.
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-2 bg-white/80 p-2 rounded-lg border border-amber-200">
+                          <span className="w-5 h-5 rounded-full bg-amber-600 text-white font-bold flex items-center justify-center shrink-0 text-[10px]">3</span>
+                          <div>
+                            Telefonunuzun ana ekranına gelen <strong>Rende Portal</strong> simgesine dokunarak açın ve buradaki <strong>"Bildirimleri Aç"</strong> butonuna basın.
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {pushMsg && (
                   <div className={`p-2 rounded-lg text-xs font-semibold ${
                     pushMsg.startsWith('✅') 
@@ -548,15 +613,23 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                   <button
                     type="button"
                     onClick={handleTogglePush}
-                    disabled={pushLoading || !pushSupported}
+                    disabled={pushLoading}
                     className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer ${
                       pushSubscribed
                         ? 'bg-rose-100 hover:bg-rose-200 text-rose-800 border border-rose-300'
+                        : isIOS && !isStandalone
+                        ? 'bg-amber-600 hover:bg-amber-700 text-white'
                         : 'bg-blue-600 hover:bg-blue-700 text-white'
                     }`}
                   >
                     <Bell className="w-3.5 h-3.5" />
-                    <span>{pushSubscribed ? 'Bildirimleri Kapat' : 'Bildirimleri Aç'}</span>
+                    <span>
+                      {pushSubscribed 
+                        ? 'Bildirimleri Kapat' 
+                        : isIOS && !isStandalone 
+                        ? 'iPhone Kurulumunu Göster' 
+                        : 'Bildirimleri Aç'}
+                    </span>
                   </button>
 
                   {pushSubscribed && (

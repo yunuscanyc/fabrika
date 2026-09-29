@@ -1507,14 +1507,14 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
               {/* General Order Notes */}
               <div>
                 <label className="block text-xs font-bold text-slate-800 mb-1">
-                  📝 Genel Sipariş Notu & Ustabaşı Açıklaması
+                  📝 Genel Sipariş Notu &amp; Ustabaşı Açıklaması
                 </label>
                 <textarea
-                  rows={2}
+                  rows={4}
                   value={formAciklama}
                   onChange={(e) => setFormAciklama(e.target.value)}
                   placeholder="Montaj yeri, marka/model tercihi, yüzey kaplama tipi veya tedarikçiye iletilecek özel uyarılar..."
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[90px]"
                 />
               </div>
 
@@ -1746,11 +1746,11 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
                   Satınalma &amp; Teslimat Notu
                 </label>
                 <textarea
-                  rows={2}
+                  rows={3}
                   value={satinalmaNot}
                   onChange={(e) => setSatinalmaNot(e.target.value)}
                   placeholder="Termin sözü, nakliye bilgisi veya ödeme vadesi..."
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[75px]"
                 />
               </div>
 

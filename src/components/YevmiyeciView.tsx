@@ -1192,11 +1192,11 @@ export const YevmiyeciView: React.FC<YevmiyeciViewProps> = ({ projeler = [], dep
                   Personel Hakkında Notlar &amp; İzlenimler
                 </label>
                 <textarea
-                  rows={3}
+                  rows={4}
                   value={notlar}
                   onChange={e => setNotlar(e.target.value)}
                   placeholder="Ustanın iş kalitesi, el takımları, hızı, ahlakı ve dikkat edilmesi gereken konular..."
-                  className="w-full px-3.5 py-2.5 bg-slate-800 border border-slate-700 text-white rounded-xl text-sm focus:outline-none focus:border-indigo-500 resize-none"
+                  className="w-full px-3.5 py-2.5 bg-slate-800 border border-slate-700 text-white rounded-xl text-sm focus:outline-none focus:border-indigo-500 min-h-[90px]"
                 />
               </div>
 
@@ -1370,11 +1370,11 @@ export const YevmiyeciView: React.FC<YevmiyeciViewProps> = ({ projeler = [], dep
                   Yapılan İş / Görev Notu
                 </label>
                 <textarea
-                  rows={2}
+                  rows={4}
                   value={calismaAciklama}
                   onChange={e => setCalismaAciklama(e.target.value)}
                   placeholder="Örn: 2. kat mutfak montajı ve lake panellerin takılması..."
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 text-white rounded-xl text-xs sm:text-sm focus:outline-none focus:border-indigo-500 resize-none"
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 text-white rounded-xl text-xs sm:text-sm focus:outline-none focus:border-indigo-500 min-h-[85px]"
                 />
               </div>
 

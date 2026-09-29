@@ -24,6 +24,19 @@ export function isPushNotificationSupported(): boolean {
   );
 }
 
+export function isIOSDevice(): boolean {
+  if (typeof window === 'undefined') return false;
+  return /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
+}
+
+export function isStandalonePWA(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (window.navigator as unknown as { standalone?: boolean }).standalone === true
+  );
+}
+
 export function getNotificationPermission(): NotificationPermission | 'unsupported' {
   if (!isPushNotificationSupported()) return 'unsupported';
   return Notification.permission;
@@ -58,6 +71,12 @@ export async function registerServiceWorkerForPush(): Promise<ServiceWorkerRegis
 
 export async function subscribeToPushNotifications(userName: string, adminId: string): Promise<{ success: boolean; error?: string }> {
   if (!isPushNotificationSupported()) {
+    if (isIOSDevice() && !isStandalonePWA()) {
+      return { 
+        success: false, 
+        error: 'iPhone (iOS 16.4+) Kuralı: Bildirim alabilmek için önce uygulamayı Safari altındaki Paylaş (📤) simgesine basıp "Ana Ekrana Ekle" (➕) yapmalı ve ardından Ana Ekrandan açmalısınız.' 
+      };
+    }
     return { success: false, error: 'Cihazınız veya tarayıcınız Web Push bildirimlerini desteklemiyor.' };
   }
 

@@ -928,231 +928,246 @@ export const CerideView: React.FC<CerideViewProps> = ({
 
       {/* Yeni Kayıt & Düzenleme Modalı */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 my-8 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-xl md:max-w-4xl lg:max-w-5xl w-full p-5 sm:p-6 shadow-2xl space-y-4 my-4 sm:my-6 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 shrink-0">
               <div className="flex items-center gap-2">
                 <BookOpen className="w-5 h-5 text-amber-500" />
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  {editingItem ? 'Ceride Kaydını Düzenle' : 'Yeni Ceride Olayı & Fotoğraf Ekle'}
-                </h3>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                    {editingItem ? 'Ceride Kaydını Düzenle' : 'Yeni Ceride Olayı & Fotoğraf Ekle'}
+                  </h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:block">
+                    Şantiye ve atölye günlük olaylarını kaydedin, geniş tutanak notu girin ve fotoğrafları ekleyin
+                  </p>
+                </div>
               </div>
               <button
                 onClick={() => setModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg leading-none p-1"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg leading-none p-1 rounded-lg"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleSubmitForm} className="space-y-4 overflow-y-auto pr-1 flex-1">
-              {/* Olay Tanımı */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Olay / Faaliyet Tanımı <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Örn: Mutfak dolaplarının montajı tamamlandı ve müşteri teslim tutanağı imzalandı"
-                  value={formOlay}
-                  onChange={(e) => setFormOlay(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs sm:text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
-
-              {/* Kategori & Proje */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Kategori
-                  </label>
-                  <select
-                    value={formKategori}
-                    onChange={(e: any) => setFormKategori(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  >
-                    <option value="Proje">📐 Proje</option>
-                    <option value="Şantiye">🏗️ Şantiye</option>
-                    <option value="Sipariş">📦 Sipariş / Malzeme</option>
-                    <option value="Makine">⚙️ Makine</option>
-                    <option value="Araç">🚛 Araç</option>
-                    <option value="Personel / İK">👥 Personel / İK</option>
-                    <option value="Genel">📌 Genel Faaliyet</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    İlişkili Proje (İsteğe Bağlı)
-                  </label>
-                  <select
-                    value={formProjeId}
-                    onChange={(e) => setFormProjeId(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  >
-                    <option value="">Genel / Projesiz</option>
-                    {projeler.map(p => (
-                      <option key={p.ProjeId} value={String(p.ProjeId)}>
-                        {p.ProjeAdi}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Tarih & Saat (24 Saat Formatı - Türkiye Saati) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-amber-50/60 dark:bg-amber-950/20 p-3 rounded-xl border border-amber-200/60 dark:border-amber-900/40">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                      Olay Tarihi
+            <form onSubmit={handleSubmitForm} className="overflow-y-auto pr-1 flex-1 flex flex-col">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 flex-1">
+                {/* SOL SÜTUN: Olay Bilgileri & Geniş Açıklama */}
+                <div className="space-y-3.5 flex flex-col">
+                  {/* Olay Tanımı */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Olay / Faaliyet Tanımı <span className="text-red-500">*</span>
                     </label>
-                  </div>
-                  <input
-                    type="date"
-                    required
-                    value={formTarih}
-                    onChange={(e) => setFormTarih(e.target.value)}
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                      <Clock className="w-3 h-3 text-amber-600" />
-                      <span>Olay Saati (24s - TR)</span>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={handleSetCurrentTurkeyTime}
-                      className="text-[10px] text-amber-700 dark:text-amber-300 hover:underline font-bold"
-                    >
-                      Şu Anki Saat
-                    </button>
-                  </div>
-                  <div className="relative">
                     <input
                       type="text"
                       required
-                      placeholder="14:30 (24s)"
-                      pattern="^([01]?[0-9]|2[0-3]):[0-5][0-9]$"
-                      value={formSaat}
-                      onChange={(e) => setFormSaat(e.target.value)}
-                      className="w-full px-3 py-2 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs font-mono font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      placeholder="Örn: Mutfak dolaplarının montajı tamamlandı ve müşteri teslim tutanağı imzalandı"
+                      value={formOlay}
+                      onChange={(e) => setFormOlay(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs sm:text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
                     />
                   </div>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 block">
-                    Örn: 08:30, 14:45, 21:00 (24 saat esası)
-                  </span>
-                </div>
-              </div>
 
-              {/* İşleyen Kişi */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  İşleyen Yönetici / Sorumlu (PIN Esaslı)
-                </label>
-                <div className="relative">
-                  <User className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                  <input
-                    type="text"
-                    required
-                    value={formIsleyenKisi}
-                    onChange={(e) => setFormIsleyenKisi(e.target.value)}
-                    placeholder="Ad Soyad"
-                    className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs sm:text-sm font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  />
-                </div>
-              </div>
+                  {/* Kategori & Proje */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        Kategori
+                      </label>
+                      <select
+                        value={formKategori}
+                        onChange={(e: any) => setFormKategori(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      >
+                        <option value="Proje">📐 Proje</option>
+                        <option value="Şantiye">🏗️ Şantiye</option>
+                        <option value="Sipariş">📦 Sipariş / Malzeme</option>
+                        <option value="Makine">⚙️ Makine</option>
+                        <option value="Araç">🚛 Araç</option>
+                        <option value="Personel / İK">👥 Personel / İK</option>
+                        <option value="Genel">📌 Genel Faaliyet</option>
+                      </select>
+                    </div>
 
-              {/* Detay & Notlar */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Açıklama / Detaylı Notlar (İsteğe Bağlı)
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="Gözlemler, şantiye tutanakları, firma yetkilisi görüşmeleri veya ek notlar..."
-                  value={formDetay}
-                  onChange={(e) => setFormDetay(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs sm:text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
-                />
-              </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        İlişkili Proje (İsteğe Bağlı)
+                      </label>
+                      <select
+                        value={formProjeId}
+                        onChange={(e) => setFormProjeId(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      >
+                        <option value="">Genel / Projesiz</option>
+                        {projeler.map(p => (
+                          <option key={p.ProjeId} value={String(p.ProjeId)}>
+                            {p.ProjeAdi}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
 
-              {/* Fotoğraf Ekleme Bölümü */}
-              <div className="space-y-2 border-t border-slate-200 dark:border-slate-800 pt-3">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                    <Camera className="w-4 h-4 text-rose-500" />
-                    <span>Şantiye &amp; Olay Fotoğrafları</span>
-                    {formFotograflar.length > 0 && (
-                      <span className="text-[10px] bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 px-1.5 py-0.5 rounded-full font-bold">
-                        {formFotograflar.length} adet
-                      </span>
-                    )}
-                  </label>
+                  {/* Tarih & Saat (24 Saat Formatı - Türkiye Saati) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-amber-50/60 dark:bg-amber-950/20 p-3 rounded-xl border border-amber-200/60 dark:border-amber-900/40">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                          Olay Tarihi
+                        </label>
+                      </div>
+                      <input
+                        type="date"
+                        required
+                        value={formTarih}
+                        onChange={(e) => setFormTarih(e.target.value)}
+                        className="w-full px-3 py-2 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
 
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploadingPhotos}
-                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
-                  >
-                    <Camera className="w-3.5 h-3.5" />
-                    <span>{uploadingPhotos ? 'İşleniyor...' : 'Fotoğraf / Çek'}</span>
-                  </button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                </div>
-
-                {/* Fotoğraf Küçük Önizlemeleri */}
-                {formFotograflar.length > 0 ? (
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 pt-1 max-h-48 overflow-y-auto p-1 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
-                    {formFotograflar.map((foto, idx) => (
-                      <div key={foto.Id || idx} className="relative group/pic rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 aspect-square shadow-2xs">
-                        <img 
-                          src={foto.DosyaIcerigi} 
-                          alt={foto.DosyaAdi} 
-                          className="w-full h-full object-cover"
-                        />
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-amber-600" />
+                          <span>Olay Saati (24s - TR)</span>
+                        </label>
                         <button
                           type="button"
-                          onClick={() => handleRemovePhoto(idx)}
-                          className="absolute top-1 right-1 p-1 bg-red-600 hover:bg-red-700 text-white rounded-full transition shadow-md cursor-pointer opacity-90 group-hover/pic:opacity-100"
-                          title="Fotoğrafı Kaldır"
+                          onClick={handleSetCurrentTurkeyTime}
+                          className="text-[10px] text-amber-700 dark:text-amber-300 hover:underline font-bold"
                         >
-                          <X className="w-3 h-3" />
+                          Şu Anki Saat
                         </button>
-                        {foto.DosyaBoyutu && (
-                          <span className="absolute bottom-1 left-1 bg-black/70 text-white text-[8px] px-1 rounded font-mono">
-                            {foto.DosyaBoyutu}
-                          </span>
-                        )}
                       </div>
-                    ))}
+                      <div className="relative">
+                        <input
+                          type="text"
+                          required
+                          placeholder="14:30 (24s)"
+                          pattern="^([01]?[0-9]|2[0-3]):[0-5][0-9]$"
+                          value={formSaat}
+                          onChange={(e) => setFormSaat(e.target.value)}
+                          className="w-full px-3 py-2 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs font-mono font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 block">
+                        Örn: 08:30, 14:45, 21:00 (24 saat esası)
+                      </span>
+                    </div>
                   </div>
-                ) : (
-                  <div 
-                    onClick={() => fileInputRef.current?.click()}
-                    className="py-4 border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-rose-400 rounded-xl text-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition cursor-pointer bg-slate-50/50 dark:bg-slate-950/50"
-                  >
-                    <Camera className="w-6 h-6 mx-auto mb-1 text-slate-300 dark:text-slate-600" />
-                    <p className="text-xs font-semibold">Fotoğraf yüklemek veya kamera ile çekmek için tıklayın</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">JPG, PNG, WEBP desteklenir (otomatik optimize edilir)</p>
+
+                  {/* İşleyen Kişi */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      İşleyen Yönetici / Sorumlu (PIN Esaslı)
+                    </label>
+                    <div className="relative">
+                      <User className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                      <input
+                        type="text"
+                        required
+                        value={formIsleyenKisi}
+                        onChange={(e) => setFormIsleyenKisi(e.target.value)}
+                        placeholder="Ad Soyad"
+                        className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs sm:text-sm font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
                   </div>
-                )}
+
+                  {/* Detay & Notlar - Geniş Alan */}
+                  <div className="flex-1 flex flex-col pt-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                        Açıklama / Detaylı Notlar (İsteğe Bağlı)
+                      </label>
+                      <span className="text-[10px] text-amber-700 dark:text-amber-400 font-semibold bg-amber-50 dark:bg-amber-950/50 px-2 py-0.5 rounded">Geniş Metin Alanı</span>
+                    </div>
+                    <textarea
+                      rows={6}
+                      placeholder="Gözlemler, şantiye tutanakları, firma yetkilisi görüşmeleri, kullanılan malzemeler veya ek notlar..."
+                      value={formDetay}
+                      onChange={(e) => setFormDetay(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs sm:text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 min-h-[140px] resize-y flex-1"
+                    />
+                  </div>
+                </div>
+
+                {/* SAĞ SÜTUN: Fotoğraf Ekleme Bölümü */}
+                <div className="space-y-3 flex flex-col md:border-l md:border-slate-200 md:dark:border-slate-800 md:pl-5 border-t md:border-t-0 pt-4 md:pt-0">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                      <Camera className="w-4 h-4 text-rose-500" />
+                      <span>Şantiye &amp; Olay Fotoğrafları</span>
+                      {formFotograflar.length > 0 && (
+                        <span className="text-[10px] bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 px-1.5 py-0.5 rounded-full font-bold">
+                          {formFotograflar.length} adet
+                        </span>
+                      )}
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingPhotos}
+                      className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      <span>{uploadingPhotos ? 'İşleniyor...' : 'Fotoğraf Çek / Ekle'}</span>
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                  </div>
+
+                  {/* Fotoğraf Önizleme Alanı */}
+                  <div className="flex-1 overflow-y-auto max-h-[460px]">
+                    {formFotograflar.length > 0 ? (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 p-2 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
+                        {formFotograflar.map((foto, idx) => (
+                          <div key={foto.Id || idx} className="relative group/pic rounded-xl overflow-hidden border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 aspect-square shadow-2xs">
+                            <img 
+                              src={foto.DosyaIcerigi} 
+                              alt={foto.DosyaAdi} 
+                              className="w-full h-full object-cover group-hover/pic:scale-105 transition-transform"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRemovePhoto(idx)}
+                              className="absolute top-1.5 right-1.5 p-1 bg-red-600 hover:bg-red-700 text-white rounded-full transition shadow-md cursor-pointer opacity-90 group-hover/pic:opacity-100"
+                              title="Fotoğrafı Kaldır"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                            {foto.DosyaBoyutu && (
+                              <span className="absolute bottom-1 left-1 bg-black/70 text-white text-[8px] px-1 rounded font-mono">
+                                {foto.DosyaBoyutu}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="py-12 border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-rose-400 rounded-2xl text-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition cursor-pointer bg-slate-50/50 dark:bg-slate-950/50 flex flex-col items-center justify-center h-48 sm:h-64"
+                      >
+                        <Camera className="w-8 h-8 mx-auto mb-2 text-slate-300 dark:text-slate-600" />
+                        <p className="text-xs font-semibold">Fotoğraf yüklemek veya kamera ile çekmek için tıklayın</p>
+                        <p className="text-[10px] text-slate-400 mt-1">JPG, PNG, WEBP desteklenir (otomatik optimize edilir)</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* Butonlar */}
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-800 shrink-0">
+              <div className="flex items-center justify-end gap-2.5 pt-4 mt-3 border-t border-slate-100 dark:border-slate-800 shrink-0">
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
