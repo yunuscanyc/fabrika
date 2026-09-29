@@ -37,7 +37,7 @@ self.addEventListener('push', (event) => {
     body: notifBody,
     icon: '/pwa-192x192.png',
     badge: '/pwa-192x192.png',
-    tag: uniqueTag,
+    tag: 'rende-portal-push',
     renotify: true,
     vibrate: [200, 100, 200],
     data: { url: notifUrl }
@@ -45,7 +45,8 @@ self.addEventListener('push', (event) => {
     return self.registration.showNotification(notifTitle, {
       body: notifBody,
       icon: '/pwa-192x192.png',
-      renotify: true
+      tag: 'rende-portal-push',
+      data: { url: notifUrl }
     });
   });
 

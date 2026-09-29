@@ -5749,13 +5749,6 @@ setInterval(async () => {
           if (!notifiedDueSet.has(alarmKey)) {
             notifiedDueSet.add(alarmKey);
             console.log(`[ALARM TETİKLENDİ] Hatırlatıcı Zamanı Geldi: "${h.Baslik}"`);
-            recordAjandaNotification({
-              HatirlaticiId: h.Id,
-              Baslik: `⏰ Hatırlatıcı Zamanı Geldi: ${h.Baslik}`,
-              IslemTuru: 'eklendi',
-              YapanKisi: 'Sistem',
-              Detay: h.Aciklama ? `${h.Aciklama} (Tarih: ${h.Tarih})` : `Hatırlatma tarihi geldi: ${h.Tarih}`
-            }).catch(() => {});
           }
         }
       }
