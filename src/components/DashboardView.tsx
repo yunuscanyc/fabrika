@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { OzetIstatistikler, OzetGorevItem } from '../types';
+import { OzetIstatistikler, OzetGorevItem, AjandaBildirimi } from '../types';
 import { DbStatusData } from './DatabaseStatusModal';
 import { formatTarihTR } from '../utils/dateUtils';
 import { PWAInstallPrompt } from './PWAInstallPrompt';
@@ -21,7 +21,8 @@ import {
   Circle,
   Plus,
   ShoppingCart,
-  BookOpen
+  BookOpen,
+  Sparkles
 } from 'lucide-react';
 
 interface DashboardViewProps {
@@ -30,6 +31,9 @@ interface DashboardViewProps {
   dbStatus?: DbStatusData | null;
   onOpenDbModal?: () => void;
   onToggleTamamlandi?: (id: number, tamamlandi: boolean) => void;
+  ajandaBildirimler?: AjandaBildirimi[];
+  currentUserName?: string;
+  onMarkNotificationRead?: (notificationId?: number, hatirlaticiId?: number) => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -37,7 +41,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigateTab,
   dbStatus,
   onOpenDbModal,
-  onToggleTamamlandi
+  onToggleTamamlandi,
+  ajandaBildirimler = [],
+  currentUserName = '',
+  onMarkNotificationRead
 }) => {
   const [ajandaFiltre, setAjandaFiltre] = useState<'hepsi' | 'acik' | 'bugun' | 'gecikmis' | 'tamamlanan'>('hepsi');
   const [togglingId, setTogglingId] = useState<number | null>(null);
@@ -521,10 +528,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   statusLabel = 'YAKLAŞAN';
                 }
 
+                // Diğer PIN/Kullanıcı Tarafından Eklenen / Düzenlenen Okunmamış Bildirim Kontrolü
+                const unreadNotif = ajandaBildirimler.find(
+                  b => Number(b.HatirlaticiId) === Number(g.id) && !b.Okundu && b.YapanKisi !== currentUserName
+                );
+                const unreadText = unreadNotif ? (unreadNotif.IslemTuru === 'eklendi' ? 'Yeni Hatırlatma' : 'Düzenlendi') : null;
+
                 return (
                   <div
                     key={g.id}
-                    className={`p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border transition-all duration-200 hover:shadow-md flex items-start justify-between gap-3 group ${cardStyle}`}
+                    className={`p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border transition-all duration-200 hover:shadow-md flex items-start justify-between gap-3 group ${cardStyle} ${
+                      unreadText ? 'ring-2 ring-amber-500 shadow-md animate-glow' : ''
+                    }`}
                   >
                     {/* Sol: Checkbox & İçerik */}
                     <div className="flex items-start gap-3 min-w-0 flex-1 relative">
@@ -564,11 +579,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                       {/* Başlık ve Üst Rozetler */}
                       <div
-                        onClick={() => onNavigateTab('hatirlaticilar')}
+                        onClick={() => {
+                          if (onMarkNotificationRead) {
+                            onMarkNotificationRead(undefined, Number(g.id));
+                          }
+                          onNavigateTab('hatirlaticilar');
+                        }}
                         className="cursor-pointer min-w-0 flex-1"
                       >
                         {/* 1. Satır: Rozetler ve Tarih */}
                         <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap mb-1">
+                          {/* Diğer PIN Tarafından Eklenme/Düzenlenme Rozeti */}
+                          {unreadText && (
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-black text-white shadow-xs animate-pulse ${
+                              unreadNotif?.IslemTuru === 'eklendi' ? 'bg-emerald-600 border border-emerald-700' : 'bg-amber-600 border border-amber-700'
+                            }`}>
+                              <Sparkles className="w-3 h-3 text-white" />
+                              <span>{unreadText}</span>
+                            </span>
+                          )}
+
                           {/* Durum Rozeti */}
                           <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${badgeStyle}`}>
                             {statusLabel}

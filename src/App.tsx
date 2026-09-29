@@ -1227,6 +1227,9 @@ export default function App() {
                 dbStatus={dbStatus}
                 onOpenDbModal={() => setDbModalOpen(true)}
                 onToggleTamamlandi={handleToggleTamamlandi}
+                ajandaBildirimler={ajandaBildirimler}
+                currentUserName={currentUserName}
+                onMarkNotificationRead={handleMarkAjandaRead}
               />
             )}
 

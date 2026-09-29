@@ -546,14 +546,17 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
           siralananlar.map((h) => {
             const d = durumBelirle(h);
             const belgeSayisi = h.Belgeler?.length || h.FotoSayisi || 0;
-            const hasUnreadChange = unreadNotifHatirlaticiIds.includes(Number(h.Id));
+            const unreadNotif = ajandaBildirimler.find(
+              b => Number(b.HatirlaticiId) === Number(h.Id) && !b.Okundu && b.YapanKisi !== currentUserName
+            );
+            const unreadText = unreadNotif ? (unreadNotif.IslemTuru === 'eklendi' ? 'Yeni Hatırlatma' : 'Düzenlendi') : null;
 
             return (
               <div
                 key={h.Id}
                 onClick={() => handleOpenCard(h)}
                 className={`p-4 rounded-2xl border cursor-pointer hover:shadow-md transition-all flex items-start justify-between gap-3 ${d.renk} ${
-                  hasUnreadChange ? 'ring-2 ring-amber-500 shadow-md animate-glow' : ''
+                  unreadText ? 'ring-2 ring-amber-500 shadow-md animate-glow' : ''
                 }`}
               >
                 <div className="flex items-start gap-3 flex-1 min-w-0 relative">
@@ -582,10 +585,12 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
 
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      {hasUnreadChange && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-gradient-to-r from-amber-500 to-red-500 text-white shadow-xs animate-pulse">
+                      {unreadText && (
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black text-white shadow-xs animate-pulse ${
+                          unreadNotif?.IslemTuru === 'eklendi' ? 'bg-emerald-600 border border-emerald-700' : 'bg-amber-600 border border-amber-700'
+                        }`}>
                           <Sparkles className="w-3 h-3 text-white" />
-                          <span>YENİ DEĞİŞİKLİK</span>
+                          <span>{unreadText}</span>
                         </span>
                       )}
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${d.badge}`}>

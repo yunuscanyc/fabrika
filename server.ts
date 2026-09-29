@@ -3642,15 +3642,13 @@ async function recordCerideEvent(eventData: {
     try {
       const projeStr = newRecord.ProjeAdi && newRecord.ProjeAdi !== 'Genel / Projesiz' ? ` [${newRecord.ProjeAdi}]` : '';
       const fotoEk = (newRecord.FotoSayisi && newRecord.FotoSayisi > 0) ? ` 📷 (${newRecord.FotoSayisi} Fotoğraf)` : '';
-      sendWebPushNotification('', {
-        title: `📜 Yeni Ceride Kaydı${projeStr}`,
-        body: `${newRecord.IsleyenKisi} (${newRecord.Saat}): ${newRecord.Olay}${fotoEk}`,
-        url: '/',
-        data: {
-          cerideId: newRecord.Id,
-          islemTuru: 'eklendi',
-          yapanKisi: newRecord.IsleyenKisi
-        }
+      
+      recordAjandaNotification({
+        HatirlaticiId: null,
+        Baslik: `📜 Yeni Ceride Kaydı${projeStr}`,
+        IslemTuru: 'eklendi',
+        YapanKisi: String(newRecord.IsleyenKisi),
+        Detay: `${newRecord.IsleyenKisi} (${newRecord.Saat}): ${newRecord.Olay}${fotoEk}`
       }).catch(() => {});
     } catch (pushErr: any) {
       console.error('[CERIDE PUSH NOTIFICATION ERROR]', pushErr.message);
@@ -5723,9 +5721,15 @@ async function recordAjandaNotification(notif: {
 
   touchSyncTimestamp();
   if (isAllowedAction && !isSystemAlarm) {
-    let pushBody = `${yapan} ajandada işlem yaptı.`;
+    const notifTitle = (newNotif.Baslik.startsWith('📜') || newNotif.Baslik.startsWith('🔔'))
+      ? newNotif.Baslik
+      : `🔔 Ajanda: ${newNotif.Baslik}`;
+
+    let pushBody = newNotif.Detay || `${yapan} işlem yaptı.`;
     if (newNotif.IslemTuru === 'eklendi') {
-      pushBody = `${yapan} yeni hatırlatma ekledi: "${newNotif.Baslik}"`;
+      pushBody = newNotif.Baslik.startsWith('📜')
+        ? newNotif.Detay
+        : `${yapan} yeni hatırlatma ekledi: "${newNotif.Baslik}"`;
     } else if (newNotif.IslemTuru === 'duzenlendi') {
       pushBody = `${yapan} "${newNotif.Baslik}" hatırlatmasını güncelledi.`;
     } else if (newNotif.IslemTuru === 'silindi') {
@@ -5733,7 +5737,7 @@ async function recordAjandaNotification(notif: {
     }
 
     sendWebPushNotification('', {
-      title: `🔔 Ajanda: ${newNotif.Baslik}`,
+      title: notifTitle,
       body: pushBody,
       url: '/',
       data: {
