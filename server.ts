@@ -4709,6 +4709,15 @@ app.post('/api/projeler', async (req, res) => {
           }
           
           const yapanKisi = req.body.YapanKisi || req.headers['x-user-name'] || 'Yönetici';
+          await recordAjandaNotification({
+            HatirlaticiId: 0,
+            Baslik: `🌿 Yeni Proje: ${inserted.ProjeAdi}`,
+            IslemTuru: 'eklendi',
+            YapanKisi: String(yapanKisi),
+            Detay: `Yeni proje başlatıldı. Kod: ${inserted.ProjeKodu}, Müşteri: ${inserted.MusteriFirma || '-'}`,
+            EventKey: 'proje_eklendi'
+          }).catch(() => {});
+
           recordCerideEvent({
             Olay: `Yeni Proje Başlatıldı: ${inserted.ProjeAdi}`,
             Kategori: 'Proje',
@@ -4728,6 +4737,15 @@ app.post('/api/projeler', async (req, res) => {
 
     memProjeler.unshift(yeniProje);
     const yapanKisi = req.body.YapanKisi || req.headers['x-user-name'] || 'Yönetici';
+    await recordAjandaNotification({
+      HatirlaticiId: 0,
+      Baslik: `🌿 Yeni Proje: ${yeniProje.ProjeAdi}`,
+      IslemTuru: 'eklendi',
+      YapanKisi: String(yapanKisi),
+      Detay: `Yeni proje başlatıldı. Kod: ${yeniProje.ProjeKodu}, Müşteri: ${yeniProje.MusteriFirma || '-'}`,
+      EventKey: 'proje_eklendi'
+    }).catch(() => {});
+
     recordCerideEvent({
       Olay: `Yeni Proje Başlatıldı: ${yeniProje.ProjeAdi}`,
       Kategori: 'Proje',
@@ -4785,6 +4803,16 @@ app.put('/api/projeler/:id', async (req, res) => {
           }
         }
         
+        const yapanKisi = req.body.YapanKisi || req.headers['x-user-name'] || 'Yönetici';
+        await recordAjandaNotification({
+          HatirlaticiId: 0,
+          Baslik: `🌿 Proje Güncellendi: ${updatedProje.ProjeAdi}`,
+          IslemTuru: 'duzenlendi',
+          YapanKisi: String(yapanKisi),
+          Detay: `${yapanKisi} proje bilgilerini güncelledi. Durum: ${updatedProje.Durum}, İlerleme: %${updatedProje.GenelIlerlemeYuzdesi}`,
+          EventKey: 'proje_duzenlendi'
+        }).catch(() => {});
+
         return res.json(updatedProje);
       }
     } catch (err: any) {
@@ -4837,6 +4865,16 @@ app.put('/api/projeler/:id', async (req, res) => {
     }
 
     memProjeler[index] = { ...memProjeler[index], ...bodyProje };
+    const yapanKisi = req.body.YapanKisi || req.headers['x-user-name'] || 'Yönetici';
+    await recordAjandaNotification({
+      HatirlaticiId: 0,
+      Baslik: `🌿 Proje Güncellendi: ${memProjeler[index].ProjeAdi}`,
+      IslemTuru: 'duzenlendi',
+      YapanKisi: String(yapanKisi),
+      Detay: `${yapanKisi} proje bilgilerini güncelledi. Durum: ${memProjeler[index].Durum}, İlerleme: %${memProjeler[index].GenelIlerlemeYuzdesi}`,
+      EventKey: 'proje_duzenlendi'
+    }).catch(() => {});
+
     return res.json(memProjeler[index]);
   }
   res.status(404).json({ error: 'Proje bulunamadı' });
@@ -4844,6 +4882,9 @@ app.put('/api/projeler/:id', async (req, res) => {
 
 app.delete('/api/projeler/:id', async (req, res) => {
   const id = parseInt(req.params.id);
+  const deletedProj = memProjeler.find(p => p.ProjeId === id);
+  const deletedProjName = deletedProj?.ProjeAdi || 'Proje';
+
   if (isDbConnected && detectedTables.projeler) {
     try {
       const cols = await getTableColumns(detectedTables.projeler);
@@ -4854,6 +4895,17 @@ app.delete('/api/projeler/:id', async (req, res) => {
     }
   }
   memProjeler = memProjeler.filter(p => p.ProjeId !== id);
+
+  const yapanKisi = req.headers['x-user-name'] || 'Yönetici';
+  await recordAjandaNotification({
+    HatirlaticiId: 0,
+    Baslik: `🌿 Proje Silindi: ${deletedProjName}`,
+    IslemTuru: 'silindi',
+    YapanKisi: String(yapanKisi),
+    Detay: `${yapanKisi} "${deletedProjName}" projesini sildi.`,
+    EventKey: 'proje_silindi'
+  }).catch(() => {});
+
   res.json({ success: true });
 });
 
@@ -5362,6 +5414,19 @@ app.post('/api/araclar/:id/bakimlar', async (req, res) => {
           const norm = normalizeBakim(bRes.rows[0]);
           norm.Belgeler = req.body.Belgeler || [];
           norm.FotoSayisi = (req.body.Belgeler || []).length;
+
+          // Push ve Kuyruk Bildirimi Gönder
+          const yapanKisi = req.headers['x-user-name'] || 'Yönetici';
+          const plakaStr = req.body.PlakaVeyaKod || 'Araç';
+          await recordAjandaNotification({
+            HatirlaticiId: 0,
+            Baslik: `🚛 Araç Bakım Eklendi: ${plakaStr}`,
+            IslemTuru: 'eklendi',
+            YapanKisi: String(yapanKisi),
+            Detay: `${yapanKisi} araç bakım kaydı ekledi. Plaka/Kod: ${plakaStr}, Maliyet: ${yeniBakim.Maliyet || 0} ₺`,
+            EventKey: 'bakim_eklendi'
+          }).catch(() => {});
+
           return res.status(201).json(norm);
         }
       } catch (err: any) {
@@ -5414,6 +5479,15 @@ app.post('/api/araclar/:id/bakimlar', async (req, res) => {
   }
 
   const yapanBakimKisi = req.body.YapanKisi || req.headers['x-user-name'] || 'Yönetici';
+  await recordAjandaNotification({
+    HatirlaticiId: 0,
+    Baslik: `🚛 Araç Bakım Eklendi: ${arac ? arac.PlakaVeyaKod : 'Araç'}`,
+    IslemTuru: 'eklendi',
+    YapanKisi: String(yapanBakimKisi),
+    Detay: `${yapanBakimKisi} araç bakım kaydı ekledi. Plaka/Kod: ${arac ? arac.PlakaVeyaKod : 'Araç'}, Maliyet: ${yeniBakim.Maliyet || 0} ₺`,
+    EventKey: 'bakim_eklendi'
+  }).catch(() => {});
+
   recordCerideEvent({
     Olay: `Araç Bakımı Yapıldı: ${arac ? arac.PlakaVeyaKod : 'Araç'}`,
     Kategori: 'Araç',
@@ -5468,6 +5542,16 @@ app.put('/api/araclar/:id/bakimlar/:bakimId', async (req, res) => {
         await saveAracBakimBelgelerToDb(bakimId, req.body.Belgeler);
       }
 
+      const yapanKisi = req.headers['x-user-name'] || 'Yönetici';
+      await recordAjandaNotification({
+        HatirlaticiId: 0,
+        Baslik: `🚛 Araç Bakımı Güncellendi`,
+        IslemTuru: 'duzenlendi',
+        YapanKisi: String(yapanKisi),
+        Detay: `${yapanKisi} araç bakım kaydını güncelledi. Maliyet: ${guncelData.Maliyet || 0} ₺, Servis: ${guncelData.YapanUstaVeyaServis || '-'}`,
+        EventKey: 'bakim_duzenlendi'
+      }).catch(() => {});
+
       return res.json({
         BakimId: bakimId,
         AracId: aracId,
@@ -5490,6 +5574,17 @@ app.put('/api/araclar/:id/bakimlar/:bakimId', async (req, res) => {
         Belgeler: req.body.Belgeler || arac.BakimGecmisi[idx].Belgeler || [],
         FotoSayisi: (req.body.Belgeler || arac.BakimGecmisi[idx].Belgeler || []).length
       };
+
+      const yapanKisi = req.headers['x-user-name'] || 'Yönetici';
+      await recordAjandaNotification({
+        HatirlaticiId: 0,
+        Baslik: `🚛 Araç Bakımı Güncellendi`,
+        IslemTuru: 'duzenlendi',
+        YapanKisi: String(yapanKisi),
+        Detay: `${yapanKisi} araç bakım kaydını güncelledi. Maliyet: ${guncelData.Maliyet || 0} ₺, Servis: ${guncelData.YapanUstaVeyaServis || '-'}`,
+        EventKey: 'bakim_duzenlendi'
+      }).catch(() => {});
+
       return res.json(arac.BakimGecmisi[idx]);
     }
   }
@@ -5756,7 +5851,7 @@ async function recordAjandaNotification(notif: {
   const yapan = notif.YapanKisi || '1. Yönetici';
   const newNotif: AjandaNotification = {
     Id: Date.now() + Math.floor(Math.random() * 1000),
-    HatirlaticiId: notif.HatirlaticiId !== undefined ? notif.HatirlaticiId : null,
+    HatirlaticiId: (notif.HatirlaticiId !== undefined && notif.HatirlaticiId !== null) ? notif.HatirlaticiId : 0,
     Baslik: notif.Baslik || 'Hatırlatma',
     IslemTuru: notif.IslemTuru,
     YapanKisi: yapan,
@@ -6460,7 +6555,20 @@ app.post('/api/personeller', async (req, res) => {
             RETURNING *
           `;
           const pRes = await pool.query(q, values);
-          if (pRes.rows.length > 0) return res.status(201).json(normalizePersonel(pRes.rows[0]));
+          if (pRes.rows.length > 0) {
+            const createdPersonel = normalizePersonel(pRes.rows[0]);
+            const yapanKisi = req.headers['x-user-name'] || 'Yönetici';
+            await recordAjandaNotification({
+              HatirlaticiId: 0,
+              Baslik: `👥 Personel Eklendi: ${createdPersonel.AdSoyad}`,
+              IslemTuru: 'eklendi',
+              YapanKisi: String(yapanKisi),
+              Detay: `${yapanKisi} yeni personel kartı oluşturdu: ${createdPersonel.AdSoyad} (${createdPersonel.Gorev})`,
+              EventKey: 'personel_eklendi'
+            }).catch(() => {});
+
+            return res.status(201).json(createdPersonel);
+          }
         }
       } catch (err: any) {
         console.error('[DB INSERT PERSONEL ERROR]', err.message);
@@ -6470,6 +6578,15 @@ app.post('/api/personeller', async (req, res) => {
     memPersoneller.unshift(yeni);
 
     const yapanPersonelKisi = req.body.YapanKisi || req.headers['x-user-name'] || 'Yönetici';
+    await recordAjandaNotification({
+      HatirlaticiId: 0,
+      Baslik: `👥 Personel Eklendi: ${yeni.AdSoyad}`,
+      IslemTuru: 'eklendi',
+      YapanKisi: String(yapanPersonelKisi),
+      Detay: `${yapanPersonelKisi} yeni personel kartı oluşturdu: ${yeni.AdSoyad} (${yeni.Gorev})`,
+      EventKey: 'personel_eklendi'
+    }).catch(() => {});
+
     recordCerideEvent({
       Olay: `Yeni Personel İşe Başladı: ${yeni.AdSoyad} (${yeni.Gorev})`,
       Kategori: 'Personel / İK',
@@ -7398,6 +7515,16 @@ app.post('/api/puantajlar', async (req, res) => {
           s.SaatlikKesintiUcretsiz || 0, s.Aciklama || ''
         ]);
       }
+      const yapanKisi = req.headers['x-user-name'] || 'Yönetici';
+      await recordAjandaNotification({
+        HatirlaticiId: 0,
+        Baslik: `👥 Puantaj Girişi Yapıldı`,
+        IslemTuru: 'eklendi',
+        YapanKisi: String(yapanKisi),
+        Detay: `${yapanKisi} ${tarih} tarihi için ${filtrelenmisSatirlar.length} personelin günlük puantaj girişini onayladı.`,
+        EventKey: 'puantaj_girildi'
+      }).catch(() => {});
+
       return res.json({ success: true, count: filtrelenmisSatirlar.length });
     } catch (err: any) {
       console.error('[DB PUANTAJ SAVE ERROR]', err.message);
@@ -7409,6 +7536,17 @@ app.post('/api/puantajlar', async (req, res) => {
   filtrelenmisSatirlar.forEach((s: any) => {
     memPuantajlar.push({ ...s, Tarih: tarih, PuantajId: Date.now() + Math.random() });
   });
+
+  const yapanKisi = req.headers['x-user-name'] || 'Yönetici';
+  await recordAjandaNotification({
+    HatirlaticiId: 0,
+    Baslik: `👥 Puantaj Girişi Yapıldı`,
+    IslemTuru: 'eklendi',
+    YapanKisi: String(yapanKisi),
+    Detay: `${yapanKisi} ${tarih} tarihi için ${filtrelenmisSatirlar.length} personelin günlük puantaj girişini onayladı.`,
+    EventKey: 'puantaj_girildi'
+  }).catch(() => {});
+
   res.json({ success: true, count: filtrelenmisSatirlar.length });
 });
 
@@ -9168,6 +9306,15 @@ app.post('/api/siparisler', async (req, res) => {
     }
 
     const talepKisi = newSiparis.TalepEden || req.headers['x-user-name'] || 'Ustabaşı';
+    await recordAjandaNotification({
+      HatirlaticiId: 0,
+      Baslik: `📦 Yeni Sipariş: ${newSiparis.SiparisNo}`,
+      IslemTuru: 'eklendi',
+      YapanKisi: String(talepKisi),
+      Detay: `${talepKisi} yeni malzeme talebi açtı. Sipariş No: ${newSiparis.SiparisNo}, Malzeme: ${newSiparis.MalzemeAdi}, Proje: ${newSiparis.ProjeAdi}`,
+      EventKey: 'siparis_eklendi'
+    }).catch(() => {});
+
     recordCerideEvent({
       Olay: `Yeni Sipariş Girildi: ${newSiparis.SiparisNo} - ${newSiparis.MalzemeAdi}`,
       Kategori: 'Sipariş',
@@ -9336,6 +9483,28 @@ app.put('/api/siparisler/:id', async (req, res) => {
       }
     }
 
+    // Durum Değiştiğinde Bildirim Gönder:
+    const isleyenKisi = req.headers['x-user-name'] || req.body.YapanKisi || req.body.IsleyenKisi || 'Satınalma / Yönetici';
+    if (body.Durum && body.Durum !== currentSiparis.Durum) {
+      await recordAjandaNotification({
+        HatirlaticiId: 0,
+        Baslik: `📦 Sipariş Durumu Değişti: ${updatedSiparis.SiparisNo}`,
+        IslemTuru: 'duzenlendi',
+        YapanKisi: String(isleyenKisi),
+        Detay: `${isleyenKisi} "${updatedSiparis.SiparisNo}" nolu siparişin durumunu "${body.Durum}" olarak güncelledi.`,
+        EventKey: 'siparis_durum_degisti'
+      }).catch(() => {});
+    } else {
+      await recordAjandaNotification({
+        HatirlaticiId: 0,
+        Baslik: `📦 Sipariş Güncellendi: ${updatedSiparis.SiparisNo}`,
+        IslemTuru: 'duzenlendi',
+        YapanKisi: String(isleyenKisi),
+        Detay: `${isleyenKisi} "${updatedSiparis.SiparisNo}" nolu sipariş bilgilerini güncelledi.`,
+        EventKey: 'siparis_durum_degisti'
+      }).catch(() => {});
+    }
+
     return res.json({
       success: true,
       message: 'Sipariş bilgileri güncellendi.',
@@ -9473,6 +9642,16 @@ app.delete('/api/siparisler/:id', async (req, res) => {
         console.error('[DB SIPARIS DELETE ERROR]', dbErr.message);
       }
     }
+
+    const yapanKisi = req.headers['x-user-name'] || 'Yönetici';
+    await recordAjandaNotification({
+      HatirlaticiId: 0,
+      Baslik: `📦 Sipariş Silindi: ${siparis.SiparisNo}`,
+      IslemTuru: 'silindi',
+      YapanKisi: String(yapanKisi),
+      Detay: `${yapanKisi} "${siparis.SiparisNo}" nolu siparişi sildi.`,
+      EventKey: 'siparis_silindi'
+    }).catch(() => {});
 
     return res.json({ success: true, message: 'Sipariş başarıyla silindi.' });
   } catch (err: any) {
@@ -10262,6 +10441,16 @@ app.put('/api/ceride/:id', async (req, res) => {
       }
     }
 
+    const isleyen = IsleyenKisi || req.headers['x-user-name'] || 'Yönetici';
+    await recordAjandaNotification({
+      HatirlaticiId: 0,
+      Baslik: `📜 Ceride Güncellendi`,
+      IslemTuru: 'duzenlendi',
+      YapanKisi: String(isleyen),
+      Detay: `${isleyen} bir ceride kaydını güncelledi: "${updated.Olay}"`,
+      EventKey: 'ceride_duzenlendi'
+    }).catch(() => {});
+
     touchSyncTimestamp();
     return res.json(updated);
   } catch (err: any) {
@@ -10272,6 +10461,9 @@ app.put('/api/ceride/:id', async (req, res) => {
 app.delete('/api/ceride/:id', async (req, res) => {
   try {
     const id = Number(req.params.id);
+    const existing = memCeride.find(c => Number(c.Id) === id);
+    const deletedOlay = existing?.Olay || 'Ceride Kaydı';
+
     memCeride = memCeride.filter(c => Number(c.Id) !== id);
     saveMemCeride();
 
@@ -10285,6 +10477,16 @@ app.delete('/api/ceride/:id', async (req, res) => {
         console.error('[DB DELETE CERIDE ERROR]', dbErr.message);
       }
     }
+
+    const yapan = req.headers['x-user-name'] || 'Yönetici';
+    await recordAjandaNotification({
+      HatirlaticiId: 0,
+      Baslik: `📜 Ceride Silindi`,
+      IslemTuru: 'silindi',
+      YapanKisi: String(yapan),
+      Detay: `${yapan} bir ceride kaydını sildi: "${deletedOlay}"`,
+      EventKey: 'ceride_silindi'
+    }).catch(() => {});
 
     touchSyncTimestamp();
     return res.json({ success: true, message: 'Ceride kaydı silindi.' });
