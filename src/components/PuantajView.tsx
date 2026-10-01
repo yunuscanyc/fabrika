@@ -310,14 +310,16 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
     }));
   };
 
-  // Eksik Saat Girildiğinde Normal Mesai Otomatik Düşer
+  // Eksik / Kesinti Saat Girildiğinde
   const handleEksikSaatChange = (personelId: number, eksik: number) => {
-    if (isNormalEngelli) return;
     const standartSaat = is6GunCumartesi ? 5.0 : getStandartNormalSaat(seciliTarih, calismaRejimi);
     setSatirlar(prev => prev.map(s => {
       if (s.PersonelId !== personelId) return s;
-      const normal = s.DurumKodu === 'N' ? Math.max(0, standartSaat - eksik) : s.NormalCalismaSaati;
-      return { ...s, SaatlikKesintiUcretsiz: eksik, NormalCalismaSaati: normal };
+      // Normal çalışma yapılabilen günde ve durum kodu 'N' ise, normal mesai standartSaat - eksik olarak düşer
+      const normal = (!isNormalEngelli && s.DurumKodu === 'N') 
+        ? Math.max(0, standartSaat - eksik) 
+        : s.NormalCalismaSaati;
+      return { ...s, SaatlikKesintiUcretsiz: Math.max(0, eksik), NormalCalismaSaati: normal };
     }));
   };
 
