@@ -49,7 +49,8 @@ function createPgPool() {
     user: (process.env.PGUSER && process.env.PGUSER !== 'postgres' ? process.env.PGUSER : 'rende_user').replace(/[{}]/g, '').trim(),
     password: process.env.PGPASSWORD && process.env.PGPASSWORD !== '1' ? process.env.PGPASSWORD : 'Elifesma12345',
     ssl: !isLocalHost || process.env.PGSSL === 'true' ? { rejectUnauthorized: false } : false,
-    connectionTimeoutMillis: 7000,
+    connectionTimeoutMillis: 5000,
+    statement_timeout: 5000
   });
 }
 
@@ -4331,33 +4332,36 @@ app.get('/api/backup/export', async (req, res) => {
     const tablesData: Record<string, any[]> = {};
     const tableCounts: Record<string, number> = {};
 
-    // 1. PostgreSQL tablolarından verileri çek (varsa, 3 saniye güvenlik zaman aşımı ile)
+    // 1. PostgreSQL tablolarından verileri paralel çek (varsa)
     if (isDbConnected) {
-      const fetchDbData = async () => {
-        const tableListRes = await pool.query(`
-          SELECT table_name 
-          FROM information_schema.tables 
-          WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
-        `);
+      try {
+        const tableListRes = await Promise.race<any>([
+          pool.query(`
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+          `),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Table list timeout')), 4000))
+        ]);
         
-        for (const row of tableListRes.rows) {
-          const tbl = row.table_name;
-          try {
-            const dataRes = await pool.query(`SELECT * FROM "${tbl}"`);
-            tablesData[tbl] = dataRes.rows;
-            tableCounts[tbl] = dataRes.rows.length;
-          } catch (tErr: any) {
-            console.warn(`[BACKUP EXPORT TABLE WARN] ${tbl}:`, tErr.message);
-          }
-        }
-      };
-
-      await Promise.race([
-        fetchDbData(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('DB Query Timeout')), 3000))
-      ]).catch((e) => {
-        console.warn('[BACKUP EXPORT DB TIMEOUT/WARN]', e.message);
-      });
+        await Promise.all(
+          tableListRes.rows.map(async (row: any) => {
+            const tbl = row.table_name;
+            try {
+              const dataRes = await Promise.race<any>([
+                pool.query(`SELECT * FROM "${tbl}"`),
+                new Promise((_, reject) => setTimeout(() => reject(new Error(`Table ${tbl} query timeout`)), 4000))
+              ]);
+              tablesData[tbl] = dataRes.rows;
+              tableCounts[tbl] = dataRes.rows.length;
+            } catch (tErr: any) {
+              console.warn(`[BACKUP EXPORT TABLE WARN] ${tbl}:`, tErr.message);
+            }
+          })
+        );
+      } catch (dbErr: any) {
+        console.error('[BACKUP EXPORT DB ERROR]', dbErr.message);
+      }
     }
 
     // 2. Hafıza (Memory) depolarını da yedek dosyasına ekle

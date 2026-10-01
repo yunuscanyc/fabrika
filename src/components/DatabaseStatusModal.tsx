@@ -63,26 +63,19 @@ export const DatabaseStatusModal: React.FC<DatabaseStatusModalProps> = ({
   };
 
   // TEK TUŞLA YEDEK İNDİR
-  const handleDownloadBackup = async () => {
+  const handleDownloadBackup = () => {
     try {
       setDownloadingBackup(true);
-      const res = await fetch('/api/backup/export');
-      if (!res.ok) throw new Error('Yedek dosyası oluşturulamadı.');
-      
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      
+      const link = document.createElement('a');
+      link.href = '/api/backup/export';
       const dateStr = new Date().toISOString().slice(0, 10);
-      a.download = `rende_veritabani_yedek_${dateStr}.json`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      link.download = `rende_veritabani_yedek_${dateStr}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => setDownloadingBackup(false), 2500);
     } catch (err: any) {
       alert('Yedek indirme hatası: ' + err.message);
-    } finally {
       setDownloadingBackup(false);
     }
   };
