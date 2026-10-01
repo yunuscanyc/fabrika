@@ -1,5 +1,5 @@
 import React from 'react';
-import { Factory, Lock, Shield, LogOut, BellRing } from 'lucide-react';
+import { Factory, Lock, Shield, LogOut, BellRing, Database } from 'lucide-react';
 import { DbStatusData } from './DatabaseStatusModal';
 import { PWAInstallPrompt } from './PWAInstallPrompt';
 
@@ -224,6 +224,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                 title="Bildirim Tercihleri Merkezi (Hangileri Gönderilsin)"
               >
                 <BellRing className="w-4 h-4 text-amber-400" />
+              </button>
+            )}
+
+            {userRole === 'admin' && onOpenDbModal && (
+              <button
+                type="button"
+                onClick={onOpenDbModal}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-800/90 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 border border-slate-700 hover:border-emerald-500/30 rounded-xl text-xs font-semibold transition-all shadow-xs cursor-pointer"
+                title="Veritabanı & Tek Tuşla Yedekleme / Geri Yükleme"
+              >
+                <Database className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden lg:inline text-[11px] font-bold text-emerald-300">Yedekle / DB</span>
               </button>
             )}
 

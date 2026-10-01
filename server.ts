@@ -4313,6 +4313,485 @@ app.get('/api/server-time', (req, res) => {
   });
 });
 
+// =========================================================================
+// TEK TUŞLA VERİTABANI YEDEKLEME & GERİ YÜKLEME SİSTEMİ (BACKUP & RESTORE)
+// =========================================================================
+
+// 1. TEK TUŞLA YEDEK İNDİR (EXPORT FULL DATABASE BACKUP)
+app.get('/api/backup/export', async (req, res) => {
+  try {
+    const exportTime = new Date();
+    const trTarih = getTurkiyeTarihStr();
+    const trSaat = getTurkiyeSaatStr();
+    const trZaman = `${trTarih} ${trSaat}`;
+
+    const tablesData: Record<string, any[]> = {};
+    const tableCounts: Record<string, number> = {};
+
+    // 1. PostgreSQL tablolarından verileri çek (varsa, 3 saniye güvenlik zaman aşımı ile)
+    if (isDbConnected) {
+      const fetchDbData = async () => {
+        const tableListRes = await pool.query(`
+          SELECT table_name 
+          FROM information_schema.tables 
+          WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+        `);
+        
+        for (const row of tableListRes.rows) {
+          const tbl = row.table_name;
+          try {
+            const dataRes = await pool.query(`SELECT * FROM "${tbl}"`);
+            tablesData[tbl] = dataRes.rows;
+            tableCounts[tbl] = dataRes.rows.length;
+          } catch (tErr: any) {
+            console.warn(`[BACKUP EXPORT TABLE WARN] ${tbl}:`, tErr.message);
+          }
+        }
+      };
+
+      await Promise.race([
+        fetchDbData(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('DB Query Timeout')), 3000))
+      ]).catch((e) => {
+        console.warn('[BACKUP EXPORT DB TIMEOUT/WARN]', e.message);
+      });
+    }
+
+    // 2. Hafıza (Memory) depolarını da yedek dosyasına ekle
+    const memoryStores: Record<string, any[]> = {
+      Ceride: memCeride || [],
+      Projeler: memProjeler || [],
+      Personeller: memPersoneller || [],
+      Izinler: memIzinler || [],
+      Puantajlar: memPuantajlar || [],
+      Araclar: memAraclar || [],
+      AracBakimlar: (memAraclar || []).flatMap(a => a.BakimKayitlari || []),
+      Makineler: memMakineler || [],
+      MakineBakimlar: (memMakineler || []).flatMap(m => m.BakimKayitlari || []),
+      Hatirlaticilar: memHatirlaticilar || [],
+      MalzemeSiparisleri: memMalzemeSiparisleri || [],
+      MalzemeKatalog: memMalzemeKatalog || [],
+      Departmanlar: memDepartmanlar || [],
+      Gorevler: memGorevler || [],
+      Yevmiyeciler: memYevmiyeciler || [],
+      IsgEgitimleri: memIsgEgitimleri || [],
+      SaglikRaporlari: memSaglikRaporlari || [],
+      KkdZimmetler: memKkdZimmetler || [],
+      SehirDisiGorevler: memSehirDisiGorevler || [],
+      NotificationSettings: [memNotificationSettings || {}]
+    };
+
+    // Eğer veritabanı bağlı değilse veya tablolar boşsa, memory stores'dan sayıları al
+    for (const [key, list] of Object.entries(memoryStores)) {
+      if (!tableCounts[key]) {
+        tableCounts[key] = Array.isArray(list) ? list.length : 1;
+      }
+    }
+
+    let totalRecords = 0;
+    Object.values(tableCounts).forEach(cnt => {
+      if (typeof cnt === 'number') totalRecords += cnt;
+    });
+
+    const backupPayload = {
+      version: '2.0.0',
+      app: 'Rende Fabrika & Şantiye Yönetim Portalı',
+      exportDate: exportTime.toISOString(),
+      exportDateTR: trZaman,
+      serverStatus: {
+        isDbConnected,
+        database: process.env.PGDATABASE || 'FabrikaYonetimDB',
+        host: process.env.PGHOST || 'localhost'
+      },
+      tableCounts,
+      totalRecords,
+      tables: tablesData,
+      memoryStores
+    };
+
+    const fileNameDate = trTarih.replace(/\./g, '-') + '_' + trSaat.replace(/:/g, '-');
+    const fileName = `rende_veritabani_yedek_${fileNameDate}.json`;
+
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    return res.send(JSON.stringify(backupPayload, null, 2));
+  } catch (err: any) {
+    console.error('[BACKUP EXPORT FATAL ERROR]', err);
+    return res.status(500).json({ error: 'Yedekleme oluşturulamadı: ' + err.message });
+  }
+});
+
+// 2. YEDEK DOSYASINI DOĞRULA VE İNCELE (PRE-FLIGHT VALIDATION)
+app.post('/api/backup/validate', (req, res) => {
+  try {
+    const backupData = req.body;
+    if (!backupData || typeof backupData !== 'object') {
+      return res.status(400).json({ valid: false, error: 'Geçersiz yedek dosyası formatı.' });
+    }
+
+    if (!backupData.tables && !backupData.memoryStores) {
+      return res.status(400).json({ valid: false, error: 'Yedek dosyası içinde tablo veya veri deposu bulunamadı.' });
+    }
+
+    const tableSummary: Array<{ name: string; key: string; count: number }> = [];
+    const source = backupData.tables && Object.keys(backupData.tables).length > 0
+      ? backupData.tables
+      : backupData.memoryStores;
+
+    let totalCount = 0;
+    for (const [key, val] of Object.entries(source)) {
+      const count = Array.isArray(val) ? val.length : 0;
+      totalCount += count;
+      let label = key;
+      if (key.toLowerCase().includes('ceride')) label = 'Şantiye Ceridesi';
+      else if (key.toLowerCase().includes('proje')) label = 'Projeler & Şantiyeler';
+      else if (key.toLowerCase().includes('personel')) label = 'Personel Kayıtları';
+      else if (key.toLowerCase().includes('arac')) label = 'Araç Filosu & Bakımlar';
+      else if (key.toLowerCase().includes('makine')) label = 'Makineler & Bakımlar';
+      else if (key.toLowerCase().includes('hatirlat')) label = 'Ajanda & Hatırlatıcılar';
+      else if (key.toLowerCase().includes('siparis')) label = 'Malzeme Siparişleri';
+      else if (key.toLowerCase().includes('puantaj')) label = 'Puantaj Kayıtları';
+      else if (key.toLowerCase().includes('izin')) label = 'İzin Kayıtları';
+      else if (key.toLowerCase().includes('isg')) label = 'İSG & Sağlık Kayıtları';
+
+      tableSummary.push({
+        name: label,
+        key,
+        count
+      });
+    }
+
+    return res.json({
+      valid: true,
+      exportDate: backupData.exportDateTR || backupData.exportDate || 'Bilinmiyor',
+      app: backupData.app || 'Rende Portalı',
+      totalRecords: totalCount,
+      tableSummary
+    });
+  } catch (err: any) {
+    return res.status(400).json({ valid: false, error: 'Doğrulama hatası: ' + err.message });
+  }
+});
+
+// 3. TEK TUŞLA GÜVENLİ GERİ YÜKLE (SAFE RESTORE: FULL OR MERGE)
+app.post('/api/backup/restore', async (req, res) => {
+  try {
+    const { backupData, mode = 'full' } = req.body;
+    const actualData = backupData || req.body;
+
+    if (!actualData || typeof actualData !== 'object') {
+      return res.status(400).json({ error: 'Geçersiz yedek verisi.' });
+    }
+
+    const restoreMode: 'full' | 'merge' = (req.body.mode === 'merge' || mode === 'merge') ? 'merge' : 'full';
+    const yapanKisi = parseSafeUserName(req.headers['x-user-name'] || req.body.userName || '1. Yönetici');
+
+    // A. GÜVENLİK ÖNLEMİ: Geri yüklemeden hemen önce otomatik "Güvenlik Anlık Görüntüsü" (Safety Snapshot) al
+    try {
+      const safetySnapshot = {
+        snapshotTime: new Date().toISOString(),
+        reason: `Pre-restore Safety Snapshot (Mode: ${restoreMode})`,
+        isDbConnected,
+        memCeride,
+        memProjeler,
+        memPersoneller,
+        memHatirlaticilar,
+        memMalzemeSiparisleri,
+        memAraclar,
+        memMakineler,
+        memPuantajlar,
+        memIzinler
+      };
+      if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+      fs.writeFileSync(path.join(DATA_DIR, 'pre_restore_safety_backup.json'), JSON.stringify(safetySnapshot, null, 2), 'utf-8');
+      console.log('[BACKUP RESTORE] Güvenlik anlık görüntüsü başarıyla alındı.');
+    } catch (snapErr: any) {
+      console.warn('[BACKUP RESTORE SNAPSHOT WARN]', snapErr.message);
+    }
+
+    let restoredTableCount = 0;
+    let totalRestoredRecords = 0;
+    let insertedCount = 0;
+    let updatedCount = 0;
+
+    // B. POSTGRESQL TABLOLARINI GERİ YÜKLE (Eğer Veritabanı Bağlıysa)
+    if (isDbConnected && actualData.tables && Object.keys(actualData.tables).length > 0) {
+      for (const [tblName, rows] of Object.entries(actualData.tables)) {
+        if (!Array.isArray(rows) || rows.length === 0) continue;
+
+        try {
+          // Tablo var mı ve kolonları neler kontrol et
+          const cols = await getTableColumns(tblName);
+          if (!cols || cols.length === 0) continue;
+
+          const idColCandidate = cols.find(c => ['id', 'projeid', 'personelid', 'aracid', 'makineid', 'hatirlaticiid', 'siparisid', 'cerideid', 'gorevid', 'iznid'].includes(c.toLowerCase()));
+
+          if (restoreMode === 'full') {
+            // FULL RESTORE: Tabloyu tamamen sıfırla ve yedektekileri yükle
+            await pool.query(`DELETE FROM "${tblName}"`);
+
+            for (const row of rows) {
+              if (!row || typeof row !== 'object') continue;
+              const validKeys: string[] = [];
+              const validVals: any[] = [];
+
+              for (const col of cols) {
+                const matchedProp = Object.keys(row).find(k => k.toLowerCase() === col.toLowerCase());
+                if (matchedProp !== undefined && row[matchedProp] !== undefined) {
+                  validKeys.push(`"${col}"`);
+                  let val = row[matchedProp];
+                  if (typeof val === 'object' && val !== null && !(val instanceof Date)) {
+                    val = JSON.stringify(val);
+                  }
+                  validVals.push(val);
+                }
+              }
+
+              if (validKeys.length > 0) {
+                const placeholders = validVals.map((_, i) => `$${i + 1}`).join(', ');
+                const insertSql = `INSERT INTO "${tblName}" (${validKeys.join(', ')}) VALUES (${placeholders})`;
+                await pool.query(insertSql, validVals);
+              }
+            }
+          } else {
+            // MERGE (AKILLI BİRLEŞTİRME) RESTORE: Mevcut yeni kayıtlara DOKUNMA, sadece eksikleri ekle/güncelle
+            let existingIds = new Set<string | number>();
+            if (idColCandidate) {
+              try {
+                const existRes = await pool.query(`SELECT "${idColCandidate}" FROM "${tblName}"`);
+                existRes.rows.forEach(r => {
+                  if (r[idColCandidate] !== undefined && r[idColCandidate] !== null) {
+                    existingIds.add(r[idColCandidate]);
+                  }
+                });
+              } catch (_) {}
+            }
+
+            for (const row of rows) {
+              if (!row || typeof row !== 'object') continue;
+              const rowId = idColCandidate ? Object.keys(row).find(k => k.toLowerCase() === idColCandidate.toLowerCase()) : null;
+              const valId = rowId ? row[rowId] : null;
+
+              const validKeys: string[] = [];
+              const validVals: any[] = [];
+
+              for (const col of cols) {
+                const matchedProp = Object.keys(row).find(k => k.toLowerCase() === col.toLowerCase());
+                if (matchedProp !== undefined && row[matchedProp] !== undefined) {
+                  validKeys.push(`"${col}"`);
+                  let val = row[matchedProp];
+                  if (typeof val === 'object' && val !== null && !(val instanceof Date)) {
+                    val = JSON.stringify(val);
+                  }
+                  validVals.push(val);
+                }
+              }
+
+              if (validKeys.length === 0) continue;
+
+              if (valId !== null && existingIds.has(valId)) {
+                // Kayıt zaten var -> Güncelle
+                const setClauses = validKeys.map((k, i) => `${k} = $${i + 1}`).join(', ');
+                const updateSql = `UPDATE "${tblName}" SET ${setClauses} WHERE "${idColCandidate}" = $${validVals.length + 1}`;
+                await pool.query(updateSql, [...validVals, valId]).catch(() => {});
+                updatedCount++;
+              } else {
+                // Kayıt yok (silinmiş veya eksik) -> Ekle
+                const placeholders = validVals.map((_, i) => `$${i + 1}`).join(', ');
+                const insertSql = `INSERT INTO "${tblName}" (${validKeys.join(', ')}) VALUES (${placeholders})`;
+                await pool.query(insertSql, validVals).catch(() => {});
+                insertedCount++;
+              }
+            }
+          }
+
+          // PostgreSQL Sequence / Auto Increment Sayacını Sıfırla
+          if (idColCandidate) {
+            try {
+              await pool.query(`
+                DO $$
+                DECLARE
+                  seq_name text;
+                  max_id bigint;
+                BEGIN
+                  SELECT pg_get_serial_sequence('"${tblName}"', '${idColCandidate}') INTO seq_name;
+                  IF seq_name IS NOT NULL THEN
+                    SELECT COALESCE(MAX("${idColCandidate}"), 1) INTO max_id FROM "${tblName}";
+                    EXECUTE 'SELECT setval(''' || seq_name || ''', ' || max_id || ')';
+                  END IF;
+                END $$;
+              `);
+            } catch (seqErr: any) {}
+          }
+
+          restoredTableCount++;
+          totalRestoredRecords += rows.length;
+          console.log(`[BACKUP RESTORE DB SUCCESS (${restoreMode})] Tablo "${tblName}": ${rows.length} kayıt işlendi.`);
+        } catch (tblErr: any) {
+          console.error(`[BACKUP RESTORE TABLE ERROR] ${tblName}:`, tblErr.message);
+        }
+      }
+    }
+
+    // C. HAFIZA (MEMORY) VE DISK DOSYALARINI GÜNCELLE
+    const memorySource = actualData.memoryStores || actualData.tables || {};
+
+    const mergeArrays = (currentList: any[], backupList: any[], idKey: string) => {
+      if (restoreMode === 'full') return backupList;
+      const map = new Map();
+      // Önce mevcutları ekle (yeni eklenenler korunsun)
+      currentList.forEach(item => {
+        const id = item[idKey] || item.Id || item.id;
+        if (id) map.set(id, item);
+      });
+      // Yedektekileri ekle/güncelle (silinenler geri gelsin)
+      backupList.forEach(item => {
+        const id = item[idKey] || item.Id || item.id;
+        if (id) {
+          if (!map.has(id)) map.set(id, item); // eksik olanı ekle
+        }
+      });
+      return Array.from(map.values());
+    };
+
+    if (memorySource.Ceride || memorySource.ceride || memorySource.CerideKayitlari) {
+      const list = memorySource.Ceride || memorySource.ceride || memorySource.CerideKayitlari || [];
+      if (Array.isArray(list)) {
+        const normalized = list.map(normalizeCeride);
+        memCeride = mergeArrays(memCeride, normalized, 'Id');
+        saveMemCeride();
+      }
+    }
+
+    if (memorySource.Projeler || memorySource.projeler) {
+      const list = memorySource.Projeler || memorySource.projeler || [];
+      if (Array.isArray(list)) {
+        const normalized = list.map(normalizeProje);
+        memProjeler = mergeArrays(memProjeler, normalized, 'ProjeId');
+      }
+    }
+
+    if (memorySource.Personeller || memorySource.personeller || memorySource.Personel) {
+      const list = memorySource.Personeller || memorySource.personeller || memorySource.Personel || [];
+      if (Array.isArray(list)) {
+        const normalized = list.map(normalizePersonel);
+        memPersoneller = mergeArrays(memPersoneller, normalized, 'PersonelId');
+      }
+    }
+
+    if (memorySource.Araclar || memorySource.araclar) {
+      const list = memorySource.Araclar || memorySource.araclar || [];
+      if (Array.isArray(list)) {
+        const normalized = list.map(normalizeArac);
+        memAraclar = mergeArrays(memAraclar, normalized, 'AracId');
+      }
+    }
+
+    if (memorySource.Makineler || memorySource.makineler) {
+      const list = memorySource.Makineler || memorySource.makineler || [];
+      if (Array.isArray(list)) {
+        const normalized = list.map(normalizeMakine);
+        memMakineler = mergeArrays(memMakineler, normalized, 'MakineId');
+      }
+    }
+
+    if (memorySource.Hatirlaticilar || memorySource.hatirlaticilar) {
+      const list = memorySource.Hatirlaticilar || memorySource.hatirlaticilar || [];
+      if (Array.isArray(list)) {
+        const normalized = list.map(normalizeHatirlatici);
+        memHatirlaticilar = mergeArrays(memHatirlaticilar, normalized, 'Id');
+        saveMemHatirlaticilar();
+      }
+    }
+
+    if (memorySource.MalzemeSiparisleri || memorySource.malzemeSiparisleri || memorySource.MalzemeSiparisi) {
+      const list = memorySource.MalzemeSiparisleri || memorySource.malzemeSiparisleri || memorySource.MalzemeSiparisi || [];
+      if (Array.isArray(list)) {
+        const normalized = list.map(normalizeMalzemeSiparisi);
+        memMalzemeSiparisleri = mergeArrays(memMalzemeSiparisleri, normalized, 'Id');
+        saveMemMalzemeSiparisleri();
+      }
+    }
+
+    if (memorySource.MalzemeKatalog || memorySource.malzemeKatalog) {
+      const list = memorySource.MalzemeKatalog || memorySource.malzemeKatalog || [];
+      if (Array.isArray(list)) {
+        memMalzemeKatalog = mergeArrays(memMalzemeKatalog, list, 'Id');
+        saveMemMalzemeKatalog();
+      }
+    }
+
+    if (memorySource.Izinler || memorySource.izinler) {
+      const list = memorySource.Izinler || memorySource.izinler || [];
+      if (Array.isArray(list)) {
+        const normalized = list.map(normalizeIzin);
+        memIzinler = mergeArrays(memIzinler, normalized, 'Id');
+      }
+    }
+
+    if (memorySource.Puantajlar || memorySource.puantajlar) {
+      const list = memorySource.Puantajlar || memorySource.puantajlar || [];
+      if (Array.isArray(list)) memPuantajlar = mergeArrays(memPuantajlar, list, 'PuantajId');
+    }
+
+    if (memorySource.Departmanlar || memorySource.departmanlar) {
+      const list = memorySource.Departmanlar || memorySource.departmanlar || [];
+      if (Array.isArray(list)) memDepartmanlar = mergeArrays(memDepartmanlar, list, 'DepartmanId');
+    }
+
+    if (memorySource.Gorevler || memorySource.gorevler) {
+      const list = memorySource.Gorevler || memorySource.gorevler || [];
+      if (Array.isArray(list)) memGorevler = mergeArrays(memGorevler, list, 'GorevId');
+    }
+
+    if (memorySource.Yevmiyeciler || memorySource.yevmiyeciler) {
+      const list = memorySource.Yevmiyeciler || memorySource.yevmiyeciler || [];
+      if (Array.isArray(list)) memYevmiyeciler = mergeArrays(memYevmiyeciler, list, 'Id');
+    }
+
+    // D. SENKRONİZASYON VE BİLDİRİM TETİKLEME
+    touchSyncTimestamp();
+
+    const modeText = restoreMode === 'merge' ? 'Akıllı Birleştirme (Eksikleri Tamamlama)' : 'Tam Durum Sıfırlama';
+
+    await recordCerideEvent({
+      Olay: `💾 Veritabanı Yedeği Geri Yüklendi (${modeText})`,
+      Tarih: getTurkiyeTarihStr(),
+      Saat: getTurkiyeSaatStr(),
+      IsleyenKisi: yapanKisi,
+      Kategori: 'Sistem / Veritabanı',
+      Detay: `${yapanKisi} tarafından sistem veritabanı yedeği geri yüklendi. Mod: ${modeText}`,
+      Fotograflar: [],
+      OtomatikMi: true
+    }).catch(() => {});
+
+    await recordAjandaNotification({
+      HatirlaticiId: 0,
+      Baslik: '💾 Veritabanı Geri Yüklendi',
+      IslemTuru: 'eklendi',
+      YapanKisi: yapanKisi,
+      Detay: `${yapanKisi} veritabanı yedeğini başarıyla geri yükledi (${modeText}).`,
+      EventKey: 'sistem_yedek_yuklendi'
+    }).catch(() => {});
+
+    return res.json({
+      success: true,
+      mode: restoreMode,
+      message: restoreMode === 'merge'
+        ? `Akıllı birleştirme tamamlandı! Yeni girilen kayıtlar korundu, eksik/silinmiş olan kayıtlar (${insertedCount + updatedCount}) sisteme geri getirildi.`
+        : 'Veritabanı yedeği tam durum olarak başarıyla geri yüklendi!',
+      restoredTableCount,
+      totalRestoredRecords: totalRestoredRecords || actualData.totalRecords || 0,
+      insertedCount,
+      updatedCount,
+      syncTimestamp: globalSyncTimestamp
+    });
+  } catch (err: any) {
+    console.error('[BACKUP RESTORE FATAL ERROR]', err);
+    return res.status(500).json({ error: 'Geri yükleme sırasında hata oluştu: ' + err.message });
+  }
+});
+
 async function getSaglikRaporlariList() {
   if (isDbConnected && detectedTables.saglikRaporlari) {
     try {
