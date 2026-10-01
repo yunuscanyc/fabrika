@@ -11,6 +11,14 @@ export interface IzinUcretiOdeme {
   Aciklama?: string;
 }
 
+export interface PersonelGirisCikis {
+  Id: number | string;
+  GirisTarihi: string; // YYYY-MM-DD
+  CikisTarihi?: string | null; // YYYY-MM-DD
+  CikisNedeni?: string;
+  Notlar?: string;
+}
+
 export interface Personel {
   PersonelId: number;
   TCKimlikNo: string;
@@ -32,6 +40,7 @@ export interface Personel {
   AktifIzinBilgisi?: string;
   DevredenIzinGunu?: number; // Eski masaüstü programından bir kerelik devir izni
   IzinUcretiOdemeleri?: IzinUcretiOdeme[]; // Ücrete çevrilen izinler
+  GirisCikisGecmisi?: PersonelGirisCikis[]; // Birden çok giriş-çıkış dönemleri
 }
 
 export interface IzinKaydi {

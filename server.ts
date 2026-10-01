@@ -463,6 +463,13 @@ function normalizePersonel(row: any) {
     else if (typeof rawO === 'string' && rawO.trim()) ucretOdemeleri = JSON.parse(rawO);
   } catch (e) {}
 
+  let girisCikisGecmisi: any[] = [];
+  try {
+    const rawG = getProp(row, 'GirisCikisGecmisi', 'giriscikisgecmisi', 'Donemler', 'donemler');
+    if (Array.isArray(rawG)) girisCikisGecmisi = rawG;
+    else if (typeof rawG === 'string' && rawG.trim()) girisCikisGecmisi = JSON.parse(rawG);
+  } catch (e) {}
+
   const durumStr = String(getProp(row, 'Durum', 'durum') || '').toLowerCase();
   const cikanTarih = formatDate(getProp(row, 'IstenCikisTarihi', 'istencikistarihi'));
   const rawAktif = getProp(row, 'DurumAktifMi', 'durumaktifmi', 'AktifMi', 'aktifmi', 'DurumAktif', 'durumaktif', 'Aktif', 'aktif');
@@ -484,6 +491,17 @@ function normalizePersonel(row: any) {
     }
   }
 
+  const anaGirisTarihi = formatDate(getProp(row, 'IseGirisTarihi', 'isegiristarihi')) || getBugunStr();
+  if (girisCikisGecmisi.length === 0 && anaGirisTarihi) {
+    girisCikisGecmisi = [{
+      Id: 1,
+      GirisTarihi: anaGirisTarihi,
+      CikisTarihi: cikanTarih || null,
+      CikisNedeni: '',
+      Notlar: 'İşe Başlama'
+    }];
+  }
+
   return {
     PersonelId: Number(getProp(row, 'PersonelId', 'personelid', 'id', 'PersonelID', 'personel_id', 'personel')),
     TCKimlikNo: String(getProp(row, 'TCKimlikNo', 'tckimlikno', 'tc') || ''),
@@ -495,13 +513,14 @@ function normalizePersonel(row: any) {
     AcilDurumTelefonu: String(getProp(row, 'AcilDurumTelefonu', 'acildurumtelefonu') || ''),
     Departman: String(getProp(row, 'Departman', 'departman') || ''),
     Gorev: String(getProp(row, 'Gorev', 'gorev') || ''),
-    IseGirisTarihi: formatDate(getProp(row, 'IseGirisTarihi', 'isegiristarihi')) || getBugunStr(),
+    IseGirisTarihi: anaGirisTarihi,
     IstenCikisTarihi: cikanTarih,
     DogumTarihi: formatDate(getProp(row, 'DogumTarihi', 'dogumtarihi')),
     DurumAktifMi: aktif,
     SilindiMi: silindi,
     DevredenIzinGunu: Number(getProp(row, 'DevredenIzinGunu', 'devredenizingunu') || 0),
-    IzinUcretiOdemeleri: ucretOdemeleri
+    IzinUcretiOdemeleri: ucretOdemeleri,
+    GirisCikisGecmisi: girisCikisGecmisi
   };
 }
 
@@ -2280,6 +2299,9 @@ async function checkDbConnection() {
         }
         if (!hasCol('DevredenIzinGunu') && !hasCol('devredenizingunu')) {
           await pool.query(`ALTER TABLE ${detectedTables.personeller} ADD COLUMN IF NOT EXISTS "DevredenIzinGunu" INT DEFAULT 0`);
+        }
+        if (!hasCol('GirisCikisGecmisi') && !hasCol('giriscikisgecmisi')) {
+          await pool.query(`ALTER TABLE ${detectedTables.personeller} ADD COLUMN IF NOT EXISTS "GirisCikisGecmisi" TEXT DEFAULT '[]'`);
         }
       } catch (alterErr: any) {
         console.error('[DB PERSONEL ALTER COLUMNS ERROR]', alterErr.message);
@@ -6506,8 +6528,13 @@ app.post('/api/personeller', async (req, res) => {
       DogumTarihi: formatDate(req.body.DogumTarihi) || '1990-01-01',
       DurumAktifMi: req.body.DurumAktifMi ?? true,
       DevredenIzinGunu: Number(req.body.DevredenIzinGunu || 0),
-      IzinUcretiOdemeleri: []
+      IzinUcretiOdemeleri: [],
+      GirisCikisGecmisi: req.body.GirisCikisGecmisi || []
     };
+
+    const girisGecmisiStr = req.body.GirisCikisGecmisi !== undefined 
+      ? (typeof req.body.GirisCikisGecmisi === 'string' ? req.body.GirisCikisGecmisi : JSON.stringify(req.body.GirisCikisGecmisi))
+      : undefined;
 
     if (isDbConnected && detectedTables.personeller) {
       try {
@@ -6533,7 +6560,8 @@ app.post('/api/personeller', async (req, res) => {
           { candidates: ['IstenCikisTarihi', 'istencikistarihi', 'IstenCikis'], val: yeni.IstenCikisTarihi },
           { candidates: ['DogumTarihi', 'dogumtarihi', 'BirthDate'], val: yeni.DogumTarihi },
           { candidates: ['DevredenIzinGunu', 'devredenizingunu', 'DevredenIzin'], val: yeni.DevredenIzinGunu },
-          { candidates: ['DurumAktifMi', 'durumaktifmi', 'AktifMi', 'aktifmi', 'DurumAktif'], val: yeni.DurumAktifMi }
+          { candidates: ['DurumAktifMi', 'durumaktifmi', 'AktifMi', 'aktifmi', 'DurumAktif'], val: yeni.DurumAktifMi },
+          { candidates: ['GirisCikisGecmisi', 'giriscikisgecmisi', 'Donemler', 'donemler'], val: girisGecmisiStr }
         ];
 
         for (const m of mappings) {
@@ -6618,7 +6646,10 @@ app.put('/api/personeller/:id', async (req, res) => {
     IstenCikisTarihi: req.body.IstenCikisTarihi !== undefined ? (req.body.IstenCikisTarihi ? formatDate(req.body.IstenCikisTarihi) : null) : undefined,
     DogumTarihi: req.body.DogumTarihi ? formatDate(req.body.DogumTarihi) : undefined,
     DevredenIzinGunu: req.body.DevredenIzinGunu !== undefined ? Number(req.body.DevredenIzinGunu || 0) : undefined,
-    DurumAktifMi: req.body.DurumAktifMi !== undefined ? req.body.DurumAktifMi : undefined
+    DurumAktifMi: req.body.DurumAktifMi !== undefined ? req.body.DurumAktifMi : undefined,
+    GirisCikisGecmisi: req.body.GirisCikisGecmisi !== undefined
+      ? (typeof req.body.GirisCikisGecmisi === 'string' ? req.body.GirisCikisGecmisi : JSON.stringify(req.body.GirisCikisGecmisi))
+      : undefined
   };
 
   if (isDbConnected && detectedTables.personeller) {
@@ -6645,7 +6676,8 @@ app.put('/api/personeller/:id', async (req, res) => {
         { candidates: ['IstenCikisTarihi', 'istencikistarihi', 'IstenCikis'], val: updateData.IstenCikisTarihi },
         { candidates: ['DogumTarihi', 'dogumtarihi', 'BirthDate'], val: updateData.DogumTarihi },
         { candidates: ['DevredenIzinGunu', 'devredenizingunu', 'DevredenIzin'], val: updateData.DevredenIzinGunu },
-        { candidates: ['DurumAktifMi', 'durumaktifmi', 'AktifMi', 'aktifmi', 'DurumAktif'], val: updateData.DurumAktifMi }
+        { candidates: ['DurumAktifMi', 'durumaktifmi', 'AktifMi', 'aktifmi', 'DurumAktif'], val: updateData.DurumAktifMi },
+        { candidates: ['GirisCikisGecmisi', 'giriscikisgecmisi', 'Donemler', 'donemler'], val: updateData.GirisCikisGecmisi }
       ];
 
       for (const m of mappings) {
@@ -7469,6 +7501,15 @@ app.post('/api/puantajlar', async (req, res) => {
   const { tarih, satirlar } = req.body;
   if (!Array.isArray(satirlar)) return res.status(400).json({ error: 'Geçersiz veri' });
 
+  // Tarih ve Rejim Kontrolü (Hafta Sonu ve Cumartesi Kuralları)
+  const match = String(tarih).match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  const targetGunIdx = match ? new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]), 12, 0, 0).getDay() : 1;
+  const rejim = memMesaiAyarlari.CalismaRejimi || '5gun';
+  const is5GunHaftaSonu = rejim === '5gun' && (targetGunIdx === 0 || targetGunIdx === 6);
+  const is6GunPazar = rejim === '6gun' && targetGunIdx === 0;
+  const is6GunCumartesi = rejim === '6gun' && targetGunIdx === 6;
+  const isNormalEngelli = is5GunHaftaSonu || is6GunPazar;
+
   // İzinli personelleri tespit et
   const tumIzinler = await getIzinlerList();
   const gununIzinlileri = tumIzinler.filter(iz => 
@@ -7495,7 +7536,37 @@ app.post('/api/puantajlar', async (req, res) => {
         Aciklama: s.Aciklama || `Onaylı ${aktifIzin.IzinTuru} İzninde (${aktifIzin.BaslangicTarihi} - ${aktifIzin.BitisTarihi})`
       };
     }
-    return s;
+
+    let norm = Number(s.NormalCalismaSaati || 0);
+    let fazla = Number(s.FazlaMesaiSaati || 0);
+    let htMesai = Number(s.HaftaTatiliMesaiSaati || 0);
+    let rtMesai = Number(s.ResmiTatilMesaiSaati || 0);
+    let dKod = s.DurumKodu || 'N';
+
+    if (isNormalEngelli) {
+      // 5 günlük rejimde hafta sonları veya 6 günlükte Pazar günü normal mesai engellenmiştir
+      if (norm > 0) {
+        htMesai = Number((htMesai + norm).toFixed(1));
+        norm = 0;
+      }
+      if (dKod === 'N') dKod = 'HT';
+    } else if (is6GunCumartesi) {
+      // 6 günlük rejimde Cumartesi günü maksimum 5 saat normal, üzeri fazla mesaidir
+      if (norm > 5) {
+        const asan = norm - 5;
+        norm = 5;
+        fazla = Number((fazla + asan).toFixed(1));
+      }
+    }
+
+    return {
+      ...s,
+      DurumKodu: dKod,
+      NormalCalismaSaati: norm,
+      FazlaMesaiSaati: fazla,
+      HaftaTatiliMesaiSaati: htMesai,
+      ResmiTatilMesaiSaati: rtMesai
+    };
   });
 
   if (isDbConnected && detectedTables.puantajlar) {

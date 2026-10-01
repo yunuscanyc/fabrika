@@ -257,6 +257,39 @@ export function getStandartNormalSaat(isoDate: string, rejim: '5gun' | '6gun'): 
   }
 }
 
+/**
+ * Seçili tarihte ve rejimde Normal Çalışma Saati girilebilir mi?
+ * - 5 günlük rejimde Cumartesi ve Pazar günleri normal mesai girişi kesinlikle engellenir (false).
+ * - 6 günlük rejimde Pazar günü normal mesai girişi kesinlikle engellenir (false).
+ * - Tam gün resmi tatillerde normal mesai girişi engellenir (false).
+ */
+export function isNormalCalismaGirilebilir(isoDate: string, rejim: '5gun' | '6gun'): boolean {
+  const tatil = getResmiTatil(isoDate);
+  if (tatil.isTatil && !tatil.yarimGunMu) return false;
+
+  const day = getGunIndex(isoDate);
+  if (rejim === '5gun') {
+    return day !== 0 && day !== 6; // 0: Pazar, 6: Cumartesi engellidir
+  } else {
+    return day !== 0; // Sadece Pazar engellidir (Cumartesi öğlene kadar serbest)
+  }
+}
+
+/**
+ * Seçili tarihte ve rejimde girilebilecek azami (maksimum) Normal Çalışma Saati:
+ * - Normal çalışma engelli günlerde: 0
+ * - 6 günlük rejimde Cumartesi günü: Maksimum 5.0 saat (üzeri fazla mesaidir)
+ * - Hafta içi günlerde azami: 11.0 saat
+ */
+export function getMaxNormalCalismaSaati(isoDate: string, rejim: '5gun' | '6gun'): number {
+  if (!isNormalCalismaGirilebilir(isoDate, rejim)) return 0;
+  const day = getGunIndex(isoDate);
+  if (rejim === '6gun' && day === 6) {
+    return 5.0; // Cumartesi en fazla 5 saat normal çalışılabilir
+  }
+  return 11.0; // Yasal günlük azami normal çalışma sınırı
+}
+
 // İznin bitiş tarihinden sonraki ilk mesai (işbaşı) gününü bulur
 export function getIlkMesaiGunu(bitisTarihi: string, rejim: '5gun' | '6gun' = '5gun'): string {
   if (!bitisTarihi) return '';

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Personel, GunlukPuantaj } from '../types';
 import { FileSpreadsheet, Printer, X, Download } from 'lucide-react';
 import { formatTarihTR, getBugunIso } from '../utils/dateUtils';
+import { isPersonelCalisiyorMuAyda } from '../utils/personelUtils';
 
 interface AylikPuantajRaporModalProps {
   isOpen: boolean;
@@ -37,8 +38,19 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
     { no: 10, ad: 'Ekim' }, { no: 11, ad: 'Kasım' }, { no: 12, ad: 'Aralık' },
   ];
 
-  // Seçili ay ve yıla ait puantajların icmali (timezone güvenli ayrıştırma ile)
-  const icmalListesi = personeller.filter(p => p.DurumAktifMi).map(p => {
+  // Seçili ay ve yıla ait puantajların icmali (o ay istihdamda olan veya puantaj kaydı bulunanlar)
+  const icmalListesi = personeller.filter(p => {
+    const hasPuantajInMonth = puantajlar.some(x => {
+      if (x.PersonelId !== p.PersonelId) return false;
+      const clean = String(x.Tarih || '').trim();
+      const match = clean.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+      if (match) {
+        return parseInt(match[1], 10) === seciliYil && parseInt(match[2], 10) === seciliAy;
+      }
+      return false;
+    });
+    return hasPuantajInMonth || isPersonelCalisiyorMuAyda(p, seciliYil, seciliAy);
+  }).map(p => {
     const pPuantaj = puantajlar.filter(x => {
       if (x.PersonelId !== p.PersonelId) return false;
       const clean = String(x.Tarih || '').trim();

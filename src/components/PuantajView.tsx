@@ -31,8 +31,11 @@ import {
   isHaftaTatiliGunu, 
   isCumartesiGunu, 
   isYuzdeYuzMesaiGecerli, 
-  getStandartNormalSaat 
+  getStandartNormalSaat,
+  isNormalCalismaGirilebilir,
+  getMaxNormalCalismaSaati
 } from '../utils/dateUtils';
+import { isPersonelCalisiyorMuTarihte } from '../utils/personelUtils';
 
 interface PuantajViewProps {
   personeller: Personel[];
@@ -63,6 +66,14 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
   const [hataMesaji, setHataMesaji] = useState('');
   const [raporModalAcik, setRaporModalAcik] = useState(false);
   const [eksikBannerGizli, setEksikBannerGizli] = useState(false);
+
+  // Günün Çalışma ve Tatil Kuralları
+  const gunIdx = getGunIndex(seciliTarih);
+  const is5GunHaftaSonu = calismaRejimi === '5gun' && (gunIdx === 0 || gunIdx === 6);
+  const is6GunPazar = calismaRejimi === '6gun' && gunIdx === 0;
+  const is6GunCumartesi = calismaRejimi === '6gun' && gunIdx === 6;
+  const isNormalEngelli = !isNormalCalismaGirilebilir(seciliTarih, calismaRejimi);
+  const maxNormalSaat = getMaxNormalCalismaSaati(seciliTarih, calismaRejimi);
 
   // 1. Mesai ayarlarını sunucudan çek
   useEffect(() => {
@@ -108,8 +119,14 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
       const tumData: GunlukPuantaj[] = await tumRes.json();
       setTumPuantajlar(tumData);
 
-      const aktifPersoneller = personeller.filter(p => p.DurumAktifMi);
-      const hazirlanan: SatirState[] = aktifPersoneller.map(p => {
+      // O gün için listelenecek personeller:
+      // 1. O tarihte işe giriş yapmış ve aktif çalışanlar (veya giriş-çıkış dönemleri içinde olanlar)
+      // 2. VEYA o tarihe ait zaten kaydedilmiş puantaj kaydı bulunan personeller
+      const gunlukPersonelIdleri = new Set(gunData.map(g => g.PersonelId));
+      const calisanPersoneller = personeller.filter(p => 
+        isPersonelCalisiyorMuTarihte(p, tarih) || gunlukPersonelIdleri.has(p.PersonelId)
+      );
+      const hazirlanan: SatirState[] = calisanPersoneller.map(p => {
         // İzinli olup olmadığını kontrol et
         const aktifIzin = izinler?.find(iz => 
           iz.PersonelId === p.PersonelId && 
@@ -119,16 +136,43 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
           tarih <= iz.BitisTarihi
         );
 
+        const targetGunIdx = getGunIndex(tarih);
+        const targetIs5GunHaftaSonu = rejim === '5gun' && (targetGunIdx === 0 || targetGunIdx === 6);
+        const targetIs6GunPazar = rejim === '6gun' && targetGunIdx === 0;
+        const targetIs6GunCumartesi = rejim === '6gun' && targetGunIdx === 6;
+        const targetNormalEngelli = targetIs5GunHaftaSonu || targetIs6GunPazar;
+
         const mevcut = gunData.find(x => x.PersonelId === p.PersonelId);
         if (mevcut) {
           const yuzdeYuzGecerli = isYuzdeYuzMesaiGecerli(tarih, rejim, mevcut.DurumKodu);
+          let normSaat = Number(mevcut.NormalCalismaSaati || 0);
+          let fazlaSaat = Number(mevcut.FazlaMesaiSaati || 0);
+          let htSaat = Number(mevcut.HaftaTatiliMesaiSaati || 0);
+          let dKod = mevcut.DurumKodu || 'N';
+
+          if (targetNormalEngelli) {
+            // 5 günlük rejimde hafta sonu veya 6 günlükte Pazar günü normal mesai OLAMAZ!
+            if (normSaat > 0) {
+              htSaat = Number((htSaat + normSaat).toFixed(1));
+              normSaat = 0;
+            }
+            if (dKod === 'N') dKod = 'HT';
+          } else if (targetIs6GunCumartesi) {
+            // 6 günlük rejimde Cumartesi günü en fazla 5 saat normal, üzeri fazla mesaidir
+            if (normSaat > 5) {
+              const asan = normSaat - 5;
+              normSaat = 5;
+              fazlaSaat = Number((fazlaSaat + asan).toFixed(1));
+            }
+          }
+
           return {
             PersonelId: p.PersonelId,
-            DurumKodu: mevcut.DurumKodu || 'N',
-            NormalCalismaSaati: Number(mevcut.NormalCalismaSaati || 0),
-            FazlaMesaiSaati: Number(mevcut.FazlaMesaiSaati || 0),
+            DurumKodu: dKod,
+            NormalCalismaSaati: normSaat,
+            FazlaMesaiSaati: fazlaSaat,
             // Tatil veya hafta sonu değilse %100 mesai sıfırlanır
-            HaftaTatiliMesaiSaati: yuzdeYuzGecerli ? Number(mevcut.HaftaTatiliMesaiSaati || 0) : 0,
+            HaftaTatiliMesaiSaati: yuzdeYuzGecerli ? htSaat : 0,
             ResmiTatilMesaiSaati: yuzdeYuzGecerli ? Number(mevcut.ResmiTatilMesaiSaati || 0) : 0,
             SaatlikKesintiUcretsiz: Number(mevcut.SaatlikKesintiUcretsiz || 0),
             Aciklama: mevcut.Aciklama || ''
@@ -137,7 +181,6 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
 
         // Yeni satır için akıllı varsayılanlar
         const tatil = getResmiTatil(tarih);
-        const haftaTatili = isHaftaTatiliGunu(tarih, rejim);
         const standartSaat = getStandartNormalSaat(tarih, rejim);
 
         let varsayilanKod = 'N';
@@ -155,10 +198,16 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
         } else {
           if (tatil.isTatil && !tatil.yarimGunMu) {
             varsayilanKod = 'RT';
-          } else if (haftaTatili) {
+            initialNormalCalisma = 0;
+          } else if (targetNormalEngelli) {
             varsayilanKod = 'HT';
+            initialNormalCalisma = 0;
+          } else if (targetIs6GunCumartesi) {
+            varsayilanKod = 'N';
+            initialNormalCalisma = 5.0; // Cumartesi 5 saat standart normal
+          } else {
+            initialNormalCalisma = standartSaat;
           }
-          initialNormalCalisma = varsayilanKod === 'N' ? standartSaat : 0;
         }
 
         return {
@@ -227,14 +276,27 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
 
   // Durum Kodu Değiştiğinde Akıllı Saat Ayarı
   const handleDurumChange = (personelId: number, kod: string) => {
+    if (isNormalEngelli && kod === 'N') {
+      setKayitMesaji(
+        calismaRejimi === '5gun'
+          ? '5 günlük rejimde Cumartesi ve Pazar günleri normal mesai kapalıdır. Hafta Tatili (HT) seçilmelidir.'
+          : 'Pazar günleri hafta tatilidir, normal mesai girilemez.'
+      );
+      setTimeout(() => setKayitMesaji(''), 4000);
+      return;
+    }
+
     const standartSaat = getStandartNormalSaat(seciliTarih, calismaRejimi);
     setSatirlar(prev => prev.map(s => {
       if (s.PersonelId !== personelId) return s;
       if (kod === 'N') {
+        const normalHedef = is6GunCumartesi 
+          ? Math.min(5, Math.max(0, 5 - s.SaatlikKesintiUcretsiz)) 
+          : Math.max(0, standartSaat - s.SaatlikKesintiUcretsiz);
         return { 
           ...s, 
           DurumKodu: kod, 
-          NormalCalismaSaati: Math.max(0, standartSaat - s.SaatlikKesintiUcretsiz) 
+          NormalCalismaSaati: normalHedef 
         };
       } else {
         // İzin, Tatil, Devamsız vb. ise normal mesai 0 olur
@@ -245,7 +307,8 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
 
   // Eksik Saat Girildiğinde Normal Mesai Otomatik Düşer
   const handleEksikSaatChange = (personelId: number, eksik: number) => {
-    const standartSaat = getStandartNormalSaat(seciliTarih, calismaRejimi);
+    if (isNormalEngelli) return;
+    const standartSaat = is6GunCumartesi ? 5.0 : getStandartNormalSaat(seciliTarih, calismaRejimi);
     setSatirlar(prev => prev.map(s => {
       if (s.PersonelId !== personelId) return s;
       const normal = s.DurumKodu === 'N' ? Math.max(0, standartSaat - eksik) : s.NormalCalismaSaati;
@@ -253,35 +316,65 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
     }));
   };
 
+  // Normal Saat Değiştirildiğinde (Hafta Sonu Engelleme ve Cumartesi 5 Saat Sınırı)
   const handleNormalSaatChange = (personelId: number, saat: number) => {
-    setSatirlar(prev => prev.map(s => s.PersonelId === personelId ? { ...s, NormalCalismaSaati: saat } : s));
+    if (isNormalEngelli) {
+      setKayitMesaji(
+        calismaRejimi === '5gun'
+          ? '5 günlük rejimde Cumartesi ve Pazar günleri normal mesai girilemez. Çalışma varsa Fazla Mesai alanına yazılmalıdır.'
+          : 'Pazar günü hafta tatilidir, normal mesai girilemez.'
+      );
+      setTimeout(() => setKayitMesaji(''), 4000);
+      return;
+    }
+
+    // 6 Günlük Rejimde Cumartesi Kuralı: Maksimum 5 saat normal, üzeri otomatik Fazla Mesai
+    if (is6GunCumartesi) {
+      if (saat > 5) {
+        const asanSaat = Number((saat - 5).toFixed(1));
+        setSatirlar(prev => prev.map(s => {
+          if (s.PersonelId !== personelId) return s;
+          return {
+            ...s,
+            NormalCalismaSaati: 5,
+            FazlaMesaiSaati: Number(((s.FazlaMesaiSaati || 0) + asanSaat).toFixed(1))
+          };
+        }));
+        setKayitMesaji(`Cumartesi kuralı: 5 saat normal çalışma sabitlendi, aşan ${asanSaat} saat fazla mesaiye aktarıldı.`);
+        setTimeout(() => setKayitMesaji(''), 4000);
+        return;
+      }
+    }
+
+    setSatirlar(prev => prev.map(s => s.PersonelId === personelId ? { ...s, NormalCalismaSaati: Math.max(0, saat) } : s));
   };
 
   const handleFazlaMesaiChange = (personelId: number, saat: number) => {
-    setSatirlar(prev => prev.map(s => s.PersonelId === personelId ? { ...s, FazlaMesaiSaati: saat } : s));
+    setSatirlar(prev => prev.map(s => s.PersonelId === personelId ? { ...s, FazlaMesaiSaati: Math.max(0, saat) } : s));
   };
 
   const handleTatilMesaiChange = (personelId: number, saat: number) => {
     const yuzdeYuzGecerli = isYuzdeYuzMesaiGecerli(seciliTarih, calismaRejimi, satirlar.find(x => x.PersonelId === personelId)?.DurumKodu);
     if (!yuzdeYuzGecerli) return;
-    setSatirlar(prev => prev.map(s => s.PersonelId === personelId ? { ...s, HaftaTatiliMesaiSaati: saat } : s));
+    setSatirlar(prev => prev.map(s => s.PersonelId === personelId ? { ...s, HaftaTatiliMesaiSaati: Math.max(0, saat) } : s));
   };
 
   // Tümüne Normal Çalışma Doldur
   const handleTumuneNormalDoldur = () => {
-    const standartSaat = getStandartNormalSaat(seciliTarih, calismaRejimi);
     const tatil = getResmiTatil(seciliTarih);
-    const haftaTatili = isHaftaTatiliGunu(seciliTarih, calismaRejimi);
 
     let hedefKod = 'N';
-    let hedefSaat = standartSaat;
+    let hedefSaat = getStandartNormalSaat(seciliTarih, calismaRejimi);
 
     if (tatil.isTatil && !tatil.yarimGunMu) {
       hedefKod = 'RT';
       hedefSaat = 0;
-    } else if (haftaTatili) {
+    } else if (isNormalEngelli) {
       hedefKod = 'HT';
       hedefSaat = 0;
+    } else if (is6GunCumartesi) {
+      hedefKod = 'N';
+      hedefSaat = 5.0; // Cumartesi 5 saat normal
     }
 
     setSatirlar(prev => prev.map(s => ({
@@ -606,6 +699,23 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
           </span>
         </div>
 
+        {/* Hafta Sonu ve Cumartesi Özel Kural Uyarısı */}
+        {is5GunHaftaSonu && (
+          <div className="flex items-center gap-1.5 text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-md font-semibold">
+            <span>⚠️ 5 Günlük Rejim: Hafta sonu normal çalışma kapalıdır. Çalışma yapılmışsa Fazla Mesai / Tatil Mesaisi yazılmalıdır.</span>
+          </div>
+        )}
+        {is6GunCumartesi && (
+          <div className="flex items-center gap-1.5 text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-md font-semibold">
+            <span>⏱️ 6 Günlük Rejim (Cumartesi): En fazla 5 saat normal çalışılır, üzeri otomatik Fazla Mesaiye aktarılır.</span>
+          </div>
+        )}
+        {is6GunPazar && (
+          <div className="flex items-center gap-1.5 text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2.5 py-1 rounded-md font-semibold">
+            <span>☕ Pazar Hafta Tatili: Normal mesai kapalıdır.</span>
+          </div>
+        )}
+
         <div className="flex items-center gap-2">
           {isYuzdeYuzMesaiGecerli(seciliTarih, calismaRejimi) ? (
             <div className="flex items-center gap-1.5 text-emerald-400 bg-emerald-950/50 border border-emerald-800/60 px-2.5 py-1 rounded-md font-medium">
@@ -630,8 +740,22 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
                 <th className="py-3 px-4">Personel</th>
                 <th className="py-3 px-3">Durum Kodu</th>
                 <th className="py-3 px-3 text-center">
-                  <div>Normal (Saat)</div>
-                  <div className="text-[10px] text-slate-500 font-normal">Hedef: {standartSaat}s</div>
+                  <div className="flex items-center justify-center gap-1">
+                    <span>Normal (Saat)</span>
+                    {isNormalEngelli && (
+                      <span className="text-[10px] text-rose-400 bg-rose-500/10 border border-rose-500/20 px-1 py-0.5 rounded font-bold lowercase">
+                        (kapalı)
+                      </span>
+                    )}
+                    {is6GunCumartesi && (
+                      <span className="text-[10px] text-amber-300 bg-amber-500/10 border border-amber-500/20 px-1 py-0.5 rounded font-bold">
+                        (Maks 5s)
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[10px] text-slate-500 font-normal">
+                    {isNormalEngelli ? 'Hafta Tatili - Sadece Mesai' : is6GunCumartesi ? 'Maks 5s Normal, Üzeri Fazla' : `Hedef: ${standartSaat}s`}
+                  </div>
                 </th>
                 <th className="py-3 px-3 text-center">
                   <div>%50 Fazla Mesai</div>
@@ -695,9 +819,15 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
                         <select
                           value={s.DurumKodu}
                           onChange={(e) => handleDurumChange(s.PersonelId, e.target.value)}
-                          className="px-2.5 py-1 bg-slate-950 border border-slate-800 rounded text-xs text-white focus:outline-none focus:border-blue-500 font-medium"
+                          className={`px-2.5 py-1 bg-slate-950 border rounded text-xs text-white focus:outline-none focus:border-blue-500 font-medium ${
+                            isNormalEngelli && s.DurumKodu === 'HT' ? 'border-amber-500/50 text-amber-300' : 'border-slate-800'
+                          }`}
                         >
-                          <option value="N">Normal Çalışma (N)</option>
+                          {!isNormalEngelli ? (
+                            <option value="N">Normal Çalışma (N)</option>
+                          ) : (
+                            <option value="N" disabled>Normal Çalışma (Hafta Sonu Kapalı)</option>
+                          )}
                           <option value="HT">Hafta Tatili (HT)</option>
                           <option value="RT">Resmi Tatil (RT)</option>
                           <option value="YI">Yıllık İzin (YI)</option>
@@ -709,15 +839,50 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
                       </td>
 
                       <td className="py-2.5 px-3 text-center">
-                        <input
-                          type="number"
-                          step="0.5"
-                          min="0"
-                          max="24"
-                          value={s.NormalCalismaSaati}
-                          onChange={(e) => handleNormalSaatChange(s.PersonelId, parseFloat(e.target.value) || 0)}
-                          className="w-16 px-2 py-1 bg-slate-950 border border-slate-800 rounded text-center text-xs text-emerald-400 font-bold focus:outline-none focus:border-emerald-500"
-                        />
+                        {isNormalEngelli ? (
+                          <div 
+                            className="relative inline-block group" 
+                            title={
+                              calismaRejimi === '5gun'
+                                ? "5 günlük çalışma rejiminde Cumartesi ve Pazar günleri normal çalışma yapılamaz. Çalışma varsa Fazla Mesai veya Hafta Tatili Mesaisi girilmelidir."
+                                : "Pazar günleri hafta tatilidir. Normal çalışma girilemez, çalışma varsa Hafta Tatili Mesaisi girilmelidir."
+                            }
+                          >
+                            <input
+                              type="number"
+                              disabled
+                              value={0}
+                              className="w-16 px-2 py-1 bg-slate-950/40 border border-slate-800/40 rounded text-center text-xs text-slate-600 font-medium cursor-not-allowed opacity-50"
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center">
+                            <input
+                              type="number"
+                              step="0.5"
+                              min="0"
+                              max={is6GunCumartesi ? 5 : 24}
+                              disabled={s.DurumKodu !== 'N'}
+                              value={s.NormalCalismaSaati}
+                              onChange={(e) => handleNormalSaatChange(s.PersonelId, parseFloat(e.target.value) || 0)}
+                              className={`w-16 px-2 py-1 bg-slate-950 border rounded text-center text-xs font-bold focus:outline-none ${
+                                s.DurumKodu !== 'N'
+                                  ? 'border-slate-800/40 text-slate-600 opacity-50 cursor-not-allowed'
+                                  : is6GunCumartesi 
+                                    ? 'border-amber-500/50 text-amber-300 focus:border-amber-400' 
+                                    : 'border-slate-800 text-emerald-400 focus:border-emerald-500'
+                              }`}
+                              title={
+                                is6GunCumartesi 
+                                  ? "Cumartesi kuralı: En fazla 5 saat normal çalışılabilir. 5 saatten fazlası otomatik olarak Fazla Mesaiye aktarılır." 
+                                  : undefined
+                              }
+                            />
+                            {is6GunCumartesi && (
+                              <span className="text-[9px] text-amber-400/80 font-mono mt-0.5 font-semibold">maks 5s</span>
+                            )}
+                          </div>
+                        )}
                       </td>
 
                       <td className="py-2.5 px-3 text-center">

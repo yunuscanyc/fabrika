@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Personel, Departman, Gorev } from '../types';
+import { Personel, Departman, Gorev, PersonelGirisCikis } from '../types';
 import { 
   Users, 
   UserPlus, 
@@ -21,9 +21,11 @@ import {
   HeartPulse,
   GraduationCap,
   ShieldCheck,
-  BookOpen
+  BookOpen,
+  History
 } from 'lucide-react';
 import { formatTarihTR } from '../utils/dateUtils';
+import { getPersonelGirisCikisDonemleri } from '../utils/personelUtils';
 
 interface PersonelViewProps {
   personeller: Personel[];
@@ -60,6 +62,7 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
   const [formGorev, setFormGorev] = useState('');
   const [formIseGiris, setFormIseGiris] = useState('');
   const [formIstenCikis, setFormIstenCikis] = useState('');
+  const [formGirisCikisGecmisi, setFormGirisCikisGecmisi] = useState<PersonelGirisCikis[]>([]);
   const [formDogumTarihi, setFormDogumTarihi] = useState('1990-01-01');
   const [formDevredenIzin, setFormDevredenIzin] = useState<number>(0);
   const [formKanGrubu, setFormKanGrubu] = useState('Bilinmiyor');
@@ -107,8 +110,16 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
     setFormEposta('');
     setFormDepartman(departmanlar[0]?.Ad || '');
     setFormGorev(gorevler[0]?.Ad || '');
-    setFormIseGiris(new Date().toISOString().split('T')[0]);
+    const bugun = new Date().toISOString().split('T')[0];
+    setFormIseGiris(bugun);
     setFormIstenCikis('');
+    setFormGirisCikisGecmisi([{
+      Id: Date.now(),
+      GirisTarihi: bugun,
+      CikisTarihi: null,
+      CikisNedeni: '',
+      Notlar: 'İşe Başlama'
+    }]);
     setFormDogumTarihi('1990-01-01');
     setFormDevredenIzin(0);
     setFormKanGrubu('Bilinmiyor');
@@ -140,7 +151,9 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
     setFormEposta(p.Eposta || '');
     setFormDepartman(p.Departman || '');
     setFormGorev(p.Gorev || '');
-    setFormIseGiris(p.IseGirisTarihi || '');
+    const donemler = getPersonelGirisCikisDonemleri(p);
+    setFormGirisCikisGecmisi(donemler);
+    setFormIseGiris(p.IseGirisTarihi || (donemler[0]?.GirisTarihi || ''));
     setFormIstenCikis(p.IstenCikisTarihi || '');
     setFormDogumTarihi(p.DogumTarihi || '1990-01-01');
     setFormDevredenIzin(Number(p.DevredenIzinGunu || 0));
@@ -155,6 +168,51 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
     setModalAcik(true);
   };
 
+  // Yeni Giriş-Çıkış Dönemi Ekle (Tekrar İşe Başlatma vb.)
+  const handleYeniDonemEkle = () => {
+    const bugun = new Date().toISOString().split('T')[0];
+    setFormGirisCikisGecmisi(prev => [
+      ...prev,
+      {
+        Id: Date.now(),
+        GirisTarihi: bugun,
+        CikisTarihi: null,
+        CikisNedeni: '',
+        Notlar: 'Tekrar İşe Başlama'
+      }
+    ]);
+    setFormIseGiris(bugun);
+    setFormIstenCikis('');
+    setFormAktif(true);
+  };
+
+  // Dönem Bilgisi Güncelle
+  const handleDonemGuncelle = (index: number, alan: keyof PersonelGirisCikis, deger: any) => {
+    setFormGirisCikisGecmisi(prev => {
+      const yeni = [...prev];
+      yeni[index] = { ...yeni[index], [alan]: deger };
+
+      // En son dönemin verilerini ana alanlara yansıt
+      if (index === yeni.length - 1) {
+        if (alan === 'GirisTarihi') setFormIseGiris(deger);
+        if (alan === 'CikisTarihi') {
+          setFormIstenCikis(deger || '');
+          setFormAktif(!deger);
+        }
+      }
+      return yeni;
+    });
+  };
+
+  // Dönem Sil
+  const handleDonemSil = (index: number) => {
+    if (formGirisCikisGecmisi.length <= 1) {
+      alert('Personelin en az bir işe giriş dönemi bulunmalıdır.');
+      return;
+    }
+    setFormGirisCikisGecmisi(prev => prev.filter((_, idx) => idx !== index));
+  };
+
   const handleKaydet = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formAdSoyad.trim()) {
@@ -164,6 +222,16 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
 
     setIslemSuruyor(true);
     try {
+      // Dönemleri sırala (Giriş tarihine göre artan)
+      const siraliDonemler = [...formGirisCikisGecmisi].sort((a, b) => 
+        (a.GirisTarihi || '').localeCompare(b.GirisTarihi || '')
+      );
+      const sonDonem = siraliDonemler[siraliDonemler.length - 1];
+
+      const sonGiris = sonDonem?.GirisTarihi || formIseGiris || new Date().toISOString().split('T')[0];
+      const sonCikis = sonDonem?.CikisTarihi || (formIstenCikis ? formIstenCikis : null);
+      const isAktif = !sonCikis;
+
       const payload = {
         TCKimlikNo: formTC.trim(),
         AdSoyad: formAdSoyad.trim(),
@@ -171,14 +239,15 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
         Eposta: formEposta.trim(),
         Departman: formDepartman.trim(),
         Gorev: formGorev.trim(),
-        IseGirisTarihi: formIseGiris || new Date().toISOString().split('T')[0],
-        IstenCikisTarihi: formIstenCikis || null,
+        IseGirisTarihi: sonGiris,
+        IstenCikisTarihi: sonCikis,
         DogumTarihi: formDogumTarihi || '1990-01-01',
         DevredenIzinGunu: Number(formDevredenIzin || 0),
         KanGrubu: formKanGrubu,
         AcilDurumKisisi: formAcilKisi.trim(),
         AcilDurumTelefonu: formAcilTel.trim(),
-        DurumAktifMi: formAktif
+        DurumAktifMi: isAktif,
+        GirisCikisGecmisi: siraliDonemler
       };
 
       let targetPersonelId = seciliPersonel?.PersonelId;
@@ -421,6 +490,15 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
                       {p.IstenCikisTarihi && (
                         <div className="text-rose-400 mt-0.5">Çıkış: {formatTarihTR(p.IstenCikisTarihi)}</div>
                       )}
+                      {p.GirisCikisGecmisi && p.GirisCikisGecmisi.length > 1 && (
+                        <div 
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-semibold mt-1 cursor-help"
+                          title={p.GirisCikisGecmisi.map((d, i) => `${i + 1}. Dönem: ${formatTarihTR(d.GirisTarihi)} - ${d.CikisTarihi ? formatTarihTR(d.CikisTarihi) : 'Devam'}${d.CikisNedeni ? ' (' + d.CikisNedeni + ')' : ''}`).join('\n')}
+                        >
+                          <History className="w-3 h-3 text-amber-400" />
+                          <span>{p.GirisCikisGecmisi.length} Giriş-Çıkış</span>
+                        </div>
+                      )}
                     </td>
 
                     <td className="py-3 px-4 text-center">
@@ -558,14 +636,103 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">İşe Giriş Tarihi</label>
-                  <input
-                    type="date"
-                    value={formIseGiris}
-                    onChange={(e) => setFormIseGiris(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-blue-500"
-                  />
+                {/* İşe Giriş - Çıkış Dönemleri Yönetimi (Çoklu Giriş-Çıkış Desteği) */}
+                <div className="col-span-full bg-slate-950/70 border border-slate-800 rounded-xl p-3.5 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-800/80">
+                    <div className="flex items-center gap-2">
+                      <History className="w-4 h-4 text-amber-400" />
+                      <span className="text-xs font-bold text-slate-200">İşe Giriş &amp; Çıkış Dönemleri (İstihdam Geçmişi)</span>
+                      <span className="text-[10px] text-slate-400 font-normal hidden sm:inline">
+                        — Bir personel birden fazla kez işe girip çıkabilir, puantaj buna göre hesaplanır.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleYeniDonemEkle}
+                      className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition shadow-xs cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Yeni Dönem Ekle (Tekrar İşe Başlat)</span>
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {formGirisCikisGecmisi.map((donem, idx) => {
+                      const isSonDonem = idx === formGirisCikisGecmisi.length - 1;
+                      const isAktif = !donem.CikisTarihi;
+                      return (
+                        <div key={donem.Id || idx} className="bg-slate-900/90 border border-slate-800 rounded-lg p-3 space-y-2">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-slate-300 flex items-center gap-2">
+                              <span>{idx + 1}. İstihdam Dönemi</span>
+                              {isAktif ? (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                  Aktif Çalışıyor
+                                </span>
+                              ) : (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                                  Ayrıldı
+                                </span>
+                              )}
+                              {isSonDonem && (
+                                <span className="text-[10px] text-blue-400 bg-blue-500/10 border border-blue-500/20 px-1.5 py-0.5 rounded">
+                                  En Son / Güncel Dönem
+                                </span>
+                              )}
+                            </span>
+                            {formGirisCikisGecmisi.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleDonemSil(idx)}
+                                className="text-slate-500 hover:text-rose-400 p-1 rounded transition cursor-pointer"
+                                title="Bu Dönemi Sil"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                            <div>
+                              <label className="block text-[11px] font-medium text-slate-400 mb-1">
+                                İşe Giriş Tarihi <span className="text-rose-400">*</span>
+                              </label>
+                              <input
+                                type="date"
+                                required
+                                value={donem.GirisTarihi || ''}
+                                onChange={(e) => handleDonemGuncelle(idx, 'GirisTarihi', e.target.value)}
+                                className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-medium text-slate-400 mb-1">
+                                İşten Çıkış Tarihi <span className="text-slate-500">(Devam ediyorsa boş)</span>
+                              </label>
+                              <input
+                                type="date"
+                                value={donem.CikisTarihi || ''}
+                                onChange={(e) => handleDonemGuncelle(idx, 'CikisTarihi', e.target.value || null)}
+                                className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-medium text-slate-400 mb-1">
+                                Çıkış Nedeni / Not
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="Örn: Askerlik, İstifa, Sezonluk"
+                                value={donem.CikisNedeni || donem.Notlar || ''}
+                                onChange={(e) => handleDonemGuncelle(idx, 'CikisNedeni', e.target.value)}
+                                className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded text-xs text-white focus:outline-none focus:border-amber-400"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div>
@@ -597,16 +764,6 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
                   <span className="text-[10px] text-slate-500 mt-0.5 block">
                     İlk kullanıma özel: Eski masaüstü programındaki devreden bakiye
                   </span>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">İşten Çıkış Tarihi</label>
-                  <input
-                    type="date"
-                    value={formIstenCikis}
-                    onChange={(e) => setFormIstenCikis(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-blue-500"
-                  />
                 </div>
 
                 <div>
