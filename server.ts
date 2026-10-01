@@ -7544,10 +7544,15 @@ app.post('/api/puantajlar', async (req, res) => {
     let dKod = s.DurumKodu || 'N';
 
     if (isNormalEngelli) {
-      // 5 günlük rejimde hafta sonları veya 6 günlükte Pazar günü normal mesai engellenmiştir
+      // 5 günlük rejimde hafta sonları veya 6 günlükte Pazar günü normal mesai engellenmiştir.
+      // Hafta tatili mesaisi %50 Fazla Mesaiye aktarılır (%100'e değil).
       if (norm > 0) {
-        htMesai = Number((htMesai + norm).toFixed(1));
+        fazla = Number((fazla + norm).toFixed(1));
         norm = 0;
+      }
+      if (htMesai > 0) {
+        fazla = Number((fazla + htMesai).toFixed(1));
+        htMesai = 0;
       }
       if (dKod === 'N') dKod = 'HT';
     } else if (is6GunCumartesi) {

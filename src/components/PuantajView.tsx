@@ -152,9 +152,14 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
 
           if (targetNormalEngelli) {
             // 5 günlük rejimde hafta sonu veya 6 günlükte Pazar günü normal mesai OLAMAZ!
+            // Hafta tatili çalışması %50 Fazla Mesaiye aktarılır (%100'e değil)
             if (normSaat > 0) {
-              htSaat = Number((htSaat + normSaat).toFixed(1));
+              fazlaSaat = Number((fazlaSaat + normSaat).toFixed(1));
               normSaat = 0;
+            }
+            if (!yuzdeYuzGecerli && htSaat > 0) {
+              fazlaSaat = Number((fazlaSaat + htSaat).toFixed(1));
+              htSaat = 0;
             }
             if (dKod === 'N') dKod = 'HT';
           } else if (targetIs6GunCumartesi) {
@@ -171,7 +176,7 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
             DurumKodu: dKod,
             NormalCalismaSaati: normSaat,
             FazlaMesaiSaati: fazlaSaat,
-            // Tatil veya hafta sonu değilse %100 mesai sıfırlanır
+            // Yalnızca resmi tatil ise %100 mesai geçerlidir
             HaftaTatiliMesaiSaati: yuzdeYuzGecerli ? htSaat : 0,
             ResmiTatilMesaiSaati: yuzdeYuzGecerli ? Number(mevcut.ResmiTatilMesaiSaati || 0) : 0,
             SaatlikKesintiUcretsiz: Number(mevcut.SaatlikKesintiUcretsiz || 0),
@@ -321,7 +326,7 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
     if (isNormalEngelli) {
       setKayitMesaji(
         calismaRejimi === '5gun'
-          ? '5 günlük rejimde Cumartesi ve Pazar günleri normal mesai girilemez. Çalışma varsa Fazla Mesai alanına yazılmalıdır.'
+          ? '5 günlük rejimde Cumartesi ve Pazar günleri normal mesai girilemez. Yapılan çalışma %50 Fazla Mesai sütununa yazılmalıdır.'
           : 'Pazar günü hafta tatilidir, normal mesai girilemez.'
       );
       setTimeout(() => setKayitMesaji(''), 4000);
@@ -702,12 +707,12 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
         {/* Hafta Sonu ve Cumartesi Özel Kural Uyarısı */}
         {is5GunHaftaSonu && (
           <div className="flex items-center gap-1.5 text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-md font-semibold">
-            <span>⚠️ 5 Günlük Rejim: Hafta sonu normal çalışma kapalıdır. Çalışma yapılmışsa Fazla Mesai / Tatil Mesaisi yazılmalıdır.</span>
+            <span>⚠️ 5 Günlük Rejim: Hafta sonu normal çalışma kapalıdır. Hafta tatilinde yapılan çalışma %50 Fazla Mesai olarak yazılır.</span>
           </div>
         )}
         {is6GunCumartesi && (
           <div className="flex items-center gap-1.5 text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-md font-semibold">
-            <span>⏱️ 6 Günlük Rejim (Cumartesi): En fazla 5 saat normal çalışılır, üzeri otomatik Fazla Mesaiye aktarılır.</span>
+            <span>⏱️ 6 Günlük Rejim (Cumartesi): En fazla 5 saat normal çalışılır, üzeri otomatik %50 Fazla Mesaiye aktarılır.</span>
           </div>
         )}
         {is6GunPazar && (
@@ -718,14 +723,14 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
 
         <div className="flex items-center gap-2">
           {isYuzdeYuzMesaiGecerli(seciliTarih, calismaRejimi) ? (
-            <div className="flex items-center gap-1.5 text-emerald-400 bg-emerald-950/50 border border-emerald-800/60 px-2.5 py-1 rounded-md font-medium">
+            <div className="flex items-center gap-1.5 text-purple-400 bg-purple-950/50 border border-purple-800/60 px-2.5 py-1 rounded-md font-medium">
               <Unlock className="w-3.5 h-3.5" />
-              <span>%100 Tatil Mesaisi AÇIK (Hafta Sonu / Resmi Tatil)</span>
+              <span>%100 Resmi Tatil Mesaisi AÇIK (Resmi Tatil / Bayram)</span>
             </div>
           ) : (
             <div className="flex items-center gap-1.5 text-slate-400 bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-md font-medium">
               <Lock className="w-3.5 h-3.5 text-slate-500" />
-              <span>%100 Mesai KİLİTLİ (İş Kanunu: Sadece Hafta Tatili veya Resmi Tatilde Verilir)</span>
+              <span>%100 Mesai KİLİTLİ (Yalnızca Resmi Tatillerde Uygulanır; Hafta Tatili ve Fazla Mesai %50'dir)</span>
             </div>
           )}
         </div>
@@ -754,19 +759,19 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
                     )}
                   </div>
                   <div className="text-[10px] text-slate-500 font-normal">
-                    {isNormalEngelli ? 'Hafta Tatili - Sadece Mesai' : is6GunCumartesi ? 'Maks 5s Normal, Üzeri Fazla' : `Hedef: ${standartSaat}s`}
+                    {isNormalEngelli ? 'Hafta Tatili - Normal Kapalı' : is6GunCumartesi ? 'Maks 5s Normal, Üzeri Fazla' : `Hedef: ${standartSaat}s`}
                   </div>
                 </th>
                 <th className="py-3 px-3 text-center">
                   <div>%50 Fazla Mesai</div>
-                  <div className="text-[10px] text-slate-500 font-normal">Hafta İçi Mesai</div>
+                  <div className="text-[10px] text-slate-500 font-normal">Hafta İçi &amp; Hafta Tatili</div>
                 </th>
                 <th className="py-3 px-3 text-center">
                   <div className="flex items-center justify-center gap-1">
-                    <span>%100 Tatil Mesaisi</span>
+                    <span>%100 Resmi Tatil</span>
                     {!isYuzdeYuzMesaiGecerli(seciliTarih, calismaRejimi) && <Lock className="w-3 h-3 text-slate-500" />}
                   </div>
-                  <div className="text-[10px] text-slate-500 font-normal">Pazar / Resmi Tatil</div>
+                  <div className="text-[10px] text-slate-500 font-normal">Milli &amp; Dini Bayramlar</div>
                 </th>
                 <th className="py-3 px-3 text-center">
                   <div>Eksik / Kesinti (Saat)</div>
@@ -907,7 +912,7 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
                             value={s.HaftaTatiliMesaiSaati}
                             onChange={(e) => handleTatilMesaiChange(s.PersonelId, parseFloat(e.target.value) || 0)}
                             className="w-16 px-2 py-1 bg-slate-950 border border-emerald-500/50 rounded text-center text-xs text-emerald-300 font-bold focus:outline-none focus:border-emerald-400 shadow-inner"
-                            title="Hafta Tatili veya Resmi Tatil %100 mesaisi girilebilir"
+                            title="Resmi Tatil / Bayram %100 mesaisi girilebilir"
                           />
                         ) : (
                           <div className="relative inline-block group">
@@ -916,7 +921,7 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
                               disabled
                               value={0}
                               className="w-16 px-2 py-1 bg-slate-950/40 border border-slate-800/40 rounded text-center text-xs text-slate-600 font-medium cursor-not-allowed opacity-50"
-                              title="İş Kanunu: %100 mesai yalnızca hafta tatili ve resmi tatil günlerinde girilebilir. Normal günlerde fazla mesai %50 olarak hesaplanır."
+                              title="İş Kanunu / İşyeri Kuralı: %100 mesai yalnızca resmi tatil ve bayram günlerinde (RT) geçerlidir. Hafta tatili ve hafta içi çalışmaları %50 Fazla Mesai sütununa yazılır."
                             />
                           </div>
                         )}

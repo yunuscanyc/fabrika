@@ -231,10 +231,9 @@ export function isCumartesiGunu(isoDate: string): boolean {
   return getGunIndex(isoDate) === 6;
 }
 
-// %100 Mesai girilebilir mi? (Hafta tatili veya Resmi Tatil ise girilebilir)
-export function isYuzdeYuzMesaiGecerli(isoDate: string, rejim: '5gun' | '6gun', durumKodu?: string): boolean {
-  if (durumKodu === 'HT' || durumKodu === 'RT') return true;
-  if (isHaftaTatiliGunu(isoDate, rejim)) return true;
+// %100 Mesai girilebilir mi? (Yalnızca Resmi Tatillerde %100 mesai geçerlidir. Hafta tatili mesaisi %50 fazla mesaidir)
+export function isYuzdeYuzMesaiGecerli(isoDate: string, _rejim?: '5gun' | '6gun', durumKodu?: string): boolean {
+  if (durumKodu === 'RT') return true;
   const tatil = getResmiTatil(isoDate);
   if (tatil.isTatil) return true;
   return false;
