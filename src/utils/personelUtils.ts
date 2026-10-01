@@ -42,25 +42,42 @@ export function isPersonelCalisiyorMuTarihte(personel: Personel, tarih: string):
   if (!personel || !tarih) return false;
   
   const cleanTarih = String(tarih).slice(0, 10);
+
+  // 1. Genel pasiflik veya işten çıkış tarihi kontrolü
+  const cikisTarihi = (personel.IstenCikisTarihi || '').slice(0, 10);
+  if (cikisTarihi && cleanTarih >= cikisTarihi) {
+    return false;
+  }
+
+  // 2. Eğer DurumAktifMi false ise veya CalismaDurumu 'Ayrıldı' / 'Ayrılmış' ise
+  if (personel.DurumAktifMi === false || personel.CalismaDurumu === 'Ayrıldı' || personel.CalismaDurumu === 'Ayrılmış') {
+    const donemler = getPersonelGirisCikisDonemleri(personel);
+    const aktifDonemVar = donemler.some(d => {
+      const giris = (d.GirisTarihi || '').slice(0, 10);
+      const cikis = (d.CikisTarihi || '').slice(0, 10);
+      if (!giris || cleanTarih < giris) return false;
+      if (cikis && cleanTarih >= cikis) return false;
+      if (!cikis && personel.DurumAktifMi === false) return false;
+      return true;
+    });
+    if (!aktifDonemVar) return false;
+  }
+
   const donemler = getPersonelGirisCikisDonemleri(personel);
 
   if (donemler.length === 0) {
-    // Giriş tarihi hiç yoksa genel aktiflik durumuna bak
     return personel.DurumAktifMi !== false;
   }
 
-  // Dönemlerden en az birinde o tarihte istihdamda mı?
   return donemler.some(d => {
     const giris = (d.GirisTarihi || '').slice(0, 10);
     const cikis = (d.CikisTarihi || '').slice(0, 10);
 
-    // Giriş tarihi girilmişse ve hedef gün girişten önceyse bu dönemde çalışmıyor
     if (giris && cleanTarih < giris) {
       return false;
     }
 
-    // Çıkış tarihi girilmişse ve hedef gün çıkıştan sonraysa bu dönemde çalışmıyor
-    if (cikis && cleanTarih > cikis) {
+    if (cikis && cleanTarih >= cikis) {
       return false;
     }
 

@@ -186,7 +186,7 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
   ];
 
   // Seçili ay ve yıla ait puantajların icmali (o ay istihdamda olan veya puantaj kaydı bulunanlar)
-  const icmalListesi = personeller.filter(p => {
+  const hamList = personeller.filter(p => {
     const hasPuantajInMonth = puantajlar.some(x => {
       if (x.PersonelId !== p.PersonelId) return false;
       const clean = String(x.Tarih || '').trim();
@@ -197,7 +197,19 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
       return false;
     });
     return hasPuantajInMonth || isPersonelCalisiyorMuAyda(p, seciliYil, seciliAy);
-  }).map(p => {
+  });
+
+  const benzersizMap = new Map<string, Personel>();
+  hamList.forEach(p => {
+    const normKey = (p.AdSoyad || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    if (!benzersizMap.has(normKey)) {
+      benzersizMap.set(normKey, p);
+    } else if (!benzersizMap.get(normKey)!.DurumAktifMi && p.DurumAktifMi) {
+      benzersizMap.set(normKey, p);
+    }
+  });
+
+  const icmalListesi = Array.from(benzersizMap.values()).map(p => {
     const pPuantaj = puantajlar.filter(x => {
       if (x.PersonelId !== p.PersonelId) return false;
       const clean = String(x.Tarih || '').trim();

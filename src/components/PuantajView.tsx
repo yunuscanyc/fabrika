@@ -123,9 +123,24 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
       // 1. O tarihte işe giriş yapmış ve aktif çalışanlar (veya giriş-çıkış dönemleri içinde olanlar)
       // 2. VEYA o tarihe ait zaten kaydedilmiş puantaj kaydı bulunan personeller
       const gunlukPersonelIdleri = new Set(gunData.map(g => g.PersonelId));
-      const calisanPersoneller = personeller.filter(p => 
+      let calisanPersoneller = personeller.filter(p => 
         isPersonelCalisiyorMuTarihte(p, tarih) || gunlukPersonelIdleri.has(p.PersonelId)
       );
+
+      // Aynı isimdeki mükerrer personel kayıtlarını ayıkla (Aktif olan kaydı tercih et)
+      const benzersizPersonellerMap = new Map<string, Personel>();
+      calisanPersoneller.forEach(p => {
+        const normKey = (p.AdSoyad || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        if (!benzersizPersonellerMap.has(normKey)) {
+          benzersizPersonellerMap.set(normKey, p);
+        } else {
+          const mevcut = benzersizPersonellerMap.get(normKey)!;
+          if (!mevcut.DurumAktifMi && p.DurumAktifMi) {
+            benzersizPersonellerMap.set(normKey, p);
+          }
+        }
+      });
+      calisanPersoneller = Array.from(benzersizPersonellerMap.values());
       const hazirlanan: SatirState[] = calisanPersoneller.map(p => {
         // İzinli olup olmadığını kontrol et
         const aktifIzin = izinler?.find(iz => 
