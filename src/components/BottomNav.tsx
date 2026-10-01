@@ -14,16 +14,56 @@ interface BottomNavProps {
   setActiveTab: (tab: TabType) => void;
   badgeCounts?: BadgeCounts;
   userRole?: 'admin' | 'ustabasi';
+  onMarkAllAjandaRead?: () => void;
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({
   activeTab,
   setActiveTab,
   badgeCounts = {} as BadgeCounts,
-  userRole = 'admin'
+  userRole = 'admin',
+  onMarkAllAjandaRead
 }) => {
   if (userRole === 'ustabasi') {
-    return null; // Ustabaşı için tek modül olduğundan alt bar karmaşasına gerek yok
+    return (
+      <div 
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur border-t border-slate-800 px-3 py-1.5 shadow-2xl safe-area-bottom"
+        style={{
+          paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.35rem)'
+        }}
+      >
+        <div className="grid grid-cols-2 gap-2 text-center max-w-sm mx-auto">
+          <button
+            onClick={() => setActiveTab('siparisler')}
+            className={`flex items-center justify-center gap-2 py-2.5 rounded-xl transition-all text-xs font-bold ${
+              activeTab === 'siparisler'
+                ? 'text-white bg-amber-600 shadow-md ring-1 ring-amber-400/30'
+                : 'text-slate-400 hover:text-slate-200 bg-slate-800/80 border border-slate-700/50'
+            }`}
+          >
+            <ShoppingCart className="w-4 h-4" />
+            <span>Malzeme Sipariş</span>
+            {Boolean(badgeCounts.siparis && badgeCounts.siparis > 0) && (
+              <span className="w-4 h-4 rounded-full bg-amber-400 text-slate-950 text-[9px] font-black flex items-center justify-center">
+                {badgeCounts.siparis}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('ceride')}
+            className={`flex items-center justify-center gap-2 py-2.5 rounded-xl transition-all text-xs font-bold ${
+              activeTab === 'ceride'
+                ? 'text-white bg-amber-600 shadow-md ring-1 ring-amber-400/30'
+                : 'text-slate-400 hover:text-slate-200 bg-slate-800/80 border border-slate-700/50'
+            }`}
+          >
+            <BookOpen className="w-4 h-4" />
+            <span>Şantiye Ceridesi</span>
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -129,7 +169,10 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         </button>
 
         <button
-          onClick={() => setActiveTab('hatirlaticilar')}
+          onClick={() => {
+            setActiveTab('hatirlaticilar');
+            onMarkAllAjandaRead?.();
+          }}
           className={`relative flex flex-col items-center justify-center py-1 rounded-lg transition-all ${
             activeTab === 'hatirlaticilar'
               ? 'text-blue-400 font-bold bg-blue-950/50'

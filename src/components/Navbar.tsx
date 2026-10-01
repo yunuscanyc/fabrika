@@ -19,6 +19,7 @@ interface NavbarProps {
   unreadOrdersCount?: number;
   unreadAjandaCount?: number;
   currentUserName?: string;
+  onMarkAllAjandaRead?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -35,6 +36,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   unreadOrdersCount = 0,
   unreadAjandaCount = 0,
   currentUserName = '',
+  onMarkAllAjandaRead,
 }) => {
   return (
     <header 
@@ -71,12 +73,32 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Masaüstü Navigasyon Sekmeleri */}
           {userRole === 'ustabasi' ? (
-            <nav className="hidden md:flex items-center gap-1 bg-slate-800/80 p-1 rounded-xl border border-slate-700/50">
+            <nav className="hidden md:flex items-center gap-1.5 bg-slate-800/80 p-1 rounded-xl border border-slate-700/50">
               <button
                 onClick={() => setActiveTab('siparisler')}
-                className="px-4 py-1.5 rounded-lg text-xs sm:text-sm font-bold bg-amber-600 text-white shadow-sm flex items-center gap-1.5"
+                className={`px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 ${
+                  activeTab === 'siparisler'
+                    ? 'bg-amber-600 text-white shadow-sm'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
+                }`}
               >
-                📦 Malzeme Sipariş Masası
+                <span>📦 Malzeme Siparişleri</span>
+                {unreadOrdersCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-amber-400 text-slate-900 text-[10px] font-black">
+                    {unreadOrdersCount}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('ceride')}
+                className={`px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 ${
+                  activeTab === 'ceride'
+                    ? 'bg-amber-600 text-white shadow-sm'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
+                }`}
+                title="Şantiye & İşletme Ceridesi (Günlük Olay Defteri)"
+              >
+                <span>📜 Şantiye Ceridesi</span>
               </button>
             </nav>
           ) : (
@@ -158,7 +180,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                 🚛 Araç &amp; Bakım
               </button>
               <button
-                onClick={() => setActiveTab('hatirlaticilar')}
+                onClick={() => {
+                  setActiveTab('hatirlaticilar');
+                  onMarkAllAjandaRead?.();
+                }}
                 className={`relative px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
                   activeTab === 'hatirlaticilar'
                     ? 'bg-blue-600 text-white shadow-sm'

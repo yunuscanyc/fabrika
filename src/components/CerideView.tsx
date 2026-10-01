@@ -149,10 +149,23 @@ export const CerideView: React.FC<CerideViewProps> = ({
       setError(null);
       setYuklenenCount(0);
       setToplamCount(0);
-      const res = await fetch(`/api/ceride?aralik=${aralik}`);
+      const url = `/api/ceride?aralik=${aralik}&role=${userRole}&user=${encodeURIComponent(currentUserName)}`;
+      const res = await fetch(url, {
+        headers: {
+          'x-user-role': userRole,
+          'x-user-name': currentUserName
+        }
+      });
       if (res.ok) {
         const data = await res.json();
-        const list = Array.isArray(data) ? data : [];
+        let list = Array.isArray(data) ? data : [];
+        if (userRole === 'ustabasi') {
+          const uLower = (currentUserName || 'ustabaşı').toLowerCase().trim();
+          list = list.filter(item => {
+            const isleyen = (item.IsleyenKisi || '').toLowerCase().trim();
+            return isleyen === uLower || isleyen.includes('ustabaşı') || isleyen.includes('ustabasi');
+          });
+        }
         setToplamCount(list.length);
         if (list.length === 0) {
           setYuklenenCount(0);
@@ -288,6 +301,10 @@ export const CerideView: React.FC<CerideViewProps> = ({
       const seciliProje = formProjeId ? projeler.find(p => String(p.ProjeId) === formProjeId) : null;
       const projeAdi = seciliProje ? seciliProje.ProjeAdi : (formProjeId ? '' : 'Genel / Projesiz');
 
+      const resolvedIsleyen = userRole === 'ustabasi' 
+        ? (currentUserName || 'Ustabaşı') 
+        : (formIsleyenKisi.trim() || currentUserName);
+
       const payload = {
         Olay: formOlay.trim(),
         Kategori: formKategori,
@@ -295,7 +312,7 @@ export const CerideView: React.FC<CerideViewProps> = ({
         Saat: formSaat.trim(),
         ProjeId: formProjeId ? Number(formProjeId) : null,
         ProjeAdi: projeAdi,
-        IsleyenKisi: formIsleyenKisi.trim() || currentUserName,
+        IsleyenKisi: resolvedIsleyen,
         Detay: formDetay.trim(),
         Fotograflar: formFotograflar,
         FotoSayisi: formFotograflar.length,
@@ -308,6 +325,7 @@ export const CerideView: React.FC<CerideViewProps> = ({
           method: 'PUT',
           headers: { 
             'Content-Type': 'application/json',
+            'x-user-role': userRole,
             'x-user-name': currentUserName
           },
           body: JSON.stringify(payload)
@@ -317,6 +335,7 @@ export const CerideView: React.FC<CerideViewProps> = ({
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
+            'x-user-role': userRole,
             'x-user-name': currentUserName
           },
           body: JSON.stringify(payload)
@@ -346,7 +365,10 @@ export const CerideView: React.FC<CerideViewProps> = ({
     try {
       const res = await fetch(`/api/ceride/${id}`, {
         method: 'DELETE',
-        headers: { 'x-user-name': currentUserName }
+        headers: { 
+          'x-user-role': userRole,
+          'x-user-name': currentUserName 
+        }
       });
       if (res.ok) {
         setCerideList(prev => prev.filter(c => c.Id !== id));
@@ -422,6 +444,14 @@ export const CerideView: React.FC<CerideViewProps> = ({
     const thirtyDaysStr = getTurkiyeTarihStr(thirtyDaysAgo);
 
     return cerideList.filter(item => {
+      // Ustabaşı sadece kendi girdiklerini görebilir (Yöneticilerinkini göremez)
+      if (userRole === 'ustabasi') {
+        const uLower = (currentUserName || 'ustabaşı').toLowerCase().trim();
+        const isleyen = (item.IsleyenKisi || '').toLowerCase().trim();
+        const isOwn = isleyen === uLower || isleyen.includes('ustabaşı') || isleyen.includes('ustabasi');
+        if (!isOwn) return false;
+      }
+
       // Metin arama
       if (searchTerm.trim()) {
         const term = searchTerm.toLowerCase();
@@ -526,11 +556,20 @@ export const CerideView: React.FC<CerideViewProps> = ({
                 <BookOpen className="w-6 h-6" />
               </div>
               <div>
-                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-                  Şantiye &amp; İşletme Ceridesi
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center gap-2 flex-wrap">
+                  <span>Şantiye &amp; İşletme Ceridesi</span>
+                  {userRole === 'ustabasi' && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-xs font-bold border border-amber-500/40">
+                      Ustabaşı Şantiye Defteri (Kendi Kayıtlarınız)
+                    </span>
+                  )}
                 </h1>
                 <p className="text-xs sm:text-sm text-slate-400 mt-0.5 flex items-center gap-2 flex-wrap">
-                  <span>Günlük vukuat, şantiye fotoğrafları, malzeme teslimatları ve makine hareketleri</span>
+                  {userRole === 'ustabasi' ? (
+                    <span className="text-amber-300/90 font-medium">Yalnızca sizin girdiğiniz şantiye olayları listelenir. Kendi kayıtlarınızı ekleyebilir, düzenleyebilir ve silebilirsiniz.</span>
+                  ) : (
+                    <span>Günlük vukuat, şantiye fotoğrafları, malzeme teslimatları ve makine hareketleri</span>
+                  )}
                   <span className="inline-flex items-center gap-1 text-[11px] bg-slate-800 px-2 py-0.5 rounded-md text-amber-300 font-mono">
                     <Clock className="w-3 h-3 text-amber-400" />
                     24 Saat Formatı (TR: GMT+3)
@@ -1068,19 +1107,26 @@ export const CerideView: React.FC<CerideViewProps> = ({
                   {/* İşleyen Kişi */}
                   <div>
                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      İşleyen Yönetici / Sorumlu (PIN Esaslı)
+                      {userRole === 'ustabasi' ? 'İşleyen Sorumlu (Ustabaşı)' : 'İşleyen Yönetici / Sorumlu (PIN Esaslı)'}
                     </label>
                     <div className="relative">
                       <User className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                       <input
                         type="text"
                         required
-                        value={formIsleyenKisi}
+                        readOnly={userRole === 'ustabasi'}
+                        disabled={userRole === 'ustabasi'}
+                        value={userRole === 'ustabasi' ? (currentUserName || 'Ustabaşı') : formIsleyenKisi}
                         onChange={(e) => setFormIsleyenKisi(e.target.value)}
                         placeholder="Ad Soyad"
-                        className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs sm:text-sm font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        className={`w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl text-xs sm:text-sm font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 ${userRole === 'ustabasi' ? 'cursor-not-allowed opacity-80 bg-slate-100 dark:bg-slate-900' : ''}`}
                       />
                     </div>
+                    {userRole === 'ustabasi' && (
+                      <span className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 block font-medium">
+                        Ustabaşı hesabınızla işlem yapıyorsunuz. Yalnızca kendi kayıtlarınızı ekleyebilir, düzenleyebilir ve silebilirsiniz.
+                      </span>
+                    )}
                   </div>
 
                   {/* Detay & Notlar - Geniş Alan */}

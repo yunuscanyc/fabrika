@@ -38,6 +38,7 @@ interface HatirlaticilarViewProps {
   onMarkNotificationRead?: (notificationId?: number, hatirlaticiId?: number) => void;
   targetOpenHatirlaticiId?: number | null;
   onClearTargetOpenHatirlaticiId?: () => void;
+  onMarkAllNotificationsRead?: () => void;
 }
 
 // Dosya/Görsel içeriğini (base64, data-uri, hex, url) her türlü formattan render edilebilir data-uri formatına çevirir
@@ -106,7 +107,8 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
   onHatirlaticiInspected,
   onMarkNotificationRead,
   targetOpenHatirlaticiId,
-  onClearTargetOpenHatirlaticiId
+  onClearTargetOpenHatirlaticiId,
+  onMarkAllNotificationsRead
 }) => {
   const [modalAcik, setModalAcik] = useState(false);
   const [secilenHatirlatici, setSecilenHatirlatici] = useState<Hatirlatici | null>(null);
@@ -117,6 +119,13 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
   const [doubleClickHintId, setDoubleClickHintId] = useState<number | null>(null);
   const clickTrackerRef = useRef<{ id: number; time: number } | null>(null);
   const lastToggleRef = useRef<{ id: number; time: number } | null>(null);
+
+  // Hatırlatıcılar ekranı açıldığında okunmamış bildirimleri otomatik temizle
+  useEffect(() => {
+    if (onMarkAllNotificationsRead) {
+      onMarkAllNotificationsRead();
+    }
+  }, [onMarkAllNotificationsRead]);
 
   // Dışarıdan veya bildirim çubuğundan belirli bir hatırlatıcı açılması istendiğinde
   useEffect(() => {
@@ -505,6 +514,18 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
           >
             Tamamlananlar ({hatirlaticilar.filter(h => h.TamamlandiMi).length})
           </button>
+
+          {onMarkAllNotificationsRead && (
+            <button
+              type="button"
+              onClick={onMarkAllNotificationsRead}
+              className="ml-auto px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+              title="Tüm ajanda bildirim geçmişini okundu say ve sayacı sıfırla"
+            >
+              <Check className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Bildirimleri Sıfırla (0'la)</span>
+            </button>
+          )}
         </div>
       </div>
 

@@ -6031,16 +6031,29 @@ app.get('/api/sync-status', (req, res) => {
 app.get('/api/ajanda/bildirimler', async (req, res) => {
   try {
     const list = await getAjandaNotificationsList();
-    const currentUser = String(req.query.user || '').trim();
+    const currentUser = String(req.query.user || req.headers['x-user-name'] || '').trim();
     
+    const isUserRead = (okuyanList: string[], user: string) => {
+      if (!user) return false;
+      const uLower = user.toLowerCase().trim();
+      return okuyanList.some(o => {
+        const oLower = String(o || '').toLowerCase().trim();
+        if (oLower === uLower) return true;
+        // Yönetici eşleşmesi (1. Yönetici, 2. Yönetici, Yönetici, Yunus CAN, admin)
+        const isMgrO = oLower.includes('yönetici') || oLower.includes('admin') || oLower.includes('yunus');
+        const isMgrU = uLower.includes('yönetici') || uLower.includes('admin') || uLower.includes('yunus');
+        return isMgrO && isMgrU;
+      });
+    };
+
     const formatted = list.map(item => ({
       ...item,
-      Okundu: currentUser ? item.OkuyanKisiler.includes(currentUser) : false
+      Okundu: currentUser ? isUserRead(item.OkuyanKisiler || [], currentUser) : false
     }));
 
     const unreadCount = currentUser 
       ? formatted.filter(item => !item.Okundu).length 
-      : formatted.filter(item => item.OkuyanKisiler.length <= 1).length;
+      : formatted.filter(item => (item.OkuyanKisiler || []).length <= 1).length;
 
     res.json({
       success: true,
@@ -6056,15 +6069,21 @@ app.get('/api/ajanda/bildirimler', async (req, res) => {
 app.post('/api/ajanda/bildirimler/okundu', async (req, res) => {
   try {
     const { notificationId, hatirlaticiId, userName } = req.body;
-    const user = String(userName || '').trim();
+    const user = String(userName || req.headers['x-user-name'] || '').trim();
     if (!user) return res.status(400).json({ error: 'Kullanıcı adı gerekli' });
+
+    const mgrAliases = ['1. Yönetici', '2. Yönetici', 'Yönetici', 'admin1', 'admin2', 'Yunus CAN', user];
 
     // Bellekte güncelle
     memAjandaBildirimler.forEach(item => {
       const match = (notificationId && item.Id === Number(notificationId)) || 
                     (hatirlaticiId && item.HatirlaticiId === Number(hatirlaticiId));
-      if (match && !item.OkuyanKisiler.includes(user)) {
-        item.OkuyanKisiler.push(user);
+      if (match) {
+        mgrAliases.forEach(u => {
+          if (!item.OkuyanKisiler.includes(u)) {
+            item.OkuyanKisiler.push(u);
+          }
+        });
       }
     });
 
@@ -6075,20 +6094,16 @@ app.post('/api/ajanda/bildirimler/okundu', async (req, res) => {
           if (rowRes.rows.length > 0) {
             let okuyan: string[] = [];
             try { okuyan = JSON.parse(rowRes.rows[0].OkuyanKisiler || '[]'); } catch { okuyan = []; }
-            if (!okuyan.includes(user)) {
-              okuyan.push(user);
-              await pool.query(`UPDATE "AjandaBildirimleri" SET "OkuyanKisiler" = $1 WHERE "Id" = $2`, [JSON.stringify(okuyan), notificationId]);
-            }
+            mgrAliases.forEach(u => { if (!okuyan.includes(u)) okuyan.push(u); });
+            await pool.query(`UPDATE "AjandaBildirimleri" SET "OkuyanKisiler" = $1 WHERE "Id" = $2`, [JSON.stringify(okuyan), notificationId]);
           }
         } else if (hatirlaticiId) {
           const rowsRes = await pool.query(`SELECT "Id", "OkuyanKisiler" FROM "AjandaBildirimleri" WHERE "HatirlaticiId" = $1`, [hatirlaticiId]);
           for (const row of rowsRes.rows) {
             let okuyan: string[] = [];
             try { okuyan = JSON.parse(row.OkuyanKisiler || '[]'); } catch { okuyan = []; }
-            if (!okuyan.includes(user)) {
-              okuyan.push(user);
-              await pool.query(`UPDATE "AjandaBildirimleri" SET "OkuyanKisiler" = $1 WHERE "Id" = $2`, [JSON.stringify(okuyan), row.Id]);
-            }
+            mgrAliases.forEach(u => { if (!okuyan.includes(u)) okuyan.push(u); });
+            await pool.query(`UPDATE "AjandaBildirimleri" SET "OkuyanKisiler" = $1 WHERE "Id" = $2`, [JSON.stringify(okuyan), row.Id]);
           }
         }
       } catch (e: any) {
@@ -6105,23 +6120,40 @@ app.post('/api/ajanda/bildirimler/okundu', async (req, res) => {
 app.post('/api/ajanda/bildirimler/hepsini-oku', async (req, res) => {
   try {
     const { userName } = req.body;
-    const user = String(userName || '').trim();
-    if (!user) return res.status(400).json({ error: 'Kullanıcı adı gerekli' });
+    const user = String(userName || req.headers['x-user-name'] || '1. Yönetici').trim();
+    const mgrAliases = ['1. Yönetici', '2. Yönetici', 'Yönetici', 'admin1', 'admin2', 'Yunus CAN', user];
 
     memAjandaBildirimler.forEach(item => {
-      if (!item.OkuyanKisiler.includes(user)) {
-        item.OkuyanKisiler.push(user);
-      }
+      mgrAliases.forEach(u => {
+        if (!item.OkuyanKisiler.includes(u)) {
+          item.OkuyanKisiler.push(u);
+        }
+      });
     });
 
     if (isDbConnected) {
       try {
-        const rowsRes = await pool.query(`SELECT "Id", "OkuyanKisiler" FROM "AjandaBildirimleri" ORDER BY "Id" DESC LIMIT 100`);
+        const rowsRes = await pool.query(`SELECT "Id", "OkuyanKisiler" FROM "AjandaBildirimleri" ORDER BY "Id" DESC LIMIT 500`);
         for (const row of rowsRes.rows) {
           let okuyan: string[] = [];
-          try { okuyan = JSON.parse(row.OkuyanKisiler || '[]'); } catch { okuyan = []; }
-          if (!okuyan.includes(user)) {
-            okuyan.push(user);
+          if (Array.isArray(row.OkuyanKisiler)) {
+            okuyan = [...row.OkuyanKisiler];
+          } else if (typeof row.OkuyanKisiler === 'string') {
+            try { 
+              okuyan = JSON.parse(row.OkuyanKisiler); 
+            } catch { 
+              okuyan = row.OkuyanKisiler ? [row.OkuyanKisiler] : []; 
+            }
+          }
+          if (!Array.isArray(okuyan)) okuyan = [];
+          let changed = false;
+          mgrAliases.forEach(u => {
+            if (!okuyan.includes(u)) {
+              okuyan.push(u);
+              changed = true;
+            }
+          });
+          if (changed) {
             await pool.query(`UPDATE "AjandaBildirimleri" SET "OkuyanKisiler" = $1 WHERE "Id" = $2`, [JSON.stringify(okuyan), row.Id]);
           }
         }
@@ -6130,7 +6162,24 @@ app.post('/api/ajanda/bildirimler/hepsini-oku', async (req, res) => {
       }
     }
 
-    res.json({ success: true });
+    res.json({ success: true, message: 'Tüm bildirimler okundu olarak işaretlendi.' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/ajanda/bildirimler/temizle', async (req, res) => {
+  try {
+    memAjandaBildirimler = [];
+    if (isDbConnected) {
+      try {
+        await pool.query(`DELETE FROM "AjandaBildirimleri"`);
+      } catch (e: any) {
+        console.error('[DB CLEAR AJANDA NOTIFS ERROR]', e.message);
+      }
+    }
+    touchSyncTimestamp();
+    res.json({ success: true, message: 'Ajanda bildirim geçmişi temizlendi.' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -10318,6 +10367,9 @@ app.get('/api/ceride', async (req, res) => {
   try {
     const aralik = String(req.query.aralik || 'bugun').toLowerCase();
     const spesifikTarih = req.query.tarih ? String(req.query.tarih).trim() : null;
+    const userRole = String(req.headers['x-user-role'] || req.query.role || '').toLowerCase();
+    const userName = String(req.headers['x-user-name'] || req.query.user || '').trim();
+    const isUstabasi = userRole === 'ustabasi' || userName.toLowerCase().includes('ustabaşı') || userName.toLowerCase().includes('ustabasi');
 
     const bugunStr = getTurkiyeTarihStr();
     
@@ -10342,37 +10394,49 @@ app.get('/api/ceride', async (req, res) => {
         const mapCol = (candidates: string[]) => cols.find(c => candidates.some(cand => cand.toLowerCase() === c.toLowerCase()));
         const idCol = mapCol(['Id', 'id', 'CerideId', 'cerideid']) || 'Id';
         const tarihCol = mapCol(['Tarih', 'tarih']) || 'Tarih';
+        const kisiCol = mapCol(['IsleyenKisi', 'isleyenkisi', 'isleyen_kisi']) || 'IsleyenKisi';
 
-        let whereClause = '';
+        let whereClauses: string[] = [];
         let queryParams: any[] = [];
+        let pIndex = 1;
 
         if (spesifikTarih) {
-          whereClause = `WHERE "${tarihCol}" = $1`;
-          queryParams = [spesifikTarih];
+          whereClauses.push(`"${tarihCol}" = $${pIndex++}`);
+          queryParams.push(spesifikTarih);
         } else if (aralik === 'bugun') {
-          whereClause = `WHERE "${tarihCol}" = $1`;
-          queryParams = [bugunStr];
+          whereClauses.push(`"${tarihCol}" = $${pIndex++}`);
+          queryParams.push(bugunStr);
         } else if (aralik === 'dun') {
-          whereClause = `WHERE "${tarihCol}" = $1`;
-          queryParams = [dunStr];
+          whereClauses.push(`"${tarihCol}" = $${pIndex++}`);
+          queryParams.push(dunStr);
         } else if (aralik === 'hafta') {
-          whereClause = `WHERE "${tarihCol}" >= $1`;
-          queryParams = [yediGunStr];
+          whereClauses.push(`"${tarihCol}" >= $${pIndex++}`);
+          queryParams.push(yediGunStr);
         } else if (aralik === 'ay') {
-          whereClause = `WHERE "${tarihCol}" >= $1`;
-          queryParams = [otuzGunStr];
-        } else if (aralik === 'tumu') {
-          whereClause = '';
-          queryParams = [];
-        } else {
-          whereClause = `WHERE "${tarihCol}" = $1`;
-          queryParams = [bugunStr];
+          whereClauses.push(`"${tarihCol}" >= $${pIndex++}`);
+          queryParams.push(otuzGunStr);
         }
 
-        const sql = `SELECT * FROM ${detectedTables.ceride} ${whereClause} ORDER BY "${idCol}" DESC LIMIT 1000`;
+        // USTABAŞI GÜVENLİK KISITLAMASI:
+        // Ustabaşı sadece kendi girdiklerini görebilir, yöneticilerinkini KESİNLİKLE göremez!
+        if (isUstabasi) {
+          const ustabasiAd = userName || 'Ustabaşı';
+          whereClauses.push(`(LOWER(TRIM("${kisiCol}")) = LOWER(TRIM($${pIndex++})) OR LOWER("${kisiCol}") LIKE '%ustaba%')`);
+          queryParams.push(ustabasiAd);
+        }
+
+        const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+        const sql = `SELECT * FROM ${detectedTables.ceride} ${whereSql} ORDER BY "${idCol}" DESC LIMIT 1000`;
         const dbRes = await pool.query(sql, queryParams);
         
-        const list = dbRes.rows.map(r => normalizeCeride(r));
+        let list = dbRes.rows.map(r => normalizeCeride(r));
+        if (isUstabasi) {
+          const uLower = (userName || 'ustabaşı').toLowerCase().trim();
+          list = list.filter(item => {
+            const isleyen = (item.IsleyenKisi || '').toLowerCase().trim();
+            return isleyen === uLower || isleyen.includes('ustabaşı') || isleyen.includes('ustabasi');
+          });
+        }
         return res.json(list);
       } catch (dbErr: any) {
         console.error('[DB GET CERIDE ERROR]', dbErr.message);
@@ -10397,6 +10461,15 @@ app.get('/api/ceride', async (req, res) => {
       filteredMem = memCeride.filter(c => c.Tarih === bugunStr);
     }
 
+    // Ustabaşı Sadece Kendi Girdiklerini Görebilir
+    if (isUstabasi) {
+      const uLower = (userName || 'ustabaşı').toLowerCase().trim();
+      filteredMem = filteredMem.filter(c => {
+        const isleyen = (c.IsleyenKisi || '').toLowerCase().trim();
+        return isleyen === uLower || isleyen.includes('ustabaşı') || isleyen.includes('ustabasi');
+      });
+    }
+
     return res.json(filteredMem);
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
@@ -10410,7 +10483,14 @@ app.post('/api/ceride', async (req, res) => {
       return res.status(400).json({ error: 'Olay tanımı zorunludur.' });
     }
 
-    const isleyen = IsleyenKisi || req.headers['x-user-name'] || 'Yönetici';
+    const userRole = String(req.headers['x-user-role'] || req.query.role || '').toLowerCase();
+    const userName = String(req.headers['x-user-name'] || req.query.user || '').trim();
+    const isUstabasi = userRole === 'ustabasi' || userName.toLowerCase().includes('ustabaşı') || userName.toLowerCase().includes('ustabasi');
+
+    const isleyen = isUstabasi 
+      ? (userName || 'Ustabaşı') 
+      : (IsleyenKisi || req.headers['x-user-name'] || 'Yönetici');
+
     const newRecord = await recordCerideEvent({
       Olay: String(Olay).trim(),
       Tarih: Tarih || getTurkiyeTarihStr(),
@@ -10435,10 +10515,42 @@ app.put('/api/ceride/:id', async (req, res) => {
     const id = Number(req.params.id);
     const { Olay, Tarih, Saat, ProjeId, ProjeAdi, IsleyenKisi, Kategori, Detay, Fotograflar } = req.body;
     
+    const userRole = String(req.headers['x-user-role'] || req.query.role || '').toLowerCase();
+    const userName = String(req.headers['x-user-name'] || req.query.user || '').trim();
+    const isUstabasi = userRole === 'ustabasi' || userName.toLowerCase().includes('ustabaşı') || userName.toLowerCase().includes('ustabasi');
+
     const index = memCeride.findIndex(c => Number(c.Id) === id);
-    const existing = index !== -1 ? memCeride[index] : null;
+    let existing = index !== -1 ? memCeride[index] : null;
+
+    if (!existing && isDbConnected && detectedTables.ceride) {
+      try {
+        const cols = await getTableColumns(detectedTables.ceride);
+        const mapCol = (candidates: string[]) => cols.find(c => candidates.some(cand => cand.toLowerCase() === c.toLowerCase()));
+        const idCol = mapCol(['Id', 'id', 'CerideId', 'cerideid']) || 'Id';
+        const dbRes = await pool.query(`SELECT * FROM ${detectedTables.ceride} WHERE "${idCol}" = $1`, [id]);
+        if (dbRes.rows.length > 0) {
+          existing = normalizeCeride(dbRes.rows[0]);
+        }
+      } catch (e) {}
+    }
+
+    // Yetki Kontrolü: Ustabaşı yöneticilerin girdiklerini düzenleyemez
+    if (isUstabasi) {
+      if (!existing) {
+        return res.status(404).json({ error: 'Ceride kaydı bulunamadı.' });
+      }
+      const existingIsleyen = (existing.IsleyenKisi || '').toLowerCase().trim();
+      const currentUstabasi = (userName || 'Ustabaşı').toLowerCase().trim();
+      if (existingIsleyen !== currentUstabasi && !existingIsleyen.includes('ustabaşı') && !existingIsleyen.includes('ustabasi')) {
+        return res.status(403).json({ error: 'Yetkisiz İşlem: Ustabaşı yalnızca kendi oluşturduğu ceride kayıtlarını düzenleyebilir!' });
+      }
+    }
 
     const updatedFotolar = Array.isArray(Fotograflar) ? Fotograflar : (existing?.Fotograflar || []);
+    const resolvedIsleyen = isUstabasi 
+      ? (userName || 'Ustabaşı') 
+      : (IsleyenKisi !== undefined ? String(IsleyenKisi).trim() : (existing?.IsleyenKisi || 'Yönetici'));
+
     const updated = {
       ...(existing || { Id: id, OtomatikMi: false, IslenmeTarihi: getTurkiyeTamZamanStr() }),
       Id: id,
@@ -10447,7 +10559,7 @@ app.put('/api/ceride/:id', async (req, res) => {
       Saat: Saat !== undefined ? Saat : (existing?.Saat || getTurkiyeSaatStr()),
       ProjeId: ProjeId !== undefined ? (ProjeId ? Number(ProjeId) : null) : (existing?.ProjeId || null),
       ProjeAdi: ProjeAdi !== undefined ? ProjeAdi : (existing?.ProjeAdi || ''),
-      IsleyenKisi: IsleyenKisi !== undefined ? String(IsleyenKisi).trim() : (existing?.IsleyenKisi || 'Yönetici'),
+      IsleyenKisi: resolvedIsleyen,
       Kategori: Kategori !== undefined ? Kategori : (existing?.Kategori || 'Genel'),
       Detay: Detay !== undefined ? String(Detay).trim() : (existing?.Detay || ''),
       Fotograflar: updatedFotolar,
@@ -10517,7 +10629,7 @@ app.put('/api/ceride/:id', async (req, res) => {
       }
     }
 
-    const isleyen = IsleyenKisi || req.headers['x-user-name'] || 'Yönetici';
+    const isleyen = updated.IsleyenKisi || req.headers['x-user-name'] || 'Yönetici';
     await recordAjandaNotification({
       HatirlaticiId: 0,
       Baslik: `📜 Ceride Güncellendi`,
@@ -10537,7 +10649,35 @@ app.put('/api/ceride/:id', async (req, res) => {
 app.delete('/api/ceride/:id', async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const existing = memCeride.find(c => Number(c.Id) === id);
+    const userRole = String(req.headers['x-user-role'] || req.query.role || '').toLowerCase();
+    const userName = String(req.headers['x-user-name'] || req.query.user || '').trim();
+    const isUstabasi = userRole === 'ustabasi' || userName.toLowerCase().includes('ustabaşı') || userName.toLowerCase().includes('ustabasi');
+
+    let existing = memCeride.find(c => Number(c.Id) === id);
+    if (!existing && isDbConnected && detectedTables.ceride) {
+      try {
+        const cols = await getTableColumns(detectedTables.ceride);
+        const mapCol = (candidates: string[]) => cols.find(c => candidates.some(cand => cand.toLowerCase() === c.toLowerCase()));
+        const idCol = mapCol(['Id', 'id', 'CerideId', 'cerideid']) || 'Id';
+        const dbRes = await pool.query(`SELECT * FROM ${detectedTables.ceride} WHERE "${idCol}" = $1`, [id]);
+        if (dbRes.rows.length > 0) {
+          existing = normalizeCeride(dbRes.rows[0]);
+        }
+      } catch (e) {}
+    }
+
+    // Yetki Kontrolü: Ustabaşı yöneticilerin girdiklerini silemez
+    if (isUstabasi) {
+      if (!existing) {
+        return res.status(404).json({ error: 'Ceride kaydı bulunamadı.' });
+      }
+      const existingIsleyen = (existing.IsleyenKisi || '').toLowerCase().trim();
+      const currentUstabasi = (userName || 'Ustabaşı').toLowerCase().trim();
+      if (existingIsleyen !== currentUstabasi && !existingIsleyen.includes('ustabaşı') && !existingIsleyen.includes('ustabasi')) {
+        return res.status(403).json({ error: 'Yetkisiz İşlem: Ustabaşı yalnızca kendi oluşturduğu ceride kayıtlarını silebilir!' });
+      }
+    }
+
     const deletedOlay = existing?.Olay || 'Ceride Kaydı';
 
     memCeride = memCeride.filter(c => Number(c.Id) !== id);
@@ -10554,7 +10694,7 @@ app.delete('/api/ceride/:id', async (req, res) => {
       }
     }
 
-    const yapan = req.headers['x-user-name'] || 'Yönetici';
+    const yapan = isUstabasi ? (userName || 'Ustabaşı') : (req.headers['x-user-name'] || 'Yönetici');
     await recordAjandaNotification({
       HatirlaticiId: 0,
       Baslik: `📜 Ceride Silindi`,

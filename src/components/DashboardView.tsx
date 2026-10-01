@@ -46,7 +46,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   currentUserName = '',
   onMarkNotificationRead
 }) => {
-  const [ajandaFiltre, setAjandaFiltre] = useState<'hepsi' | 'acik' | 'bugun' | 'gecikmis' | 'tamamlanan'>('hepsi');
+  const [ajandaFiltre, setAjandaFiltre] = useState<'acik' | 'bugun' | 'gecikmis' | 'tamamlanan' | 'hepsi'>('acik');
   const [togglingId, setTogglingId] = useState<number | null>(null);
   const [doubleClickHintId, setDoubleClickHintId] = useState<number | null>(null);
   const clickTrackerRef = useRef<{ id: number; time: number } | null>(null);
@@ -406,16 +406,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {/* Filtre Butonları */}
             <div className="flex items-center bg-slate-100/90 p-1 rounded-xl text-xs font-semibold overflow-x-auto max-w-full gap-1">
               <button
-                onClick={() => setAjandaFiltre('hepsi')}
-                className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
-                  ajandaFiltre === 'hepsi'
-                    ? 'bg-white text-slate-900 shadow-xs font-bold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Tümü ({gorevler.length})
-              </button>
-              <button
                 onClick={() => setAjandaFiltre('acik')}
                 className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
                   ajandaFiltre === 'acik'
@@ -423,7 +413,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Bekleyenler ({acikGorevSayisi})
+                Açık / Bekleyen ({acikGorevSayisi})
               </button>
               <button
                 onClick={() => setAjandaFiltre('bugun')}
@@ -447,6 +437,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   Gecikmiş ({gecikmisSayisi})
                 </button>
               )}
+              <button
+                onClick={() => setAjandaFiltre('hepsi')}
+                className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
+                  ajandaFiltre === 'hepsi'
+                    ? 'bg-white text-slate-900 shadow-xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Tümü ({gorevler.length})
+              </button>
               <button
                 onClick={() => setAjandaFiltre('tamamlanan')}
                 className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${

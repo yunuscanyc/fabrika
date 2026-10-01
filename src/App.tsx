@@ -30,6 +30,14 @@ export default function App() {
   const [currentAdminId, setCurrentAdminId] = useState<string>(() => sessionStorage.getItem('rende_admin_id') || 'admin1');
   const [unreadOrdersCount, setUnreadOrdersCount] = useState<number>(0);
   const [ajandaBildirimler, setAjandaBildirimler] = useState<AjandaBildirimi[]>([]);
+  
+  // Okunmamış Ajanda Bildirimleri ve Hatırlatıcı ID'leri
+  const unreadAjandaNotifs = ajandaBildirimler.filter(b => !b.Okundu && b.YapanKisi !== currentUserName);
+  const unreadNotifHatirlaticiIds = unreadAjandaNotifs
+    .map(b => b.HatirlaticiId)
+    .filter((id): id is number => typeof id === 'number' && id > 0);
+  const unreadAjandaCount = unreadAjandaNotifs.length;
+
   const [targetOpenHatirlaticiId, setTargetOpenHatirlaticiId] = useState<number | null>(null);
   const [personelSubTab, setPersonelSubTab] = useState<'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci'>('liste');
   const [selectedPersonelId, setSelectedPersonelId] = useState<number | undefined>(undefined);
@@ -132,7 +140,8 @@ export default function App() {
     let isInitialized = false;
 
     const pollInterval = setInterval(() => {
-      fetch('/api/ajanda/bildirimler')
+      const uName = sessionStorage.getItem('rende_user_name') || currentUserName || '1. Yönetici';
+      fetch(`/api/ajanda/bildirimler?user=${encodeURIComponent(uName)}`)
         .then(res => res.json())
         .then((resData: any) => {
           // Çoklu Cihaz Anlık Veri Senkronizasyonu Kontrolü
@@ -566,6 +575,13 @@ export default function App() {
       })));
     } catch (e) {}
   };
+
+  // Hatırlatıcılar sekmesi aktif olduğunda tüm bildirimleri otomatik okundu say ve sayacı 0'la
+  useEffect(() => {
+    if (activeTab === 'hatirlaticilar' && unreadAjandaCount > 0) {
+      handleMarkAllAjandaRead();
+    }
+  }, [activeTab, unreadAjandaCount]);
 
   const handleOpenHatirlaticiFromNotification = (hatirlaticiId: number) => {
     setActiveTab('hatirlaticilar');
@@ -1110,13 +1126,6 @@ export default function App() {
     }
   };
 
-  // Okunmamış Ajanda Bildirimleri ve Hatırlatıcı ID'leri
-  const unreadAjandaNotifs = ajandaBildirimler.filter(b => !b.Okundu && b.YapanKisi !== currentUserName);
-  const unreadNotifHatirlaticiIds = unreadAjandaNotifs
-    .map(b => b.HatirlaticiId)
-    .filter((id): id is number => typeof id === 'number' && id > 0);
-  const unreadAjandaCount = unreadAjandaNotifs.length;
-
   // Başlangıç Oturum Kontrolü Yükleniyor Ekranı
   if (authChecking) {
     return (
@@ -1158,6 +1167,7 @@ export default function App() {
         unreadOrdersCount={unreadOrdersCount}
         unreadAjandaCount={unreadAjandaCount}
         currentUserName={currentUserName}
+        onMarkAllAjandaRead={handleMarkAllAjandaRead}
       />
 
       {/* Cep Telefonu & Web Push Bildirim Kurulum Bildirimi */}
@@ -1220,14 +1230,23 @@ export default function App() {
           />
         )}
 
-        {/* Ustabaşı Modunda Doğrudan ve Yalnızca Sipariş Modülü Açılır */}
+        {/* Ustabaşı Modunda Siparişler ve Şantiye Ceridesi Sekmeleri */}
         {userRole === 'ustabasi' ? (
-          <SiparislerView
-            userRole="ustabasi"
-            onOrderAdded={() => {
-              verileriYukle();
-            }}
-          />
+          activeTab === 'ceride' ? (
+            <CerideView
+              projeler={projeler}
+              currentUserName={currentUserName}
+              userRole={userRole}
+              onNavigateTab={setActiveTab}
+            />
+          ) : (
+            <SiparislerView
+              userRole="ustabasi"
+              onOrderAdded={() => {
+                verileriYukle();
+              }}
+            />
+          )
         ) : (
           <>
             {activeTab === 'dashboard' && (
@@ -1317,6 +1336,7 @@ export default function App() {
                 currentUserName={currentUserName}
                 onHatirlaticiInspected={(id) => handleMarkAjandaRead(undefined, id)}
                 onMarkNotificationRead={handleMarkAjandaRead}
+                onMarkAllNotificationsRead={handleMarkAllAjandaRead}
                 targetOpenHatirlaticiId={targetOpenHatirlaticiId}
                 onClearTargetOpenHatirlaticiId={() => setTargetOpenHatirlaticiId(null)}
               />
@@ -1366,6 +1386,7 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         userRole={userRole}
+        onMarkAllAjandaRead={handleMarkAllAjandaRead}
         badgeCounts={{
           bakim: ozet?.bakimBekleyenArac,
           hatirlatici: ozet?.bugunBitenGorevler,
