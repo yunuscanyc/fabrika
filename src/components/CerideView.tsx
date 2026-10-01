@@ -39,7 +39,8 @@ import {
   formatTarihTR, 
   getTurkiyeSaatStr, 
   getTurkiyeTarihStr, 
-  getTurkiyeTamZamanStr 
+  getTurkiyeTamZamanStr,
+  toSafeHeader
 } from '../utils/dateUtils';
 
 interface CerideViewProps {
@@ -149,11 +150,11 @@ export const CerideView: React.FC<CerideViewProps> = ({
       setError(null);
       setYuklenenCount(0);
       setToplamCount(0);
-      const url = `/api/ceride?aralik=${aralik}&role=${userRole}&user=${encodeURIComponent(currentUserName)}`;
+      const url = `/api/ceride?aralik=${aralik}&role=${encodeURIComponent(userRole)}&user=${encodeURIComponent(currentUserName)}`;
       const res = await fetch(url, {
         headers: {
-          'x-user-role': userRole,
-          'x-user-name': currentUserName
+          'x-user-role': encodeURIComponent(userRole),
+          'x-user-name': toSafeHeader(currentUserName)
         }
       });
       if (res.ok) {
@@ -325,8 +326,8 @@ export const CerideView: React.FC<CerideViewProps> = ({
           method: 'PUT',
           headers: { 
             'Content-Type': 'application/json',
-            'x-user-role': userRole,
-            'x-user-name': currentUserName
+            'x-user-role': encodeURIComponent(userRole),
+            'x-user-name': toSafeHeader(currentUserName)
           },
           body: JSON.stringify(payload)
         });
@@ -335,8 +336,8 @@ export const CerideView: React.FC<CerideViewProps> = ({
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
-            'x-user-role': userRole,
-            'x-user-name': currentUserName
+            'x-user-role': encodeURIComponent(userRole),
+            'x-user-name': toSafeHeader(currentUserName)
           },
           body: JSON.stringify(payload)
         });
@@ -366,8 +367,8 @@ export const CerideView: React.FC<CerideViewProps> = ({
       const res = await fetch(`/api/ceride/${id}`, {
         method: 'DELETE',
         headers: { 
-          'x-user-role': userRole,
-          'x-user-name': currentUserName 
+          'x-user-role': encodeURIComponent(userRole),
+          'x-user-name': toSafeHeader(currentUserName) 
         }
       });
       if (res.ok) {

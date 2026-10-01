@@ -3,6 +3,17 @@
  * Timezone (UTC-TRT) kaymalarını, ISO dönüşüm hatalarını ve Türkçe gün/ay gösterimlerini garanti altına alır.
  */
 
+// HTTP Headers yalnızca ISO-8859-1 (ASCII / ByteString) destekler.
+// Türkçe karakter içeren kullanıcı adlarını (örn: "Ustabaşı", "1. Yönetici") güvenle kodlar
+export function toSafeHeader(val: string | null | undefined): string {
+  if (!val) return 'Yonetici';
+  try {
+    return encodeURIComponent(String(val).trim());
+  } catch {
+    return 'Yonetici';
+  }
+}
+
 // Yerel tarayıcı saatine göre YYYY-MM-DD formatında bugünü döndürür
 export function getBugunIso(): string {
   const now = new Date();

@@ -112,6 +112,53 @@ function getProp(obj: any, ...keys: string[]): any {
   return undefined;
 }
 
+// HTTP Header'larından veya parametrelerden gelen kullanıcı adlarını güvenle çözer ve Türkçe karakter bozulmalarını (mojibake) düzeltir
+function sanitizeTurkishMojibake(text: any): string {
+  if (!text) return '';
+  let str = String(text);
+  try {
+    if (str.includes('%')) {
+      str = decodeURIComponent(str);
+    }
+  } catch {}
+
+  return str
+    // UTF-8 in Latin-1 / Win1252 / ISO-8859-1 mojibake & unicode control sequences
+    .replace(/\u00C5[\u009F\u015F\u0178\uFFFD\?]/g, 'ş')
+    .replace(/\u00C5[\u009E\u015E\u017D\uFFFD\?]/g, 'Ş')
+    .replace(/\u00C4\u00B1/g, 'ı')
+    .replace(/\u00C4\u00B0/g, 'İ')
+    .replace(/\u00C4[\u009F\u011F\uFFFD]/g, 'ğ')
+    .replace(/\u00C4[\u009E\u011E\uFFFD]/g, 'Ğ')
+    .replace(/\u00C3\u00A7/g, 'ç')
+    .replace(/\u00C3\u0087/g, 'Ç')
+    .replace(/\u00C3\u00B6/g, 'ö')
+    .replace(/\u00C3\u0096/g, 'Ö')
+    .replace(/\u00C3\u00BC/g, 'ü')
+    .replace(/\u00C3\u009C/g, 'Ü')
+    // String literal patterns
+    .replace(/ÅŸ/g, 'ş').replace(/Å\x9f/g, 'ş').replace(/Å\u009f/g, 'ş')
+    .replace(/Åž/g, 'Ş').replace(/Å\x9e/g, 'Ş').replace(/Å\u009e/g, 'Ş')
+    .replace(/Ä±/g, 'ı').replace(/Ä°/g, 'İ')
+    .replace(/ÄŸ/g, 'ğ').replace(/Ä\x9f/g, 'ğ')
+    .replace(/Äž/g, 'Ğ').replace(/Ä\x9e/g, 'Ğ')
+    .replace(/Ã§/g, 'ç').replace(/Ã‡/g, 'Ç')
+    .replace(/Ã¶/g, 'ö').replace(/Ã–/g, 'Ö')
+    .replace(/Ã¼/g, 'ü').replace(/Ãœ/g, 'Ü')
+    // Common corruptions in user roles & notifications
+    .replace(/Ustaba[şs\u00C5\?][ıi\u00C4\?]*/gi, 'Ustabaşı')
+    .replace(/Y[öo\u00C3\?]netici/gi, 'Yönetici')
+    .replace(/1\.\s*Y[öo\u00C3\?]netici/gi, '1. Yönetici')
+    .replace(/2\.\s*Y[öo\u00C3\?]netici/gi, '2. Yönetici');
+}
+
+function parseSafeUserName(raw: any, fallback = 'Yönetici'): string {
+  if (!raw) return fallback;
+  const str = String(raw).trim();
+  if (!str) return fallback;
+  return sanitizeTurkishMojibake(str);
+}
+
 // Veritabanından gelen ikili (bytea), hex veya base64 dosya içeriğini güvenle okuyup data-uri formatına çevirme
 function parseDatabaseFileContent(raw: any): string {
   if (!raw) return '';
@@ -5725,9 +5772,12 @@ async function sendWebPushNotification(excludeUserName: string, payload: {
       }
     });
 
+    const safeTitle = sanitizeTurkishMojibake(payload.title || '🔔 Rende Portal');
+    const safeBody = sanitizeTurkishMojibake(payload.body || 'Yeni bildirim');
+
     const payloadString = JSON.stringify({
-      title: payload.title,
-      body: payload.body,
+      title: safeTitle,
+      body: safeBody,
       icon: payload.icon || '/pwa-192x192.png',
       badge: payload.badge || '/pwa-192x192.png',
       url: payload.url || '/',
@@ -5870,14 +5920,17 @@ async function recordAjandaNotification(notif: {
     return;
   }
 
-  const yapan = notif.YapanKisi || '1. Yönetici';
+  const yapan = sanitizeTurkishMojibake(notif.YapanKisi || '1. Yönetici');
+  const baslik = sanitizeTurkishMojibake(notif.Baslik || 'Hatırlatma');
+  const detay = sanitizeTurkishMojibake(notif.Detay || `${yapan} ajandada işlem yaptı.`);
+
   const newNotif: AjandaNotification = {
     Id: Date.now() + Math.floor(Math.random() * 1000),
     HatirlaticiId: (notif.HatirlaticiId !== undefined && notif.HatirlaticiId !== null) ? notif.HatirlaticiId : 0,
-    Baslik: notif.Baslik || 'Hatırlatma',
+    Baslik: baslik,
     IslemTuru: notif.IslemTuru,
     YapanKisi: yapan,
-    Detay: notif.Detay || `${yapan} ajandada işlem yaptı.`,
+    Detay: detay,
     Tarih: new Date().toISOString(),
     OkuyanKisiler: [yapan]
   };
@@ -5991,12 +6044,12 @@ async function getAjandaNotificationsList(): Promise<AjandaNotification[]> {
           return {
             Id: r.Id,
             HatirlaticiId: r.HatirlaticiId,
-            Baslik: r.Baslik,
+            Baslik: sanitizeTurkishMojibake(r.Baslik),
             IslemTuru: r.IslemTuru,
-            YapanKisi: r.YapanKisi,
-            Detay: r.Detay,
+            YapanKisi: sanitizeTurkishMojibake(r.YapanKisi),
+            Detay: sanitizeTurkishMojibake(r.Detay),
             Tarih: r.Tarih ? new Date(r.Tarih).toISOString() : new Date().toISOString(),
-            OkuyanKisiler: okuyan
+            OkuyanKisiler: okuyan.map(sanitizeTurkishMojibake)
           };
         });
       }
@@ -6004,6 +6057,13 @@ async function getAjandaNotificationsList(): Promise<AjandaNotification[]> {
       console.error('[DB AJANDA BILDIRIM GET ERROR]', e.message);
     }
   }
+  memAjandaBildirimler = memAjandaBildirimler.map(r => ({
+    ...r,
+    Baslik: sanitizeTurkishMojibake(r.Baslik),
+    YapanKisi: sanitizeTurkishMojibake(r.YapanKisi),
+    Detay: sanitizeTurkishMojibake(r.Detay),
+    OkuyanKisiler: (r.OkuyanKisiler || []).map(sanitizeTurkishMojibake)
+  }));
   return memAjandaBildirimler;
 }
 
@@ -10484,12 +10544,12 @@ app.post('/api/ceride', async (req, res) => {
     }
 
     const userRole = String(req.headers['x-user-role'] || req.query.role || '').toLowerCase();
-    const userName = String(req.headers['x-user-name'] || req.query.user || '').trim();
+    const userName = parseSafeUserName(req.headers['x-user-name'] || req.query.user || (userRole === 'ustabasi' ? 'Ustabaşı' : 'Yönetici'));
     const isUstabasi = userRole === 'ustabasi' || userName.toLowerCase().includes('ustabaşı') || userName.toLowerCase().includes('ustabasi');
 
     const isleyen = isUstabasi 
       ? (userName || 'Ustabaşı') 
-      : (IsleyenKisi || req.headers['x-user-name'] || 'Yönetici');
+      : (parseSafeUserName(IsleyenKisi || req.headers['x-user-name'] || 'Yönetici'));
 
     const newRecord = await recordCerideEvent({
       Olay: String(Olay).trim(),
@@ -10516,7 +10576,7 @@ app.put('/api/ceride/:id', async (req, res) => {
     const { Olay, Tarih, Saat, ProjeId, ProjeAdi, IsleyenKisi, Kategori, Detay, Fotograflar } = req.body;
     
     const userRole = String(req.headers['x-user-role'] || req.query.role || '').toLowerCase();
-    const userName = String(req.headers['x-user-name'] || req.query.user || '').trim();
+    const userName = parseSafeUserName(req.headers['x-user-name'] || req.query.user || (userRole === 'ustabasi' ? 'Ustabaşı' : 'Yönetici'));
     const isUstabasi = userRole === 'ustabasi' || userName.toLowerCase().includes('ustabaşı') || userName.toLowerCase().includes('ustabasi');
 
     const index = memCeride.findIndex(c => Number(c.Id) === id);
@@ -10549,7 +10609,7 @@ app.put('/api/ceride/:id', async (req, res) => {
     const updatedFotolar = Array.isArray(Fotograflar) ? Fotograflar : (existing?.Fotograflar || []);
     const resolvedIsleyen = isUstabasi 
       ? (userName || 'Ustabaşı') 
-      : (IsleyenKisi !== undefined ? String(IsleyenKisi).trim() : (existing?.IsleyenKisi || 'Yönetici'));
+      : parseSafeUserName(IsleyenKisi !== undefined ? String(IsleyenKisi).trim() : (existing?.IsleyenKisi || 'Yönetici'));
 
     const updated = {
       ...(existing || { Id: id, OtomatikMi: false, IslenmeTarihi: getTurkiyeTamZamanStr() }),
@@ -10650,7 +10710,7 @@ app.delete('/api/ceride/:id', async (req, res) => {
   try {
     const id = Number(req.params.id);
     const userRole = String(req.headers['x-user-role'] || req.query.role || '').toLowerCase();
-    const userName = String(req.headers['x-user-name'] || req.query.user || '').trim();
+    const userName = parseSafeUserName(req.headers['x-user-name'] || req.query.user || (userRole === 'ustabasi' ? 'Ustabaşı' : 'Yönetici'));
     const isUstabasi = userRole === 'ustabasi' || userName.toLowerCase().includes('ustabaşı') || userName.toLowerCase().includes('ustabasi');
 
     let existing = memCeride.find(c => Number(c.Id) === id);
@@ -10694,7 +10754,7 @@ app.delete('/api/ceride/:id', async (req, res) => {
       }
     }
 
-    const yapan = isUstabasi ? (userName || 'Ustabaşı') : (req.headers['x-user-name'] || 'Yönetici');
+    const yapan = isUstabasi ? (userName || 'Ustabaşı') : parseSafeUserName(req.headers['x-user-name'] || 'Yönetici');
     await recordAjandaNotification({
       HatirlaticiId: 0,
       Baslik: `📜 Ceride Silindi`,

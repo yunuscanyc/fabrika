@@ -21,6 +21,7 @@ import { SecuritySettingsModal } from './components/SecuritySettingsModal';
 import { NotificationSettingsModal } from './components/NotificationSettingsModal';
 import { PushPromptBanner } from './components/PushPromptBanner';
 import { PageLoadingIndicator } from './components/PageLoadingIndicator';
+import { toSafeHeader } from './utils/dateUtils';
 import { Proje, Arac, BakimKaydi, Hatirlatici, OzetIstatistikler, Personel, IzinKaydi, Makine, Departman, Gorev, AjandaBildirimi } from './types';
 
 export default function App() {
@@ -980,7 +981,7 @@ export default function App() {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'x-user-name': currentUserName
+          'x-user-name': toSafeHeader(currentUserName)
         },
         body: JSON.stringify({
           ...h,
@@ -1042,7 +1043,7 @@ export default function App() {
         method: 'PUT',
         headers: { 
           'Content-Type': 'application/json',
-          'x-user-name': currentUserName
+          'x-user-name': toSafeHeader(currentUserName)
         },
         body: JSON.stringify(payload),
       });
@@ -1072,7 +1073,7 @@ export default function App() {
         method: 'PUT',
         headers: { 
           'Content-Type': 'application/json',
-          'x-user-name': currentUserName
+          'x-user-name': toSafeHeader(currentUserName)
         },
         body: JSON.stringify({
           ...fields,
@@ -1110,7 +1111,7 @@ export default function App() {
     try {
       const res = await fetch(`/api/hatirlaticilar/${id}?yapan=${encodeURIComponent(currentUserName)}`, { 
         method: 'DELETE',
-        headers: { 'x-user-name': currentUserName }
+        headers: { 'x-user-name': toSafeHeader(currentUserName) }
       });
       if (!res.ok) {
         const txt = await res.text();
