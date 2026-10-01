@@ -138,6 +138,7 @@ export const CerideView: React.FC<CerideViewProps> = ({
   } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const cerideLoadingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Yükleme Sayacı State
@@ -1165,15 +1166,41 @@ export const CerideView: React.FC<CerideViewProps> = ({
                       )}
                     </label>
 
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploadingPhotos}
-                      className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
-                    >
-                      <Camera className="w-3.5 h-3.5" />
-                      <span>{uploadingPhotos ? 'İşleniyor...' : 'Fotoğraf Çek / Ekle'}</span>
-                    </button>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => cameraInputRef.current?.click()}
+                        disabled={uploadingPhotos}
+                        className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+                        title="Telefon/Tablet veya Cihaz Kamerasından Canlı Fotoğraf Çek"
+                      >
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>{uploadingPhotos ? 'İşleniyor...' : 'Kamera ile Çek'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploadingPhotos}
+                        className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+                        title="Harddisk, Hafıza veya Galeriden Dosya Seç"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Dosya / Galeri</span>
+                      </button>
+                    </div>
+
+                    {/* Kamera Doğrudan Çekim Inputu */}
+                    <input
+                      ref={cameraInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+
+                    {/* Harddisk / Dosya Seçici Inputu */}
                     <input
                       ref={fileInputRef}
                       type="file"
@@ -1213,12 +1240,38 @@ export const CerideView: React.FC<CerideViewProps> = ({
                       </div>
                     ) : (
                       <div 
-                        onClick={() => fileInputRef.current?.click()}
-                        className="py-12 border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-rose-400 rounded-2xl text-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition cursor-pointer bg-slate-50/50 dark:bg-slate-950/50 flex flex-col items-center justify-center h-48 sm:h-64"
+                        className="py-10 border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-rose-400 rounded-2xl text-center text-slate-400 transition bg-slate-50/50 dark:bg-slate-950/50 flex flex-col items-center justify-center h-48 sm:h-64 p-4"
                       >
-                        <Camera className="w-8 h-8 mx-auto mb-2 text-slate-300 dark:text-slate-600" />
-                        <p className="text-xs font-semibold">Fotoğraf yüklemek veya kamera ile çekmek için tıklayın</p>
-                        <p className="text-[10px] text-slate-400 mt-1">JPG, PNG, WEBP desteklenir (otomatik optimize edilir)</p>
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-12 h-12 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center border border-rose-500/20">
+                            <Camera className="w-6 h-6" />
+                          </div>
+                          <div className="w-12 h-12 rounded-2xl bg-blue-500/10 text-blue-500 flex items-center justify-center border border-blue-500/20">
+                            <Upload className="w-6 h-6" />
+                          </div>
+                        </div>
+                        <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Fotoğraf yüklemek için kaynak seçiniz:
+                        </p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <button
+                            type="button"
+                            onClick={() => cameraInputRef.current?.click()}
+                            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                          >
+                            <Camera className="w-3.5 h-3.5" />
+                            <span>📷 Kamera ile Çek</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                          >
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>📁 Harddisk / Galeri</span>
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-2">JPG, PNG, WEBP desteklenir (otomatik optimize edilir)</p>
                       </div>
                     )}
                   </div>

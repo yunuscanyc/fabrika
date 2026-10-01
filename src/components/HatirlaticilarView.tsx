@@ -797,17 +797,28 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                       Fotoğraf ve Belge Ekleri ({editBelgeler.length})
                     </span>
                     
-                    {/* Dosya Seçme Butonu */}
-                    <div className="flex items-center gap-2">
+                    {/* Dosya / Kamera Seçme Butonları */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       {isProcessingFiles && (
-                        <span className="text-[11px] text-blue-600 flex items-center gap-1 font-semibold animate-pulse">
+                        <span className="text-[11px] text-blue-600 flex items-center gap-1 font-semibold animate-pulse mr-1">
                           <Loader2 className="w-3 h-3 animate-spin" />
                           Görsel işleniyor...
                         </span>
                       )}
-                      <label className="cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1.5 rounded-xl border border-blue-200 flex items-center gap-1.5 transition-colors">
+                      <label className="cursor-pointer bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold px-2.5 py-1.5 rounded-xl border border-rose-200 flex items-center gap-1 transition-colors" title="Kamera ile çek">
+                        <Camera className="w-3.5 h-3.5" />
+                        📷 Kamera
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={(e) => handleDosyaYukle(e, true)}
+                          className="hidden"
+                        />
+                      </label>
+                      <label className="cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold px-2.5 py-1.5 rounded-xl border border-blue-200 flex items-center gap-1 transition-colors" title="Harddisk veya galeriden seç">
                         <Upload className="w-3.5 h-3.5" />
-                        Görsel Ekle
+                        📁 Dosya
                         <input
                           type="file"
                           multiple
@@ -1088,16 +1099,27 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                       <ImageIcon className="w-4 h-4 text-blue-500" />
                       Fotoğraf / Belge Ekle ({yeniBelgeler.length})
                     </span>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       {isProcessingFiles && (
-                        <span className="text-[11px] text-blue-600 flex items-center gap-1 font-semibold animate-pulse">
+                        <span className="text-[11px] text-blue-600 flex items-center gap-1 font-semibold animate-pulse mr-1">
                           <Loader2 className="w-3 h-3 animate-spin" />
                           Görsel işleniyor...
                         </span>
                       )}
-                      <label className="cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1.5 rounded-xl border border-blue-200 flex items-center gap-1.5 transition-colors">
+                      <label className="cursor-pointer bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold px-2.5 py-1.5 rounded-xl border border-rose-200 flex items-center gap-1 transition-colors" title="Kamera ile çek">
+                        <Camera className="w-3.5 h-3.5" />
+                        📷 Kamera
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={(e) => handleDosyaYukle(e, false)}
+                          className="hidden"
+                        />
+                      </label>
+                      <label className="cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold px-2.5 py-1.5 rounded-xl border border-blue-200 flex items-center gap-1 transition-colors" title="Harddisk veya galeriden seç">
                         <Upload className="w-3.5 h-3.5" />
-                        Görsel Seç
+                        📁 Dosya
                         <input
                           type="file"
                           multiple

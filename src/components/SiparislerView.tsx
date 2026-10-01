@@ -92,6 +92,7 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
   const [satinalmaKilitNotu, setSatinalmaKilitNotu] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   // Siparişleri API'den Çek
   const fetchSiparisler = async () => {
@@ -1563,20 +1564,41 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
 
               {/* 6. Çoklu Kroki / Fotoğraf Yükleme Alanı */}
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                     <Upload className="w-4 h-4 text-blue-600" />
-                    Kroki, Çizim &amp; Referans Fotoğrafları (Multi Upload)
+                    Kroki, Çizim &amp; Referans Fotoğrafları
                   </label>
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-1"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Fotoğraf Ekle</span>
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => cameraInputRef.current?.click()}
+                      className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                      title="Kameradan doğrudan fotoğraf çek"
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      <span>📷 Kamera ile Çek</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                      title="Harddisk veya galeriden seç"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>📁 Dosya / Galeri</span>
+                    </button>
+                  </div>
                 </div>
+
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
 
                 <input
                   ref={fileInputRef}
@@ -1589,12 +1611,30 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
 
                 {formBelgeler.length === 0 ? (
                   <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className="border-2 border-dashed border-slate-300 hover:border-blue-400 rounded-xl p-4 text-center cursor-pointer transition-colors"
+                    className="border-2 border-dashed border-slate-300 hover:border-blue-400 rounded-xl p-4 text-center transition-colors bg-white/60"
                   >
-                    <Image className="w-8 h-8 text-slate-400 mx-auto mb-1" />
-                    <p className="text-xs text-slate-600 font-medium">Fotoğraf veya kroki yüklemek için tıklayın veya sürükleyin</p>
-                    <span className="text-[10px] text-slate-400">Birden fazla görsel seçebilirsiniz</span>
+                    <div className="flex items-center justify-center gap-2 mb-1.5">
+                      <Camera className="w-6 h-6 text-rose-500" />
+                      <Image className="w-6 h-6 text-blue-500" />
+                    </div>
+                    <p className="text-xs text-slate-700 font-semibold mb-2">Fotoğraf veya kroki yükleme kaynağını seçin:</p>
+                    <div className="flex items-center justify-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => cameraInputRef.current?.click()}
+                        className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-lg transition shadow-xs cursor-pointer"
+                      >
+                        📷 Kamera
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold rounded-lg transition shadow-xs cursor-pointer"
+                      >
+                        📁 Harddisk / Galeri
+                      </button>
+                    </div>
+                    <span className="text-[10px] text-slate-400 block mt-2">Birden fazla görsel veya PDF seçebilirsiniz</span>
                   </div>
                 ) : (
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">

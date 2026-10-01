@@ -1350,25 +1350,48 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                     </span>
                   </div>
 
-                  <label className="border-2 border-dashed border-blue-300 hover:border-blue-500 bg-blue-50/50 hover:bg-blue-50 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition text-center group shadow-inner">
-                    <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
-                      <Upload className="w-5 h-5" />
+                  <div className="border-2 border-dashed border-blue-300 bg-blue-50/50 rounded-xl p-4 flex flex-col items-center justify-center text-center shadow-inner">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shadow-xs">
+                        <Camera className="w-5 h-5" />
+                      </div>
+                      <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shadow-xs">
+                        <Upload className="w-5 h-5" />
+                      </div>
                     </div>
-                    <span className="text-xs font-bold text-blue-700">
-                      Fotoğraf veya Fatura Belgesi Eklemek İçin Tıklayın
+                    <span className="text-xs font-bold text-slate-800">
+                      Fotoğraf veya Fatura Belgesi Ekleyin
                     </span>
-                    <span className="text-[11px] text-slate-500 mt-0.5">
+                    <div className="flex items-center gap-2 mt-2">
+                      <label className="cursor-pointer px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs">
+                        <Camera className="w-3.5 h-3.5" />
+                        📷 Kamera ile Çek
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={handleBakimDosyaYukle}
+                          disabled={bakimKaydediliyor}
+                          className="hidden"
+                        />
+                      </label>
+                      <label className="cursor-pointer px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs">
+                        <Upload className="w-3.5 h-3.5" />
+                        📁 Harddisk / Galeri
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx"
+                          onChange={handleBakimDosyaYukle}
+                          disabled={bakimKaydediliyor}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                    <span className="text-[10px] text-slate-500 mt-2">
                       Fatura, servis tutanağı, parça veya bakım fotoğrafları (JPG, PNG, PDF)
                     </span>
-                    <input
-                      type="file"
-                      multiple
-                      accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx"
-                      onChange={handleBakimDosyaYukle}
-                      disabled={bakimKaydediliyor}
-                      className="hidden"
-                    />
-                  </label>
+                  </div>
 
                   {bakimBelgeler.length > 0 && (
                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 pt-1">
