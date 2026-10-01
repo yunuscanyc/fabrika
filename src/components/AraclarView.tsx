@@ -16,6 +16,7 @@ import {
   X,
   ShieldCheck,
   ShieldAlert,
+  Camera,
   Upload,
   Image as ImageIcon,
   Paperclip,

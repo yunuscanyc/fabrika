@@ -25,6 +25,7 @@ import {
   RefreshCw,
   Sparkles,
   Camera,
+  Upload,
   Image as ImageIcon,
   X,
   Eye,

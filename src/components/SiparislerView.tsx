@@ -3,7 +3,7 @@ import {
   PackagePlus, ShoppingCart, Lock, Unlock, Search, Filter, Printer, Trash2, Edit3,
   CheckCircle2, Clock, AlertTriangle, AlertCircle, Eye, Upload, Image, X, FileText,
   Plus, Check, ChevronDown, Sparkles, Building2, User, Phone, Tag, Calendar, DollarSign,
-  ShieldAlert, RefreshCw, Layers, ArrowUpDown, Info, BookOpen
+  ShieldAlert, RefreshCw, Layers, ArrowUpDown, Info, BookOpen, Camera
 } from 'lucide-react';
 import { MalzemeSiparisi, MalzemeSiparisBelgesi, MalzemeKatalogItem } from '../types';
 import { formatTarihTR } from '../utils/dateUtils';

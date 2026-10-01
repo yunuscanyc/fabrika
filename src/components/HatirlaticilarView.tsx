@@ -4,6 +4,7 @@ import { formatTarihTR } from '../utils/dateUtils';
 import { 
   Bell, 
   Plus, 
+  Camera,
   CheckCircle2, 
   Circle, 
   Calendar, 
