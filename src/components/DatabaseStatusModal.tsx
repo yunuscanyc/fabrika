@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { 
-  Database, RefreshCw, CheckCircle2, AlertTriangle, X, Table, Settings, 
-  Download, Upload, ShieldCheck, FileJson, Loader2, HardDrive, Check, Sparkles, AlertOctagon 
+  Database, RefreshCw, CheckCircle2, AlertTriangle, X, Table, 
+  Download, Upload, ShieldCheck, FileJson, Loader2, HardDrive, Check, Sparkles, AlertOctagon, Terminal
 } from 'lucide-react';
 
 export interface DbStatusData {
@@ -20,7 +20,7 @@ interface DatabaseStatusModalProps {
   onClose: () => void;
   dbStatus: DbStatusData | null;
   onRefresh: () => Promise<void>;
-  initialTab?: 'durum' | 'yedek' | 'ayarlar';
+  initialTab?: 'durum' | 'yedek';
 }
 
 export const DatabaseStatusModal: React.FC<DatabaseStatusModalProps> = ({
@@ -30,11 +30,8 @@ export const DatabaseStatusModal: React.FC<DatabaseStatusModalProps> = ({
   onRefresh,
   initialTab = 'durum'
 }) => {
-  const [activeTab, setActiveTab] = useState<'durum' | 'yedek' | 'ayarlar'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'durum' | 'yedek'>(initialTab);
   const [refreshing, setRefreshing] = useState(false);
-  const [savingConfig, setSavingConfig] = useState(false);
-  const [configSuccess, setConfigSuccess] = useState<string | null>(null);
-  const [configError, setConfigError] = useState<string | null>(null);
 
   // Yedekleme & Geri Yükleme State
   const [downloadingBackup, setDownloadingBackup] = useState(false);
@@ -53,15 +50,6 @@ export const DatabaseStatusModal: React.FC<DatabaseStatusModalProps> = ({
   const [restoreSuccessMsg, setRestoreSuccessMsg] = useState<string | null>(null);
   const [restoreErrorMsg, setRestoreErrorMsg] = useState<string | null>(null);
   const backupFileInputRef = useRef<HTMLInputElement>(null);
-
-  // Form state
-  const [connectionString, setConnectionString] = useState('');
-  const [host, setHost] = useState(dbStatus?.host || 'localhost');
-  const [port, setPort] = useState(String(dbStatus?.port || '5432'));
-  const [database, setDatabase] = useState(dbStatus?.database || 'FabrikaYonetimDB');
-  const [user, setUser] = useState(dbStatus?.user || 'postgres');
-  const [password, setPassword] = useState('');
-  const [ssl, setSsl] = useState(false);
 
   if (!isOpen) return null;
 
@@ -191,46 +179,6 @@ export const DatabaseStatusModal: React.FC<DatabaseStatusModalProps> = ({
     }
   };
 
-  const handleSaveConfig = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSavingConfig(true);
-    setConfigSuccess(null);
-    setConfigError(null);
-
-    try {
-      const payload = connectionString.trim()
-        ? { connectionString: connectionString.trim() }
-        : {
-            host: host.trim(),
-            port: port.trim(),
-            database: database.trim(),
-            user: user.trim(),
-            password,
-            ssl: ssl ? 'true' : 'false'
-          };
-
-      const res = await fetch('/api/db-config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await res.json();
-      if (data.connected) {
-        setConfigSuccess('PostgreSQL veritabanınıza başarıyla bağlanıldı! Canlı veriler yüklendi.');
-        await onRefresh();
-        setActiveTab('durum');
-      } else {
-        setConfigError(data.lastDbError || 'Veritabanına bağlanılamadı. Bilgileri kontrol ediniz.');
-        await onRefresh();
-      }
-    } catch (err: any) {
-      setConfigError(err.message || 'Bağlantı isteği başarısız oldu.');
-    } finally {
-      setSavingConfig(false);
-    }
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/70 backdrop-blur-sm animate-fadeIn">
       <div className="bg-white rounded-2xl max-w-2xl w-full p-4 sm:p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto">
@@ -258,7 +206,7 @@ export const DatabaseStatusModal: React.FC<DatabaseStatusModalProps> = ({
                 )}
               </h3>
               <p className="text-xs text-slate-500 font-mono">
-                {dbStatus?.database || 'FabrikaYonetimDB'} @ {dbStatus?.host || 'localhost'}:{dbStatus?.port || 5432}
+                {dbStatus?.database || 'FabrikaYonetimDB'} @ {dbStatus?.host || 'localhost'}:{dbStatus?.port || 5432} (.env)
               </p>
             </div>
           </div>
@@ -278,7 +226,7 @@ export const DatabaseStatusModal: React.FC<DatabaseStatusModalProps> = ({
             }`}
           >
             <Table className="w-3.5 h-3.5" />
-            <span>Bağlantı &amp; Tablolar</span>
+            <span>Bağlantı &amp; Tablo Durumu</span>
           </button>
 
           <button
@@ -294,18 +242,6 @@ export const DatabaseStatusModal: React.FC<DatabaseStatusModalProps> = ({
               💾 Tek Tuşla Yedek &amp; Geri Yükle
               <span className="bg-emerald-100 text-emerald-700 text-[10px] px-1.5 py-0.2 rounded-full font-extrabold">Canlı</span>
             </span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('ayarlar')}
-            className={`px-3 sm:px-4 py-2 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors shrink-0 cursor-pointer ${
-              activeTab === 'ayarlar'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Settings className="w-3.5 h-3.5" />
-            <span>Bağlantı Yapılandır</span>
           </button>
         </div>
 
@@ -331,7 +267,7 @@ export const DatabaseStatusModal: React.FC<DatabaseStatusModalProps> = ({
                       PostgreSQL Veritabanı Aktif ve Bağlı!
                     </p>
                     <p>
-                      Sistem doğrudan canlı <strong>{dbStatus.database}</strong> veritabanınızdan veri okumaktadır.
+                      Sistem doğrudan <strong>.env</strong> dosyasında tanımlı canlı <strong>{dbStatus.database}</strong> veritabanınızdan veri okumaktadır.
                     </p>
                   </>
                 ) : (
@@ -340,7 +276,7 @@ export const DatabaseStatusModal: React.FC<DatabaseStatusModalProps> = ({
                       Canlı PostgreSQL Veritabanı Bağlantısı Bekleniyor
                     </p>
                     <p>
-                      Kendi sunucunuzdaki veritabanına bağlanmak için <strong>Bağlantı Yapılandır</strong> sekmesini kullanabilirsiniz.
+                      Sunucunuzdaki <strong>.env</strong> dosyasındaki <code>PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD</code> değişkenlerini kontrol ediniz.
                     </p>
                     {dbStatus?.lastDbError && (
                       <div className="mt-1 p-2 bg-rose-100 rounded text-[11px] font-mono text-rose-900 overflow-x-auto">
@@ -349,6 +285,32 @@ export const DatabaseStatusModal: React.FC<DatabaseStatusModalProps> = ({
                     )}
                   </>
                 )}
+              </div>
+            </div>
+
+            {/* Sunucu .env Yapılandırması Özeti */}
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-xs">
+              <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                <Terminal className="w-3.5 h-3.5 text-slate-600" />
+                <span>Ortam Değişkenleri (.env) Bağlantı Bilgisi</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono">
+                <div className="p-2 bg-white rounded-lg border border-slate-200">
+                  <span className="text-slate-400 block text-[9px] font-sans">Sunucu / Host</span>
+                  <span className="font-bold text-slate-800 truncate block">{dbStatus?.host || 'localhost'}</span>
+                </div>
+                <div className="p-2 bg-white rounded-lg border border-slate-200">
+                  <span className="text-slate-400 block text-[9px] font-sans">Port</span>
+                  <span className="font-bold text-slate-800 truncate block">{dbStatus?.port || '5432'}</span>
+                </div>
+                <div className="p-2 bg-white rounded-lg border border-slate-200">
+                  <span className="text-slate-400 block text-[9px] font-sans">Veritabanı</span>
+                  <span className="font-bold text-blue-700 truncate block">{dbStatus?.database || 'FabrikaYonetimDB'}</span>
+                </div>
+                <div className="p-2 bg-white rounded-lg border border-slate-200">
+                  <span className="text-slate-400 block text-[9px] font-sans">Kullanıcı</span>
+                  <span className="font-bold text-slate-800 truncate block">{dbStatus?.user || 'postgres'}</span>
+                </div>
               </div>
             </div>
 
@@ -697,138 +659,6 @@ export const DatabaseStatusModal: React.FC<DatabaseStatusModalProps> = ({
               </div>
             )}
           </div>
-        )}
-
-        {/* 3. AYARLAR SEKMESİ */}
-        {activeTab === 'ayarlar' && (
-          <form onSubmit={handleSaveConfig} className="space-y-3 text-xs">
-            {configSuccess && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>{configSuccess}</span>
-              </div>
-            )}
-
-            {configError && (
-              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                <span>{configError}</span>
-              </div>
-            )}
-
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1 text-slate-600">
-              <p className="font-bold text-slate-800">Doğrudan Canlı PostgreSQL Bağlantısı</p>
-              <p className="text-[11px]">
-                Kendi sunucunuzdaki veya buluttaki PostgreSQL veritabanı adresini (Connection String veya tekil parametreler) buraya girebilirsiniz.
-              </p>
-            </div>
-
-            <div className="space-y-1">
-              <label className="font-bold text-slate-700">Bağlantı Dizesi (Connection URL)</label>
-              <input
-                type="text"
-                value={connectionString}
-                onChange={(e) => setConnectionString(e.target.value)}
-                placeholder="postgresql://kullanici:sifre@sunucu_ip:5432/veritabani_adi"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              />
-            </div>
-
-            <div className="relative flex py-1 items-center">
-              <div className="flex-grow border-t border-slate-200"></div>
-              <span className="flex-shrink mx-3 text-slate-400 text-[10px] font-bold uppercase">veya tek tek girin</span>
-              <div className="flex-grow border-t border-slate-200"></div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2">
-              <div className="col-span-2 space-y-1">
-                <label className="font-bold text-slate-700">Host (Sunucu / IP)</label>
-                <input
-                  type="text"
-                  value={host}
-                  onChange={(e) => setHost(e.target.value)}
-                  disabled={!!connectionString.trim()}
-                  placeholder="localhost veya IP"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-100"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">Port</label>
-                <input
-                  type="text"
-                  value={port}
-                  onChange={(e) => setPort(e.target.value)}
-                  disabled={!!connectionString.trim()}
-                  placeholder="5432"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-100"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">Veritabanı Adı (Database)</label>
-                <input
-                  type="text"
-                  value={database}
-                  onChange={(e) => setDatabase(e.target.value)}
-                  disabled={!!connectionString.trim()}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-100"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">Kullanıcı (User)</label>
-                <input
-                  type="text"
-                  value={user}
-                  onChange={(e) => setUser(e.target.value)}
-                  disabled={!!connectionString.trim()}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-100"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">Şifre (Password)</label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={!!connectionString.trim()}
-                  placeholder="PostgreSQL şifresi"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-100"
-                />
-              </div>
-
-              <div className="flex items-center gap-2 pt-5">
-                <input
-                  type="checkbox"
-                  id="sslCheck"
-                  checked={ssl}
-                  onChange={(e) => setSsl(e.target.checked)}
-                  disabled={!!connectionString.trim()}
-                  className="rounded text-blue-600 focus:ring-blue-500"
-                />
-                <label htmlFor="sslCheck" className="text-slate-700 font-medium cursor-pointer">
-                  SSL Kullan (Bulut DB için)
-                </label>
-              </div>
-            </div>
-
-            <div className="pt-2 flex justify-end">
-              <button
-                type="submit"
-                disabled={savingConfig}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow transition disabled:opacity-50 cursor-pointer"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${savingConfig ? 'animate-spin' : ''}`} />
-                <span>{savingConfig ? 'Test Ediliyor & Kaydediliyor...' : 'Bağlantıyı Test Et ve Kaydet'}</span>
-              </button>
-            </div>
-          </form>
         )}
 
         {/* Alt Aksiyonlar */}
