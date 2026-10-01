@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import zlib from 'zlib';
 import { createServer as createViteServer } from 'vite';
 import pg from 'pg';
 import dotenv from 'dotenv';
@@ -4416,12 +4417,22 @@ app.get('/api/backup/export', async (req, res) => {
       memoryStores
     };
 
+    const jsonString = JSON.stringify(backupPayload);
     const fileNameDate = trTarih.replace(/\./g, '-') + '_' + trSaat.replace(/:/g, '-');
     const fileName = `rende_veritabani_yedek_${fileNameDate}.json`;
 
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-    return res.send(JSON.stringify(backupPayload, null, 2));
+
+    const acceptEncoding = (req.headers['accept-encoding'] || '').toString();
+    if (acceptEncoding.includes('gzip')) {
+      const compressedBuffer = zlib.gzipSync(Buffer.from(jsonString), { level: 6 });
+      res.setHeader('Content-Encoding', 'gzip');
+      res.setHeader('Content-Length', compressedBuffer.length);
+      return res.send(compressedBuffer);
+    }
+
+    return res.send(jsonString);
   } catch (err: any) {
     console.error('[BACKUP EXPORT FATAL ERROR]', err);
     return res.status(500).json({ error: 'Yedekleme oluşturulamadı: ' + err.message });
