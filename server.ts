@@ -4190,6 +4190,9 @@ app.get('/api/health', (req, res) => {
 
 // Veritabanı Teşhis & Yeniden Bağlanma Testi
 app.get('/api/db-status', async (req, res) => {
+  if (!isDbConnected) {
+    await checkDbConnection().catch(() => {});
+  }
   let tableCounts: Record<string, any> = {};
   if (isDbConnected) {
     for (const [key, tbl] of Object.entries(detectedTables)) {

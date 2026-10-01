@@ -216,37 +216,15 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
-            {userRole === 'admin' && onOpenNotificationSettings && (
-              <button
-                type="button"
-                onClick={onOpenNotificationSettings}
-                className="p-1.5 bg-slate-800/90 hover:bg-amber-500/20 text-slate-300 hover:text-amber-300 border border-slate-700 hover:border-amber-500/30 rounded-xl text-xs transition-all shadow-xs cursor-pointer"
-                title="Bildirim Tercihleri Merkezi (Hangileri Gönderilsin)"
-              >
-                <BellRing className="w-4 h-4 text-amber-400" />
-              </button>
-            )}
-
-            {userRole === 'admin' && onOpenDbModal && (
-              <button
-                type="button"
-                onClick={onOpenDbModal}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-800/90 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 border border-slate-700 hover:border-emerald-500/30 rounded-xl text-xs font-semibold transition-all shadow-xs cursor-pointer"
-                title="Veritabanı & Tek Tuşla Yedekleme / Geri Yükleme"
-              >
-                <Database className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="hidden lg:inline text-[11px] font-bold text-emerald-300">Yedekle / DB</span>
-              </button>
-            )}
-
             {userRole === 'admin' && onOpenSecuritySettings && (
               <button
                 type="button"
                 onClick={onOpenSecuritySettings}
-                className="p-1.5 bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-xl text-xs transition-all shadow-xs cursor-pointer"
-                title="Güvenlik &amp; Parola Ayarları"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-800/90 hover:bg-blue-600/20 text-slate-200 hover:text-blue-300 border border-slate-700 hover:border-blue-500/40 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                title="Sistem Ayarları (Güvenlik, PIN, Bildirim Tercihleri & Veritabanı Yedekleme)"
               >
                 <Shield className="w-4 h-4 text-blue-400" />
+                <span className="hidden sm:inline text-[11px] font-bold text-slate-200">Sistem &amp; Güvenlik</span>
               </button>
             )}
 

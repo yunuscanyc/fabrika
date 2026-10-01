@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Shield, Key, Lock, Clock, CheckCircle2, AlertCircle, Save, Hash, Bell, Smartphone, Send, Radio, Share2, PlusSquare, HelpCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, Shield, Key, Lock, Clock, CheckCircle2, AlertCircle, Save, Hash, Bell, Smartphone, Send, Radio, Share2, PlusSquare, HelpCircle, ChevronDown, ChevronUp, Database } from 'lucide-react';
 import { 
   isPushNotificationSupported, 
   isIOSDevice,
@@ -16,13 +16,17 @@ interface SecuritySettingsModalProps {
   onClose: () => void;
   onSettingsUpdated?: (newAutoLockMin: number) => void;
   currentUserName?: string;
+  onOpenNotificationSettings?: () => void;
+  onOpenDbModal?: () => void;
 }
 
 export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
   isOpen,
   onClose,
   onSettingsUpdated,
-  currentUserName = '1. Yönetici'
+  currentUserName = '1. Yönetici',
+  onOpenNotificationSettings,
+  onOpenDbModal
 }) => {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
@@ -270,8 +274,8 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
               <Shield className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h3 className="font-bold text-sm text-white">Güvenlik &amp; Parola Ayarları</h3>
-              <p className="text-[11px] text-slate-300">Gizli PIN, parola, bildirim ve otomatik kilit yönetimi</p>
+              <h3 className="font-bold text-sm text-white">Sistem &amp; Güvenlik Merkezi</h3>
+              <p className="text-[11px] text-slate-300">Güvenlik, PIN, Bildirim Tercihleri &amp; Veritabanı</p>
             </div>
           </div>
           <button
@@ -281,6 +285,47 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
           >
             <X className="w-5 h-5" />
           </button>
+        </div>
+
+        {/* Hızlı Erişim / Alt Sekmeler */}
+        <div className="px-4 py-2 bg-slate-100 border-b border-slate-200 flex items-center justify-start gap-1.5 flex-wrap shrink-0">
+          <button
+            type="button"
+            className="px-3 py-1.5 bg-blue-600 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1 cursor-default shrink-0"
+          >
+            <Shield className="w-3.5 h-3.5" />
+            <span>🛡️ Güvenlik &amp; PIN</span>
+          </button>
+
+          {onOpenNotificationSettings && (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenNotificationSettings();
+              }}
+              className="px-3 py-1.5 bg-white hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl border border-slate-300 shadow-xs transition flex items-center gap-1 cursor-pointer shrink-0"
+              title="Ayrıntılı Olay Bildirim Tercihlerini Aç"
+            >
+              <Bell className="w-3.5 h-3.5 text-amber-500" />
+              <span>🔔 Bildirim Tercihleri</span>
+            </button>
+          )}
+
+          {onOpenDbModal && (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenDbModal();
+              }}
+              className="px-3 py-1.5 bg-white hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl border border-slate-300 shadow-xs transition flex items-center gap-1 cursor-pointer shrink-0"
+              title="Canlı Veritabanı ve Tek Tuşla Yedekleme / Geri Yükleme"
+            >
+              <Database className="w-3.5 h-3.5 text-emerald-600" />
+              <span>💾 Veritabanı &amp; Yedekleme</span>
+            </button>
+          )}
         </div>
 
         {/* Modal İçerik (Kaydırılabilir Gövde) */}

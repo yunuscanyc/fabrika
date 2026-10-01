@@ -1358,6 +1358,8 @@ export default function App() {
           onClose={() => setSecurityModalOpen(false)}
           onSettingsUpdated={(newMin) => setAutoLockMinutes(newMin)}
           currentUserName={currentUserName}
+          onOpenNotificationSettings={() => setNotifModalOpen(true)}
+          onOpenDbModal={() => setDbModalOpen(true)}
         />
       )}
 

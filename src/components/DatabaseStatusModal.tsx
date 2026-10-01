@@ -321,32 +321,52 @@ export const DatabaseStatusModal: React.FC<DatabaseStatusModalProps> = ({
                   <Table className="w-3.5 h-3.5 text-slate-500" />
                   Tespit Edilen Tablolar &amp; Canlı Kayıt Sayıları
                 </span>
-                <span className="text-[11px] text-slate-500">
-                  {Object.keys(dbStatus?.detectedTables || {}).length} tablo eşleşti
+                <span className="text-[11px] text-slate-500 font-bold text-emerald-700">
+                  {Object.keys(dbStatus?.detectedTables || {}).length} tablo bağlandı
                 </span>
               </div>
 
               <div className="grid grid-cols-2 gap-2 text-xs">
                 {[
-                  { key: 'Ceride', label: 'Şantiye Ceridesi' },
-                  { key: 'Projeler', label: 'Projeler' },
-                  { key: 'Personeller', label: 'Personeller' },
-                  { key: 'Departmanlar', label: 'Departmanlar' },
-                  { key: 'Gorevler', label: 'Görevler' },
-                  { key: 'Izinler', label: 'İzinler' },
-                  { key: 'Puantajlar', label: 'Puantaj Kayıtları' },
-                  { key: 'Makineler', label: 'Makineler' },
-                  { key: 'MakineBakimlari', label: 'Makine Bakımları' },
-                  { key: 'Araclar', label: 'Araçlar' },
-                  { key: 'Yevmiyeciler', label: 'Yevmiyeciler' },
-                  { key: 'KkdZimmetler', label: 'KKD Zimmetleri' },
-                  { key: 'SaglikRaporlari', label: 'Sağlık Raporları' },
-                  { key: 'IsgEgitimleri', label: 'İSG Eğitimleri' },
-                  { key: 'Hatirlaticilar', label: 'Hatırlatıcılar' },
-                  { key: 'MalzemeSiparisleri', label: 'Malzeme Siparişleri' }
+                  { key: 'ceride', label: 'Şantiye Ceridesi' },
+                  { key: 'projeler', label: 'Projeler &amp; Şantiyeler' },
+                  { key: 'personeller', label: 'Personel Kayıtları' },
+                  { key: 'departmanlar', label: 'Departmanlar' },
+                  { key: 'gorevler', label: 'Görevler' },
+                  { key: 'izinler', label: 'İzin Kayıtları' },
+                  { key: 'puantajlar', label: 'Puantaj Kayıtları' },
+                  { key: 'makineler', label: 'Makineler &amp; Ekipman' },
+                  { key: 'makineBakimlar', label: 'Makine Bakımları' },
+                  { key: 'araclar', label: 'Araç Filosu' },
+                  { key: 'aracBakimlar', label: 'Araç Bakımları' },
+                  { key: 'yevmiyeciler', label: 'Yevmiyeciler' },
+                  { key: 'kkdZimmetler', label: 'KKD Zimmetleri' },
+                  { key: 'saglikRaporlari', label: 'Sağlık Raporları' },
+                  { key: 'isgEgitimleri', label: 'İSG Eğitimleri' },
+                  { key: 'hatirlaticilar', label: 'Ajanda &amp; Hatırlatıcılar' },
+                  { key: 'malzemeSiparisleri', label: 'Malzeme Siparişleri' },
+                  { key: 'malzemeKatalog', label: 'Malzeme Kataloğu' }
                 ].map((item) => {
-                  const detected = dbStatus?.detectedTables?.[item.key];
-                  const count = dbStatus?.tableCounts?.[item.key];
+                  const lowerKey = item.key.toLowerCase();
+                  let detected: string | undefined = undefined;
+                  let count: any = undefined;
+
+                  if (dbStatus?.detectedTables) {
+                    for (const [k, v] of Object.entries(dbStatus.detectedTables)) {
+                      if (k.toLowerCase() === lowerKey || k.toLowerCase().includes(lowerKey)) {
+                        if (v) { detected = v; break; }
+                      }
+                    }
+                  }
+
+                  if (dbStatus?.tableCounts) {
+                    for (const [k, v] of Object.entries(dbStatus.tableCounts)) {
+                      if (k.toLowerCase() === lowerKey || k.toLowerCase().includes(lowerKey)) {
+                        if (v !== undefined) { count = v; break; }
+                      }
+                    }
+                  }
+
                   return (
                     <div
                       key={item.key}
@@ -355,19 +375,13 @@ export const DatabaseStatusModal: React.FC<DatabaseStatusModalProps> = ({
                       <div>
                         <p className="font-semibold text-slate-800 text-[11px]">{item.label}</p>
                         <p className="text-[10px] text-slate-400 font-mono">
-                          {detected ? `"${detected}"` : 'Tablo yok'}
+                          {detected ? `${detected}` : 'Hafıza Deposu'}
                         </p>
                       </div>
                       <div className="text-right">
-                        {detected ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                            {count !== undefined ? `${count} kayıt` : 'Var'}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-200 text-slate-600">
-                            Mevcut Değil
-                          </span>
-                        )}
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                          {count !== undefined ? `${count} kayıt` : 'Aktif'}
+                        </span>
                       </div>
                     </div>
                   );
