@@ -80,17 +80,15 @@ self.addEventListener('push', (event: PushEvent) => {
     data: { url: notifUrl }
   };
 
-  // Açık olan pencerelere anlık CANLI mesaj gönder (ön planda aktifse toast kartı açılır)
+  // Açık olan pencerelere anlık veri senkronizasyonu tetikleme mesajı gönder
   const clientPromise = (self.clients && self.clients.matchAll)
     ? self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
         if (Array.isArray(windowClients)) {
           windowClients.forEach((client) => {
             try {
               client.postMessage({
-                type: 'PUSH_NOTIFICATION_RECEIVED',
+                type: 'DATA_SYNC_TRIGGER',
                 payload: {
-                  title: notifTitle,
-                  body: notifBody,
                   url: notifUrl
                 }
               });

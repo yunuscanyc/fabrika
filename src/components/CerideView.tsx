@@ -138,6 +138,7 @@ export const CerideView: React.FC<CerideViewProps> = ({
   } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cerideLoadingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Yükleme Sayacı State
   const [yuklenenCount, setYuklenenCount] = useState<number>(0);
@@ -146,6 +147,9 @@ export const CerideView: React.FC<CerideViewProps> = ({
   // Ceride verilerini çek (Varsayılan: Sadece Bugün - Boşuna veri akışı olmasın)
   const fetchCeride = async (aralik: string = tarihFilter) => {
     try {
+      if (cerideLoadingTimerRef.current) {
+        clearInterval(cerideLoadingTimerRef.current);
+      }
       setLoading(true);
       setError(null);
       setYuklenenCount(0);
@@ -175,11 +179,11 @@ export const CerideView: React.FC<CerideViewProps> = ({
         } else {
           let curr = 0;
           const step = Math.max(1, Math.ceil(list.length / 8));
-          const timer = setInterval(() => {
+          cerideLoadingTimerRef.current = setInterval(() => {
             curr = Math.min(list.length, curr + step);
             setYuklenenCount(curr);
             if (curr >= list.length) {
-              clearInterval(timer);
+              if (cerideLoadingTimerRef.current) clearInterval(cerideLoadingTimerRef.current);
               setCerideList(list);
               setLoading(false);
             }

@@ -103,8 +103,18 @@ export default function App() {
   };
 
   // Service Worker ve sayfa içi olaylardan gelen anlık Push Bildirimlerini Ön Planda Canlı Toast Olarak Yakala
+  const lastShownToastRef = useRef<{ key: string; time: number }>({ key: '', time: 0 });
+
   useEffect(() => {
     const handlePushEvent = (payload: { title: string; body: string; url?: string }) => {
+      const toastKey = `${payload.title || ''}__${payload.body || ''}`;
+      const now = Date.now();
+      // 8 saniye içinde gelen aynı bildirimi tekrar gösterme (çift bildirim engelleme)
+      if (lastShownToastRef.current.key === toastKey && (now - lastShownToastRef.current.time) < 8000) {
+        return;
+      }
+      lastShownToastRef.current = { key: toastKey, time: now };
+
       setActivePushToast(payload);
       playPushNotificationSound();
 
@@ -117,7 +127,9 @@ export default function App() {
     };
 
     const handleSWMessage = (event: MessageEvent) => {
-      if (event.data && event.data.type === 'PUSH_NOTIFICATION_RECEIVED' && event.data.payload) {
+      if (event.data && event.data.type === 'DATA_SYNC_TRIGGER') {
+        triggerDataSync();
+      } else if (event.data && event.data.type === 'PUSH_NOTIFICATION_RECEIVED' && event.data.payload) {
         handlePushEvent(event.data.payload);
         triggerDataSync();
       }
@@ -137,9 +149,6 @@ export default function App() {
     window.addEventListener('SHOW_PUSH_TOAST', handleCustomToast);
 
     // Canlı Bildirim Kontrolü & Çoklu Cihaz Senkronizasyonu (2.5 saniyede bir tarama)
-    const seenNotifKeys = new Set<string>();
-    let isInitialized = false;
-
     const pollInterval = setInterval(() => {
       const uName = sessionStorage.getItem('rende_user_name') || currentUserName || '1. Yönetici';
       fetch(`/api/ajanda/bildirimler?user=${encodeURIComponent(uName)}`)
@@ -152,32 +161,6 @@ export default function App() {
             } else if (resData.syncTimestamp > lastSyncTsRef.current) {
               lastSyncTsRef.current = resData.syncTimestamp;
               triggerDataSync();
-            }
-          }
-
-          const list = Array.isArray(resData) ? resData : (resData?.bildirimler || []);
-          if (Array.isArray(list) && list.length > 0) {
-            const newItems: any[] = [];
-            for (const item of list) {
-              const key = `${item.Id || ''}-${item.Tarih || ''}-${item.Baslik || ''}`;
-              if (!seenNotifKeys.has(key)) {
-                seenNotifKeys.add(key);
-                if (isInitialized) {
-                  newItems.push(item);
-                }
-              }
-            }
-            if (!isInitialized) {
-              isInitialized = true;
-            } else if (newItems.length > 0) {
-              for (const latest of newItems) {
-                if (latest.YapanKisi !== 'Sistem' && !latest.Baslik?.includes('Hatırlatıcı Zamanı Geldi')) {
-                  handlePushEvent({
-                    title: `🔔 ${latest.Baslik || 'Rende Portal Bildirimi'}`,
-                    body: latest.Detay || `${latest.YapanKisi || 'Yönetici'} işlem yaptı.`
-                  });
-                }
-              }
             }
           }
         })
@@ -221,38 +204,54 @@ export default function App() {
   const [yukleniyor, setYukleniyor] = useState(true);
 
   // Sayfa Yükleme & Progress Durumu
-  const [sayfaYukleniyor, setSayfaYukleniyor] = useState<boolean>(true);
+  const [sayfaYukleniyor, setSayfaYukleniyor] = useState<boolean>(false);
   const [sayfaBaslik, setSayfaBaslik] = useState<string>('Veriler Yükleniyor...');
   const [yuklenenCount, setYuklenenCount] = useState<number>(0);
   const [toplamCount, setToplamCount] = useState<number>(0);
 
+  const pageLoadingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const pageProgressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
   const startPageLoading = (title: string) => {
+    // Ustabaşı sekmesinde ve Ceride / Sipariş sekmelerinde global yükleme çubuğunu açma
+    if (userRole === 'ustabasi' || activeTab === 'ceride' || activeTab === 'siparisler') {
+      setSayfaYukleniyor(false);
+      return;
+    }
+    if (pageLoadingTimerRef.current) clearTimeout(pageLoadingTimerRef.current);
+    if (pageProgressIntervalRef.current) clearInterval(pageProgressIntervalRef.current);
+
     setSayfaBaslik(title);
     setYuklenenCount(0);
     setToplamCount(0);
     setSayfaYukleniyor(true);
-    setYukleniyor(true);
+
+    // Güvenlik: Maksimum 2 saniye sonra göstergeyi kapat (takılı kalmayı kesin önler)
+    pageLoadingTimerRef.current = setTimeout(() => {
+      setSayfaYukleniyor(false);
+    }, 2000);
   };
 
   const finishPageLoadingWithCount = (total: number) => {
+    if (pageLoadingTimerRef.current) clearTimeout(pageLoadingTimerRef.current);
+    if (pageProgressIntervalRef.current) clearInterval(pageProgressIntervalRef.current);
+
     setToplamCount(total);
-    if (total === 0) {
+    if (total === 0 || userRole === 'ustabasi' || activeTab === 'ceride' || activeTab === 'siparisler') {
       setYuklenenCount(0);
       setSayfaYukleniyor(false);
-      setYukleniyor(false);
       return;
     }
     let current = 0;
     const step = Math.max(1, Math.ceil(total / 8));
-    const interval = setInterval(() => {
+    pageProgressIntervalRef.current = setInterval(() => {
       current = Math.min(total, current + step);
       setYuklenenCount(current);
       if (current >= total) {
-        clearInterval(interval);
+        if (pageProgressIntervalRef.current) clearInterval(pageProgressIntervalRef.current);
         setTimeout(() => {
           setSayfaYukleniyor(false);
-          setYukleniyor(false);
-        }, 150);
+        }, 120);
       }
     }, 25);
   };
@@ -663,6 +662,11 @@ export default function App() {
 
     const yukleAktifSekmeVerisi = async () => {
       try {
+        if (userRole === 'ustabasi' || activeTab === 'ceride' || activeTab === 'siparisler') {
+          setSayfaYukleniyor(false);
+          return;
+        }
+
         if (activeTab === 'dashboard') {
           startPageLoading('Dashboard İstatistikleri Yükleniyor...');
           const [resOzet, resDbStatus, resSiparisOzet] = await Promise.all([
@@ -722,11 +726,12 @@ export default function App() {
           const list = Array.isArray(resMakineler) ? resMakineler : [];
           setMakineler(list);
           finishPageLoadingWithCount(list.length);
+        } else {
+          setSayfaYukleniyor(false);
         }
       } catch (err) {
         console.error('Sekme verisi senkronizasyon hatası:', err);
         setSayfaYukleniyor(false);
-        setYukleniyor(false);
       }
     };
 
@@ -1223,7 +1228,7 @@ export default function App() {
 
       {/* Ana İçerik Alanı */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-4 sm:pt-6">
-        {(sayfaYukleniyor || yukleniyor) && (
+        {sayfaYukleniyor && userRole !== 'ustabasi' && activeTab !== 'ceride' && activeTab !== 'siparisler' && (
           <PageLoadingIndicator
             baslik={sayfaBaslik}
             yuklenenCount={yuklenenCount}
