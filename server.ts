@@ -24,8 +24,8 @@ types.setTypeParser(1184, (val: string) => val ? val.split('T')[0] : val);
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
 
-app.use(express.json({ limit: '100mb' }));
-app.use(express.urlencoded({ limit: '100mb', extended: true }));
+app.use(express.json({ limit: '500mb' }));
+app.use(express.urlencoded({ limit: '500mb', extended: true }));
 
 // PostgreSQL Havuz Yapılandırması (Hem yerel hem bulut/tünel bağlantılarını destekler)
 function createPgPool() {
@@ -4401,9 +4401,28 @@ app.get('/api/backup/export', async (req, res) => {
       if (typeof cnt === 'number') totalRecords += cnt;
     });
 
+    const isNoPhotos = req.query.noPhotos === 'true' || req.query.dataOnly === 'true';
+
+    const cleanDataForExport = (obj: any) => {
+      if (!isNoPhotos) return obj;
+      return JSON.parse(JSON.stringify(obj, (key, value) => {
+        if (typeof value === 'string' && (value.startsWith('data:image/') || value.startsWith('data:application/pdf'))) {
+          return '[MEDYA_HARIC]';
+        }
+        if (key.toLowerCase() === 'fotograflar' && Array.isArray(value)) {
+          return [];
+        }
+        return value;
+      }));
+    };
+
+    const finalTables = cleanDataForExport(tablesData);
+    const finalMemory = cleanDataForExport(memoryStores);
+
     const backupPayload = {
       version: '2.0.0',
       app: 'Rende Fabrika & Şantiye Yönetim Portalı',
+      isDataOnly: isNoPhotos,
       exportDate: exportTime.toISOString(),
       exportDateTR: trZaman,
       serverStatus: {
@@ -4413,8 +4432,8 @@ app.get('/api/backup/export', async (req, res) => {
       },
       tableCounts,
       totalRecords,
-      tables: tablesData,
-      memoryStores
+      tables: finalTables,
+      memoryStores: finalMemory
     };
 
     const jsonString = JSON.stringify(backupPayload);

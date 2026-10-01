@@ -63,13 +63,15 @@ export const DatabaseStatusModal: React.FC<DatabaseStatusModalProps> = ({
   };
 
   // TEK TUŞLA YEDEK İNDİR
-  const handleDownloadBackup = () => {
+  const handleDownloadBackup = (fullMedia = false) => {
     try {
       setDownloadingBackup(true);
       const link = document.createElement('a');
-      link.href = '/api/backup/export';
+      link.href = fullMedia ? '/api/backup/export' : '/api/backup/export?noPhotos=true';
       const dateStr = new Date().toISOString().slice(0, 10);
-      link.download = `rende_veritabani_yedek_${dateStr}.json`;
+      link.download = fullMedia 
+        ? `rende_veritabani_tam_yedek_${dateStr}.json`
+        : `rende_veritabani_hizli_veri_yedeği_${dateStr}.json`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -433,24 +435,31 @@ export const DatabaseStatusModal: React.FC<DatabaseStatusModalProps> = ({
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleDownloadBackup}
-                  disabled={downloadingBackup}
-                  className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                >
-                  {downloadingBackup ? (
-                    <>
+                <div className="space-y-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadBackup(false)}
+                    disabled={downloadingBackup}
+                    className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {downloadingBackup ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Yedek Hazırlanıyor...</span>
-                    </>
-                  ) : (
-                    <>
+                    ) : (
                       <Download className="w-4 h-4" />
-                      <span>Yedeği Bilgisayara İndir (.json)</span>
-                    </>
-                  )}
-                </button>
+                    )}
+                    <span>⚡ Hızlı Veri Yedeği İndir (~2 MB)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadBackup(true)}
+                    disabled={downloadingBackup}
+                    className="w-full py-2 px-3 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold text-[11px] rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <Download className="w-3.5 h-3.5 text-slate-600" />
+                    <span>🖼️ Tam Arşiv Yedeği (Fotoğraflı)</span>
+                  </button>
+                </div>
               </div>
 
               {/* SAĞ KART: TEK TUŞLA GERİ YÜKLE */}
