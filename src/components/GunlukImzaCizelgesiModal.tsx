@@ -41,13 +41,13 @@ export const GunlukImzaCizelgesiModal: React.FC<GunlukImzaCizelgesiModalProps> =
       <style dangerouslySetInnerHTML={{ __html: `
         @page {
           size: portrait;
-          margin: 1.2cm;
+          margin: 0 !important; /* Tarayıcının URL, Tarih, IP vb. tüm alt/üst bilgilerini zorla temizlemek için sıfır kenar boşluğu */
         }
         @media print {
-          /* Tarayıcı başlık/altlıklarını (URL, IP, Tarih vb.) tamamen gizler */
+          /* Sayfadaki IP, URL, Tarih gibi tarayıcı başlık/altlıklarını gizler ve mükemmel yerleşimi garanti eder */
           body {
             margin: 0 !important;
-            padding: 0 !important;
+            padding: 1.2cm 1.5cm !important; /* Kağıt kenarlarından güvenli boşluk bırakır */
             background: white !important;
             color: black !important;
           }
@@ -97,19 +97,22 @@ export const GunlukImzaCizelgesiModal: React.FC<GunlukImzaCizelgesiModalProps> =
           th {
             background-color: #f1f5f9 !important;
             color: black !important;
-            border: 1.5px solid #000 !important;
+            border: 1.2px solid #000 !important;
             font-weight: bold !important;
-            padding: 6px 4px !important;
+            padding: 4px 2px !important;
+            font-size: 10px !important;
             text-align: center !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
           td {
             color: black !important;
-            border: 1.5px solid #000 !important;
-            padding: 8px 6px !important;
+            border: 1.2px solid #000 !important;
+            padding: 4px 6px !important; /* Satır yüksekliğini dar yapar */
+            font-size: 10px !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
+            white-space: nowrap !important; /* İsimlerin asla alt satıra geçmesini istemiyoruz */
           }
           .print-hidden {
             display: none !important;
@@ -189,14 +192,14 @@ export const GunlukImzaCizelgesiModal: React.FC<GunlukImzaCizelgesiModalProps> =
             <table className="w-full text-left text-xs border-collapse border-2 border-black">
               <thead className="bg-slate-100 text-black">
                 <tr className="border-b-2 border-black">
-                  <th className="py-3 px-2 text-center border-r border-black font-extrabold w-12 bg-slate-100">Sıra</th>
-                  <th className="py-3 px-3 text-left border-r border-black font-extrabold bg-slate-100">Personel Adı Soyadı</th>
-                  <th className="py-3 px-2 text-center border-r border-black font-extrabold w-24 bg-slate-100">Giriş Saati</th>
-                  <th className="py-3 px-2 text-center border-r border-black font-extrabold w-24 bg-slate-100">Çıkış Saati</th>
-                  <th className="py-3 px-2 text-center border-r border-black font-extrabold w-20 bg-slate-100">Fazla Mesai</th>
-                  <th className="py-3 px-2 text-center border-r border-black font-extrabold w-20 bg-slate-100">Eksik Mesai</th>
-                  <th className="py-3 px-3 text-left border-r border-black font-extrabold w-36 bg-slate-100">Açıklamalar</th>
-                  <th className="py-3 px-4 text-center font-extrabold w-40 bg-slate-100">Personel İmzası</th>
+                  <th className="py-1 px-1.5 text-center border-r border-black font-extrabold w-12 bg-slate-100 text-[10px]">Sıra</th>
+                  <th className="py-1 px-3.5 text-left border-r border-black font-extrabold bg-slate-100 text-[10px]">Personel Adı Soyadı</th>
+                  <th className="py-1 px-1.5 text-center border-r border-black font-extrabold w-24 bg-slate-100 text-[10px]">Giriş Saati</th>
+                  <th className="py-1 px-1.5 text-center border-r border-black font-extrabold w-24 bg-slate-100 text-[10px]">Çıkış Saati</th>
+                  <th className="py-1 px-1.5 text-center border-r border-black font-extrabold w-20 bg-slate-100 text-[10px]">Fazla Mesai</th>
+                  <th className="py-1 px-1.5 text-center border-r border-black font-extrabold w-20 bg-slate-100 text-[10px]">Eksik Mesai</th>
+                  <th className="py-1 px-2.5 text-left border-r border-black font-extrabold w-36 bg-slate-100 text-[10px]">Açıklamalar</th>
+                  <th className="py-1 px-3 text-center font-extrabold w-40 bg-slate-100 text-[10px]">Personel İmzası</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/60">
@@ -209,28 +212,25 @@ export const GunlukImzaCizelgesiModal: React.FC<GunlukImzaCizelgesiModalProps> =
                 ) : (
                   aktifCalisanlar.map((p, idx) => (
                     <tr key={p.PersonelId} className="border-b border-black/30 hover:bg-slate-50 transition-colors">
-                      <td className="py-3 px-2 text-center border-r border-black font-bold text-black bg-slate-50/50">
+                      <td className="py-1 px-1.5 text-center border-r border-black font-bold text-black bg-slate-50/50 text-[10px]">
                         {idx + 1}
                       </td>
-                      <td className="py-3 px-3 border-r border-black font-black text-black">
+                      <td className="py-1 px-3.5 border-r border-black font-black text-black text-[11px] whitespace-nowrap overflow-hidden text-ellipsis">
                         {p.AdSoyad}
-                        <span className="text-[10px] text-slate-500 block font-normal print-hidden">
-                          {p.Departman} • {p.Gorev}
-                        </span>
                       </td>
                       {/* Giriş Saati Boşluk */}
-                      <td className="py-3 px-2 border-r border-black h-10"></td>
+                      <td className="py-1 px-1.5 border-r border-black h-8"></td>
                       {/* Çıkış Saati Boşluk */}
-                      <td className="py-3 px-2 border-r border-black h-10"></td>
+                      <td className="py-1 px-1.5 border-r border-black h-8"></td>
                       {/* Fazla Mesai Boşluk */}
-                      <td className="py-3 px-2 border-r border-black h-10"></td>
+                      <td className="py-1 px-1.5 border-r border-black h-8"></td>
                       {/* Eksik Mesai Boşluk */}
-                      <td className="py-3 px-2 border-r border-black h-10"></td>
+                      <td className="py-1 px-1.5 border-r border-black h-8"></td>
                       {/* Açıklamalar Boşluk */}
-                      <td className="py-3 px-3 border-r border-black h-10 text-slate-400"></td>
+                      <td className="py-1 px-2.5 border-r border-black h-8 text-slate-400"></td>
                       {/* İmza Atma Alanı */}
-                      <td className="py-3 px-4 h-10">
-                        <div className="w-full border-b border-dashed border-slate-400 h-6"></div>
+                      <td className="py-1 px-3 h-8">
+                        <div className="w-full border-b border-dashed border-slate-400 h-5"></div>
                       </td>
                     </tr>
                   ))
@@ -241,20 +241,19 @@ export const GunlukImzaCizelgesiModal: React.FC<GunlukImzaCizelgesiModalProps> =
                   const bosSiraNo = aktifCalisanlar.length + bIdx + 1;
                   return (
                     <tr key={`blank_${bIdx}`} className="border-b border-black/30 hover:bg-slate-50 transition-colors">
-                      <td className="py-3 px-2 text-center border-r border-black font-bold text-black bg-slate-50/50">
+                      <td className="py-1 px-1.5 text-center border-r border-black font-bold text-black bg-slate-50/50 text-[10px]">
                         {bosSiraNo}
                       </td>
-                      <td className="py-3 px-3 border-r border-black">
-                        <div className="w-full border-b border-dashed border-slate-400 h-6 mt-1"></div>
-                        <span className="text-[8px] text-slate-400 font-bold block pt-1 print:hidden">El Yazısı ile İsim Yazma Alanı</span>
+                      <td className="py-1 px-3.5 border-r border-black">
+                        <div className="w-full border-b border-dashed border-slate-350 h-5 mt-0.5"></div>
                       </td>
-                      <td className="py-3 px-2 border-r border-black h-10"></td>
-                      <td className="py-3 px-2 border-r border-black h-10"></td>
-                      <td className="py-3 px-2 border-r border-black h-10"></td>
-                      <td className="py-3 px-2 border-r border-black h-10"></td>
-                      <td className="py-3 px-3 border-r border-black h-10"></td>
-                      <td className="py-3 px-4 h-10">
-                        <div className="w-full border-b border-dashed border-slate-400 h-6"></div>
+                      <td className="py-1 px-1.5 border-r border-black h-8"></td>
+                      <td className="py-1 px-1.5 border-r border-black h-8"></td>
+                      <td className="py-1 px-1.5 border-r border-black h-8"></td>
+                      <td className="py-1 px-1.5 border-r border-black h-8"></td>
+                      <td className="py-1 px-2.5 border-r border-black h-8"></td>
+                      <td className="py-1 px-3 h-8">
+                        <div className="w-full border-b border-dashed border-slate-400 h-5"></div>
                       </td>
                     </tr>
                   );
