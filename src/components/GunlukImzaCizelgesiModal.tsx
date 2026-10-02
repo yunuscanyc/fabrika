@@ -36,7 +36,7 @@ export const GunlukImzaCizelgesiModal: React.FC<GunlukImzaCizelgesiModalProps> =
     .sort((a, b) => (a.AdSoyad || '').localeCompare(b.AdSoyad || 'TR'));
 
   return createPortal(
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 print-portal-container">
       {/* Yazdırma CSS'i */}
       <style dangerouslySetInnerHTML={{ __html: `
         @page {
@@ -44,49 +44,57 @@ export const GunlukImzaCizelgesiModal: React.FC<GunlukImzaCizelgesiModalProps> =
           margin: 1.2cm;
         }
         @media print {
-          /* Sayfadaki IP, URL, Tarih gibi tarayıcı başlık/altlıklarını gizler ve mükemmel yerleşimi garanti eder */
+          /* Tarayıcı başlık/altlıklarını (URL, IP, Tarih vb.) tamamen gizler */
           body {
             margin: 0 !important;
             padding: 0 !important;
             background: white !important;
             color: black !important;
           }
-          /* Çift yazdırma sorununu engellemek için root ve diğer her şeyi tamamen gizler, sadece print-area kalır */
           #root {
             display: none !important;
           }
-          body > *:not(.print-area) {
+          /* Ana portal dışındaki her şeyi gizle */
+          body > *:not(.print-portal-container) {
             display: none !important;
           }
-          .print-area {
-            display: block !important;
+          .print-portal-container {
             position: absolute !important;
             left: 0 !important;
             top: 0 !important;
             width: 100% !important;
-            max-width: 100% !important;
-            border: none !important;
-            box-shadow: none !important;
+            height: auto !important;
+            background: white !important;
+            color: black !important;
+            display: block !important;
+            overflow: visible !important;
             padding: 0 !important;
             margin: 0 !important;
-            visibility: visible !important;
           }
-          .print-area * {
-            visibility: visible !important;
+          .print-content-box {
+            background: white !important;
+            color: black !important;
+            border: none !important;
+            box-shadow: none !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            height: auto !important;
+            max-height: none !important;
+            overflow: visible !important;
+            margin: 0 !important;
+            padding: 0 !important;
           }
-          /* Sayfa Sonu Başlık Tekrarlama */
-          .print-area table {
+          /* Tablo stillerinin tam siyah olmasını sağlama */
+          table {
             width: 100% !important;
             border-collapse: collapse !important;
+            color: black !important;
           }
-          .print-area thead {
-            display: table-header-group !important;
-          }
-          .print-area tr {
+          tr {
             page-break-inside: avoid !important;
             break-inside: avoid !important;
           }
-          .print-area th {
+          th {
             background-color: #f1f5f9 !important;
             color: black !important;
             border: 1.5px solid #000 !important;
@@ -96,7 +104,7 @@ export const GunlukImzaCizelgesiModal: React.FC<GunlukImzaCizelgesiModalProps> =
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
-          .print-area td {
+          td {
             color: black !important;
             border: 1.5px solid #000 !important;
             padding: 8px 6px !important;
@@ -111,7 +119,7 @@ export const GunlukImzaCizelgesiModal: React.FC<GunlukImzaCizelgesiModalProps> =
 
       <div 
         onClick={(e) => e.stopPropagation()}
-        className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl my-6 flex flex-col max-h-[90vh]"
+        className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl my-6 flex flex-col max-h-[90vh] print-content-box"
       >
         {/* Üst Bar (Yazdırmada Gizlenir) */}
         <div className="px-6 py-4 bg-slate-950 border-b border-slate-800 flex flex-wrap justify-between items-center gap-3 print-hidden shrink-0">
