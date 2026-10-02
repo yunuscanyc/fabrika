@@ -6,7 +6,7 @@ import {
   ShieldAlert, RefreshCw, Layers, ArrowUpDown, Info, BookOpen, Camera
 } from 'lucide-react';
 import { MalzemeSiparisi, MalzemeSiparisBelgesi, MalzemeKatalogItem } from '../types';
-import { formatTarihTR } from '../utils/dateUtils';
+import { formatTarihTR, getBugunIso } from '../utils/dateUtils';
 import { PageLoadingIndicator } from './PageLoadingIndicator';
 import { SiparisYazdirModal } from './SiparisYazdirModal';
 import { UstabasiUyariModal } from './UstabasiUyariModal';
@@ -45,6 +45,7 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
   const [siparisler, setSiparisler] = useState<MalzemeSiparisi[]>([]);
   const [katalog, setKatalog] = useState<MalzemeKatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [yuklenenCount, setYuklenenCount] = useState<number>(0);
   const [toplamCount, setToplamCount] = useState<number>(0);
   const [filterDurum, setFilterDurum] = useState<string>('Aktifler');
@@ -76,7 +77,7 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
   }>>([]);
   const [formAciklama, setFormAciklama] = useState('');
   const [formAciliyet, setFormAciliyet] = useState<'Normal' | 'Acil' | 'CokAcil'>('Normal');
-  const [formTerminTarihi, setFormTerminTarihi] = useState('');
+  const [formTerminTarihi, setFormTerminTarihi] = useState<string>(() => getBugunIso());
   const [formTalepEden, setFormTalepEden] = useState(userRole === 'ustabasi' ? 'İmalat Ustabaşı' : 'Atölye Sorumlusu');
   const [formBelgeler, setFormBelgeler] = useState<any[]>([]);
   const [formLoading, setFormLoading] = useState(false);
@@ -96,22 +97,28 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  // Siparişleri API'den Çek
-  const fetchSiparisler = async () => {
+  // Siparişleri API'den Çek (isBackground: true ise ekranda hiçbir siyah yükleme/kararma çıkmaz)
+  const fetchSiparisler = async (isBackground: boolean = false) => {
     try {
-      setLoading(true);
-      setYuklenenCount(0);
-      setToplamCount(0);
+      if (!isBackground && siparisler.length === 0) {
+        setLoading(true);
+        setYuklenenCount(0);
+        setToplamCount(0);
+      } else if (!isBackground) {
+        setRefreshing(true);
+      }
+
       const res = await fetch('/api/siparisler');
       if (res.ok) {
         const data = await res.json();
         const list = Array.isArray(data) ? data : [];
         setToplamCount(list.length);
-        if (list.length === 0) {
-          setYuklenenCount(0);
-          setSiparisler([]);
-          setLoading(false);
-        } else {
+
+        if (isBackground) {
+          // Arka plan periyodik kontrolde sessizce güncelle (ekranda siyah hiçbir şey çıkmaz)
+          setSiparisler(list);
+        } else if (siparisler.length === 0) {
+          // Sadece sayfa ilk açıldığında tek seferlik yükleme animasyonu
           let curr = 0;
           const step = Math.max(1, Math.ceil(list.length / 8));
           const timer = setInterval(() => {
@@ -122,12 +129,22 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
               setSiparisler(list);
               setLoading(false);
             }
-          }, 25);
+          }, 20);
+        } else {
+          // Zaten açık olan ekranda butonla yenileme yapıldıysa kararmadan güncelle
+          setSiparisler(list);
+          setLoading(false);
         }
       }
     } catch (err) {
       console.error('Siparişler çekilemedi:', err);
-      setLoading(false);
+      if (!isBackground) {
+        setLoading(false);
+      }
+    } finally {
+      if (!isBackground) {
+        setRefreshing(false);
+      }
     }
   };
 
@@ -145,12 +162,12 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
   };
 
   useEffect(() => {
-    fetchSiparisler();
+    fetchSiparisler(false);
     fetchKatalog();
 
-    // Satınalma ve Ustabaşı ekranlarının anlık senkronizasyonu için 6 saniyede bir otomatik arka plan güncellemesi
+    // Satınalma ve Ustabaşı ekranlarının anlık senkronizasyonu için 6 saniyede bir sessiz arka plan kontrolü
     const intervalId = setInterval(() => {
-      fetchSiparisler();
+      fetchSiparisler(true);
     }, 6000);
 
     return () => clearInterval(intervalId);
@@ -275,7 +292,7 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
 
     setFormAciklama('');
     setFormAciliyet('Normal');
-    setFormTerminTarihi('');
+    setFormTerminTarihi(getBugunIso());
     setFormTalepEden(userRole === 'ustabasi' ? 'İmalat Ustabaşı' : 'Atölye Sorumlusu');
     setFormBelgeler([]);
     setKaydetKataloga(false);
@@ -324,7 +341,7 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
 
     setFormAciklama(siparis.Aciklama || '');
     setFormAciliyet(siparis.Aciliyet || 'Normal');
-    setFormTerminTarihi(siparis.TerminTarihi || '');
+    setFormTerminTarihi(siparis.TerminTarihi || getBugunIso());
     setFormTalepEden(siparis.TalepEden || '');
     setFormBelgeler(siparis.Belgeler || []);
     setKaydetKataloga(false);
@@ -755,11 +772,12 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
             </button>
 
             <button
-              onClick={fetchSiparisler}
-              className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer bg-white"
+              onClick={() => fetchSiparisler(false)}
+              disabled={refreshing}
+              className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer bg-white disabled:opacity-50"
               title="Yenile"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-blue-600' : ''}`} />
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-blue-600' : ''}`} />
             </button>
             <button
               onClick={handleOpenNewForm}
@@ -1621,7 +1639,7 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
                   </label>
                   <input
                     type="date"
-                    value={formTerminTarihi}
+                    value={formTerminTarihi || getBugunIso()}
                     onChange={(e) => setFormTerminTarihi(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />

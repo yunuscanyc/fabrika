@@ -79,7 +79,7 @@ self.addEventListener('push', (event: PushEvent) => {
 
   const uniqueTag = (data.tag || 'rende-push') + '-' + Date.now();
 
-  const notifOptions: NotificationOptions = {
+  const notifOptions: any = {
     body: notifBody,
     icon: iconUrl,
     badge: iconUrl,
