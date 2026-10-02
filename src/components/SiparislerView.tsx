@@ -147,6 +147,13 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
   useEffect(() => {
     fetchSiparisler();
     fetchKatalog();
+
+    // Satınalma ve Ustabaşı ekranlarının anlık senkronizasyonu için 6 saniyede bir otomatik arka plan güncellemesi
+    const intervalId = setInterval(() => {
+      fetchSiparisler();
+    }, 6000);
+
+    return () => clearInterval(intervalId);
   }, []);
 
   // Dinamik ve Statik Tüm Kategoriler (Tekilleştirilmiş)
