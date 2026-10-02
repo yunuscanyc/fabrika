@@ -82,7 +82,11 @@ self.addEventListener('push', (event: PushEvent) => {
   const notifOptions: NotificationOptions = {
     body: notifBody,
     icon: iconUrl,
+    badge: iconUrl,
     tag: uniqueTag,
+    renotify: true,
+    silent: false,
+    vibrate: [300, 200, 300, 200, 500],
     data: { url: notifUrl }
   };
 

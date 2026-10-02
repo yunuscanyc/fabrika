@@ -21,6 +21,7 @@ import { SecuritySettingsModal } from './components/SecuritySettingsModal';
 import { NotificationSettingsModal } from './components/NotificationSettingsModal';
 import { PushPromptBanner } from './components/PushPromptBanner';
 import { PageLoadingIndicator } from './components/PageLoadingIndicator';
+import { subscribeToPushNotifications } from './utils/pushManager';
 import { toSafeHeader } from './utils/dateUtils';
 import { Proje, Arac, BakimKaydi, Hatirlatici, OzetIstatistikler, Personel, IzinKaydi, Makine, Departman, Gorev, AjandaBildirimi } from './types';
 
@@ -145,6 +146,12 @@ export default function App() {
 
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
       navigator.serviceWorker.addEventListener('message', handleSWMessage);
+      // Uygulama açıldığında cihazın bildirim aboneliğini arka planda sunucuyla tazele
+      if ('PushManager' in window && 'Notification' in window && Notification.permission === 'granted') {
+        const uName = sessionStorage.getItem('rende_user_name') || currentUserName || '1. Yönetici';
+        const aId = sessionStorage.getItem('rende_admin_id') || currentAdminId || 'admin1';
+        subscribeToPushNotifications(uName, aId, false).catch(() => {});
+      }
     }
     window.addEventListener('SHOW_PUSH_TOAST', handleCustomToast);
 
