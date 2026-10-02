@@ -253,17 +253,7 @@ export async function sendTestPushNotification(userName: string): Promise<{ succ
       }
     }
 
-    // 2. Sayfa içi Canlı Bildirim Kartını ve Sesini Tetikle
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('SHOW_PUSH_TOAST', {
-        detail: {
-          title: '🔔 Rende Portal - Test Bildirimi',
-          body: `Harika! ${targetName} için bildirim sistemi aktif ve başarıyla çalışıyor.`
-        }
-      }));
-    }
-
-    // 3. Web Push Aboneliğini Sağla
+    // 2. Web Push Aboneliğini Sağla
     let subRes = await subscribeToPushNotifications(userName, adminId, false);
     if (!subRes.success) {
       subRes = await subscribeToPushNotifications(userName, adminId, true);

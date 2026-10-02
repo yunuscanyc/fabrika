@@ -54,29 +54,7 @@ export default function App() {
   const [securityModalOpen, setSecurityModalOpen] = useState<boolean>(false);
   const [notifModalOpen, setNotifModalOpen] = useState<boolean>(false);
   const [authChecking, setAuthChecking] = useState<boolean>(true);
-  const [activePushToast, setActivePushToast] = useState<{ title: string; body: string; url?: string } | null>(null);
-  const pushToastTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastActiveRef = useRef<number>(Date.now());
-
-  // Sesli bildirim çalma yardımcısı (Web Audio API)
-  const playPushNotificationSound = () => {
-    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-      osc.frequency.setValueAtTime(880, ctx.currentTime + 0.1); // A5
-      gain.gain.setValueAtTime(0.2, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.35);
-    } catch (e) {}
-  };
 
   const lastSyncTsRef = useRef<number>(0);
 
@@ -103,43 +81,9 @@ export default function App() {
     window.dispatchEvent(new CustomEvent('DATA_SYNC_REFRESH'));
   };
 
-  // Service Worker ve sayfa içi olaylardan gelen anlık Push Bildirimlerini Ön Planda Canlı Toast Olarak Yakala
-  const lastShownToastRef = useRef<{ key: string; time: number }>({ key: '', time: 0 });
-
   useEffect(() => {
-    const handlePushEvent = (payload: { title: string; body: string; url?: string }) => {
-      const toastKey = `${payload.title || ''}__${payload.body || ''}`;
-      const now = Date.now();
-      // 8 saniye içinde gelen aynı bildirimi tekrar gösterme (çift bildirim engelleme)
-      if (lastShownToastRef.current.key === toastKey && (now - lastShownToastRef.current.time) < 8000) {
-        return;
-      }
-      lastShownToastRef.current = { key: toastKey, time: now };
-
-      setActivePushToast(payload);
-      playPushNotificationSound();
-
-      if (pushToastTimerRef.current) {
-        clearTimeout(pushToastTimerRef.current);
-      }
-      pushToastTimerRef.current = setTimeout(() => {
-        setActivePushToast(null);
-      }, 7000);
-    };
-
     const handleSWMessage = (event: MessageEvent) => {
-      if (event.data && event.data.type === 'DATA_SYNC_TRIGGER') {
-        triggerDataSync();
-      } else if (event.data && event.data.type === 'PUSH_NOTIFICATION_RECEIVED' && event.data.payload) {
-        handlePushEvent(event.data.payload);
-        triggerDataSync();
-      }
-    };
-
-    const handleCustomToast = (event: Event) => {
-      const customEvt = event as CustomEvent;
-      if (customEvt.detail) {
-        handlePushEvent(customEvt.detail);
+      if (event.data && (event.data.type === 'DATA_SYNC_TRIGGER' || event.data.type === 'PUSH_NOTIFICATION_RECEIVED')) {
         triggerDataSync();
       }
     };
@@ -153,7 +97,6 @@ export default function App() {
         subscribeToPushNotifications(uName, aId, false).catch(() => {});
       }
     }
-    window.addEventListener('SHOW_PUSH_TOAST', handleCustomToast);
 
     // Canlı Bildirim Kontrolü & Çoklu Cihaz Senkronizasyonu (2.5 saniyede bir tarama)
     const pollInterval = setInterval(() => {
@@ -178,7 +121,6 @@ export default function App() {
       if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
         navigator.serviceWorker.removeEventListener('message', handleSWMessage);
       }
-      window.removeEventListener('SHOW_PUSH_TOAST', handleCustomToast);
       clearInterval(pollInterval);
     };
   }, []);
@@ -1185,34 +1127,6 @@ export default function App() {
 
       {/* Cep Telefonu & Web Push Bildirim Kurulum Bildirimi */}
       <PushPromptBanner currentUserName={currentUserName} />
-
-      {/* Ön Planda Canlı Gelen Push Bildirim Bannerı */}
-      {activePushToast && (
-        <div 
-          className="fixed left-1/2 -translate-x-1/2 z-[99999] max-w-md w-[calc(100vw-1.5rem)] bg-slate-900/98 border-2 border-blue-500 text-white p-4 rounded-2xl shadow-2xl backdrop-blur-xl flex items-start justify-between gap-3 animate-slideDown"
-          style={{ top: 'calc(1rem + env(safe-area-inset-top, 0px))' }}
-        >
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center shrink-0 shadow-lg">
-              <Bell className="w-5 h-5 text-white animate-bounce" />
-            </div>
-            <div>
-              <h4 className="text-xs font-bold text-white tracking-tight flex items-center gap-1.5">
-                <span>{activePushToast.title}</span>
-                <span className="text-[9px] bg-blue-500/30 text-blue-300 font-bold px-1.5 py-0.5 rounded border border-blue-400/30">CANLI</span>
-              </h4>
-              <p className="text-xs text-slate-300 mt-0.5 leading-snug">{activePushToast.body}</p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => setActivePushToast(null)}
-            className="text-slate-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
 
       {/* Admin için Ustabaşı Yeni Sipariş Canlı Bildirimi */}
       {userRole === 'admin' && (
