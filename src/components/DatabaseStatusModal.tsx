@@ -699,7 +699,7 @@ export const DatabaseStatusModal: React.FC<DatabaseStatusModalProps> = ({
 
           {activeTab === 'yedek' && (
             <button
-              onClick={handleDownloadBackup}
+              onClick={() => handleDownloadBackup()}
               disabled={downloadingBackup}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow transition disabled:opacity-50 cursor-pointer"
             >

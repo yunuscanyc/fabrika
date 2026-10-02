@@ -18,7 +18,30 @@ export const GunlukImzaCizelgesiModal: React.FC<GunlukImzaCizelgesiModalProps> =
   personeller,
   varsayilanTarih
 }) => {
-  const [seciliTarih, setSeciliTarih] = useState<string>(varsayilanTarih || getBugunIso());
+  const getTomorrowDate = (baseDateStr: string) => {
+    const match = (baseDateStr || '').match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (!match) return getBugunIso();
+    const y = parseInt(match[1], 10);
+    const m = parseInt(match[2], 10);
+    const d = parseInt(match[3], 10);
+    const dt = new Date(y, m - 1, d, 12, 0, 0);
+    dt.setDate(dt.getDate() + 1); // 1 gün sonrasını seç
+    const resY = dt.getFullYear();
+    const resM = String(dt.getMonth() + 1).padStart(2, '0');
+    const resD = String(dt.getDate()).padStart(2, '0');
+    return `${resY}-${resM}-${resD}`;
+  };
+
+  const [seciliTarih, setSeciliTarih] = useState<string>(() => {
+    const base = varsayilanTarih || getBugunIso();
+    return getTomorrowDate(base);
+  });
+
+  useEffect(() => {
+    if (varsayilanTarih) {
+      setSeciliTarih(getTomorrowDate(varsayilanTarih));
+    }
+  }, [varsayilanTarih]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -184,7 +207,6 @@ export const GunlukImzaCizelgesiModal: React.FC<GunlukImzaCizelgesiModalProps> =
                 <span className="flex items-center gap-1">
                   📅 TARİH: <strong className="underline text-sm">{formatTarihUzunTR(seciliTarih)}</strong>
                 </span>
-                <span>TOPLAM PERSONEL: {aktifCalisanlar.length} KİŞİ</span>
               </div>
             </div>
 

@@ -1,4 +1,20 @@
-// Web Push Notification Manager for Rende Portal
+// Web Push Notification Manager for Rende Portal (iOS Safari 16.4+, Android Chrome & Desktop)
+
+// Önceden bilinen ve sunucuyla eşleşen VAPID Genel Anahtarı (Kullanıcı etkileşiminde gecikme olmadan anında abone olabilmek için)
+const DEFAULT_VAPID_PUBLIC_KEY = 'BB-BlnsliiTrP_tgryzagLdjLTP7FOkJMBcJCuhTW7og11JGISYtM--dcTs1U-CEUlgeR_U9WKtbVk8guQc3J0c';
+let cachedVapidPublicKey: string = DEFAULT_VAPID_PUBLIC_KEY;
+
+// Sayfa ilk yüklendiğinde sunucudan güncel anahtarı arka planda al
+if (typeof window !== 'undefined') {
+  fetch('/api/push/public-key')
+    .then(r => r.json())
+    .then(d => {
+      if (d && d.publicKey) {
+        cachedVapidPublicKey = d.publicKey;
+      }
+    })
+    .catch(() => {});
+}
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -26,7 +42,10 @@ export function isPushNotificationSupported(): boolean {
 
 export function isIOSDevice(): boolean {
   if (typeof window === 'undefined') return false;
-  return /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
+  const ua = navigator.userAgent.toLowerCase();
+  const isIosUa = /iphone|ipad|ipod/.test(ua);
+  const isIpadOS = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  return isIosUa || isIpadOS;
 }
 
 export function isStandalonePWA(): boolean {
@@ -49,8 +68,8 @@ export async function registerServiceWorkerForPush(): Promise<ServiceWorkerRegis
     if (!reg) {
       reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
     }
-    await navigator.serviceWorker.ready;
-    return reg;
+    const readyReg = await navigator.serviceWorker.ready;
+    return readyReg || reg;
   } catch (err) {
     console.error('Service Worker kayit hatasi:', err);
     return null;
@@ -61,7 +80,7 @@ export async function getCurrentPushSubscription(): Promise<PushSubscription | n
   if (!isPushNotificationSupported()) return null;
   try {
     const reg = await registerServiceWorkerForPush();
-    if (!reg) return null;
+    if (!reg || !reg.pushManager) return null;
     return await reg.pushManager.getSubscription();
   } catch (err) {
     console.error('Push aboneligi kontrol hatasi:', err);
@@ -69,23 +88,33 @@ export async function getCurrentPushSubscription(): Promise<PushSubscription | n
   }
 }
 
+/**
+ * Kullanıcı etkileşimi (click/tap) içerisinde doğrudan çağrılmalıdır.
+ * Safari / iOS WebKit'te transient user activation süresi dolmaması için
+ * arada ağ isteği (fetch) yapılmadan doğrudan Notification.requestPermission()
+ * ve pushManager.subscribe() çalıştırılır.
+ */
 export async function subscribeToPushNotifications(
   userName: string, 
   adminId: string, 
   forceRenew: boolean = false
 ): Promise<{ success: boolean; error?: string; subscription?: PushSubscription }> {
+  const isIOS = isIOSDevice();
+  const isStandalone = isStandalonePWA();
+
+  if (isIOS && !isStandalone) {
+    return { 
+      success: false, 
+      error: '📱 iPhone Kuralı: Apple güvenlik politikası gereği bildirimler Safari sekmesinde çalışmaz. Lütfen Safari altındaki Paylaş (📤) simgesine dokunup "Ana Ekrana Ekle" (➕) yapın ve ardından Rende Portal\'ı Ana Ekrandan açarak bildirimleri açın.' 
+    };
+  }
+
   if (!isPushNotificationSupported()) {
-    if (isIOSDevice() && !isStandalonePWA()) {
-      return { 
-        success: false, 
-        error: 'iPhone (iOS 16.4+) Kurulum Kuralı: Bildirim alabilmek için lütfen önce Safari alttaki Paylaş (📤) simgesine basıp "Ana Ekrana Ekle" (➕) yapın ve ardından Rende Portal\'ı Ana Ekrandan açın.' 
-      };
-    }
     return { success: false, error: 'Cihazınız veya tarayıcınız Web Push bildirimlerini desteklemiyor.' };
   }
 
   try {
-    // 1. Kullanıcıdan bildirim izni iste
+    // 1. Kullanıcıdan bildirim izni iste (Doğrudan kullanıcı tıklama olayı içinde)
     let permission = Notification.permission;
     if (permission !== 'granted') {
       permission = await Notification.requestPermission();
@@ -94,30 +123,27 @@ export async function subscribeToPushNotifications(
       return { 
         success: false, 
         error: permission === 'denied' 
-          ? 'Bildirim izni engellenmiş. Lütfen tarayıcı veya telefon ayarlarından bildirimlere izin verin.' 
-          : 'Bildirim izni verilmedi.' 
+          ? (isIOS 
+              ? 'Bildirim izni iPhone\'da engellenmiş. Lütfen iPhone Ayarlar > Bildirimler > Rende Portal menüsünden bildirimlere izin verin.' 
+              : 'Bildirim izni engellenmiş. Lütfen tarayıcı ayarlarından bildirimlere izin verin.')
+          : 'Bildirim izni onaylanmadı.' 
       };
     }
 
     // 2. Service Worker hazırla
     const reg = await registerServiceWorkerForPush();
-    if (!reg) {
-      return { success: false, error: 'Service Worker başlatılamadı.' };
+    if (!reg || !reg.pushManager) {
+      return { success: false, error: 'Service Worker Push Yöneticisi başlatılamadı.' };
     }
 
     // 3. Mevcut aboneliği kontrol et
     let subscription = await reg.pushManager.getSubscription();
 
-    // 4. forceRenew istendiyse veya abonelik yoksa veya anahtarları eksikse sıfırdan abone ol
+    // 4. forceRenew veya abonelik yoksa veya anahtarları eksikse sıfırdan abone ol
     const needsNewSub = forceRenew || !subscription || !subscription.toJSON().keys;
 
     if (needsNewSub) {
-      const keyRes = await fetch('/api/push/public-key');
-      if (!keyRes.ok) throw new Error('VAPID sunucu anahtarı alınamadı.');
-      const { publicKey } = await keyRes.json();
-      if (!publicKey) throw new Error('Geçersiz VAPID anahtarı.');
-
-      const convertedKey = urlBase64ToUint8Array(publicKey);
+      const convertedKey = urlBase64ToUint8Array(cachedVapidPublicKey);
 
       if (subscription) {
         try {
@@ -153,7 +179,7 @@ export async function subscribeToPushNotifications(
       throw new Error('Push servisinden geçerli anahtarlar temin edilemedi.');
     }
 
-    // 5. Aboneliği sunucuya kaydet
+    // 5. Aboneliği sunucuya kaydet (Abonelik oluştuktan sonra asenkron gönderim)
     const subRes = await fetch('/api/push/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -179,7 +205,7 @@ export async function subscribeToPushNotifications(
 export async function unsubscribeFromPushNotifications(): Promise<{ success: boolean; error?: string }> {
   try {
     const reg = await registerServiceWorkerForPush();
-    if (reg) {
+    if (reg && reg.pushManager) {
       const subscription = await reg.pushManager.getSubscription();
       if (subscription) {
         const endpoint = subscription.endpoint;
@@ -188,7 +214,7 @@ export async function unsubscribeFromPushNotifications(): Promise<{ success: boo
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ endpoint })
-        });
+        }).catch(() => {});
       }
     }
     return { success: true };
@@ -199,6 +225,16 @@ export async function unsubscribeFromPushNotifications(): Promise<{ success: boo
 
 export async function sendTestPushNotification(userName: string): Promise<{ success: boolean; message?: string; error?: string }> {
   try {
+    const isIOS = isIOSDevice();
+    const isStandalone = isStandalonePWA();
+
+    if (isIOS && !isStandalone) {
+      return {
+        success: false,
+        error: '📱 iPhone Kuralı: Test bildirimi alabilmek için lütfen önce Safari Paylaş (📤) menüsünden "Ana Ekrana Ekle" (➕) yapın ve Rende Portal\'ı Ana Ekrandan açın.'
+      };
+    }
+
     const adminId = userName?.includes('2') ? 'admin2' : 'admin1';
     const targetName = userName || 'Yönetici';
     
@@ -207,12 +243,17 @@ export async function sendTestPushNotification(userName: string): Promise<{ succ
       if (Notification.permission !== 'granted') {
         const perm = await Notification.requestPermission();
         if (perm !== 'granted') {
-          return { success: false, error: 'Bildirim izni verilmedi. Lütfen tarayıcı ayarlarından bildirimlere izin verin.' };
+          return { 
+            success: false, 
+            error: isIOS
+              ? 'Bildirim izni verilmedi. Lütfen iPhone Ayarlar > Bildirimler > Rende Portal menüsünden bildirimleri açın.'
+              : 'Bildirim izni verilmedi. Lütfen tarayıcı ayarlarından bildirimlere izin verin.'
+          };
         }
       }
     }
 
-    // 2. Sayfa içi Canlı Bildirim Kartını ve Sesini Anında Tetikle
+    // 2. Sayfa içi Canlı Bildirim Kartını ve Sesini Tetikle
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('SHOW_PUSH_TOAST', {
         detail: {
@@ -222,73 +263,45 @@ export async function sendTestPushNotification(userName: string): Promise<{ succ
       }));
     }
 
-    // 3. Tarayıcı/İşletim Sistemi Bildirim Merkezine Yerel Anlık Bildirim İlet
-    let localNotifShown = false;
-    try {
-      const reg = await registerServiceWorkerForPush();
-      if (reg && 'showNotification' in reg) {
-        await reg.showNotification('🔔 Rende Portal - Test Bildirimi', {
-          body: `Harika! ${targetName} için bildirimler başarıyla aktif edildi.`,
-          icon: '/pwa-192x192.png',
-          badge: '/pwa-192x192.png',
-          tag: 'rende-test-instant-' + Date.now(),
-          data: { url: '/' }
-        });
-        localNotifShown = true;
-      } else if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-        new Notification('🔔 Rende Portal - Test Bildirimi', {
-          body: `Harika! ${targetName} için bildirimler başarıyla aktif edildi.`,
-          icon: '/pwa-192x192.png'
-        });
-        localNotifShown = true;
-      }
-    } catch (localErr) {
-      console.warn('Yerel bildirim tetikleme uyarısı:', localErr);
-    }
-
-    // 4. Web Push Aboneliğini Sunucuya Gönder ve Test Et
+    // 3. Web Push Aboneliğini Sağla
     let subRes = await subscribeToPushNotifications(userName, adminId, false);
     if (!subRes.success) {
       subRes = await subscribeToPushNotifications(userName, adminId, true);
     }
 
     const reg = await registerServiceWorkerForPush();
-    let subscription = reg ? await reg.pushManager.getSubscription() : null;
+    let subscription = (reg && reg.pushManager) ? await reg.pushManager.getSubscription() : null;
 
-    try {
-      const res = await fetch('/api/push/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          subscription: subscription ? subscription.toJSON() : null,
-          userName: targetName
-        })
-      });
-      
-      const data = await res.json().catch(() => ({}));
-
-      if (res.ok && data.success) {
-        return { 
-          success: true, 
-          message: data.message || '✅ Test bildirimi ekranınıza ve bildirim merkezinize başarıyla iletildi!' 
-        };
-      }
-    } catch (netErr) {
-      console.warn('Sunucu push test uyarısı:', netErr);
-    }
-
-    // Yerel bildirim gösterildiyse kullanıcıya her halükarda başarı bildir
-    if (localNotifShown) {
-      return { 
-        success: true, 
-        message: '✅ Test bildirimi masaüstünüze ve ekranın üst kısmına başarıyla iletildi!' 
+    if (!subscription) {
+      return {
+        success: false,
+        error: 'Cihazınızda push aboneliği oluşturulamadı. Lütfen Safari ayarlarınızı kontrol edin.'
       };
     }
 
-    return { 
-      success: true, 
-      message: '✅ Test bildirimi başarıyla oluşturuldu ve cihazınıza iletildi!' 
-    };
+    // 4. Sunucu üzerinden Web Push gönder
+    const res = await fetch('/api/push/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subscription: subscription.toJSON(),
+        userName: targetName
+      })
+    });
+    
+    const data = await res.json().catch(() => ({}));
+
+    if (res.ok && data.success) {
+      return { 
+        success: true, 
+        message: data.message || '✅ Test bildirimi telefonunuzun kilit ekranına ve bildirim merkezine başarıyla iletildi!' 
+      };
+    } else {
+      return {
+        success: false,
+        error: data.error || 'Sunucu test bildirimini cihaza iletemedi.'
+      };
+    }
   } catch (err: any) {
     return { success: false, error: err.message || 'Sunucu bağlantı hatası oluştu.' };
   }

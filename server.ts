@@ -808,6 +808,61 @@ function normalizeCeride(row: any) {
   };
 }
 
+function normalizeMalzemeSiparisi(row: any) {
+  let dbKalemler: any[] = [];
+  const rawKalemler = getProp(row, 'Kalemler', 'kalemler');
+  if (rawKalemler) {
+    if (typeof rawKalemler === 'string') {
+      try { dbKalemler = JSON.parse(rawKalemler); } catch (e) {}
+    } else if (Array.isArray(rawKalemler)) {
+      dbKalemler = rawKalemler;
+    }
+  }
+
+  let dbBelgeler: any[] = [];
+  const rawBelgeler = getProp(row, 'Belgeler', 'belgeler');
+  if (rawBelgeler) {
+    if (typeof rawBelgeler === 'string') {
+      try { dbBelgeler = JSON.parse(rawBelgeler); } catch (e) {}
+    } else if (Array.isArray(rawBelgeler)) {
+      dbBelgeler = rawBelgeler;
+    }
+  }
+
+  const rawId = getProp(row, 'Id', 'id');
+  const numId = Number(rawId);
+
+  return {
+    Id: isNaN(numId) ? Date.now() : numId,
+    SiparisNo: String(getProp(row, 'SiparisNo', 'siparisno') || ''),
+    ProjeAdi: String(getProp(row, 'ProjeAdi', 'projeadi') || ''),
+    Kategori: String(getProp(row, 'Kategori', 'kategori') || ''),
+    MalzemeAdi: String(getProp(row, 'MalzemeAdi', 'malzemeadi') || ''),
+    Marka: String(getProp(row, 'Marka', 'marka') || ''),
+    Model: String(getProp(row, 'Model', 'model') || ''),
+    Miktar: Number(getProp(row, 'Miktar', 'miktar') || 1),
+    Birim: String(getProp(row, 'Birim', 'birim') || 'Adet'),
+    Olculer: String(getProp(row, 'Olculer', 'olculer') || ''),
+    Aciklama: String(getProp(row, 'Aciklama', 'aciklama') || ''),
+    Aciliyet: String(getProp(row, 'Aciliyet', 'aciliyet') || 'Normal'),
+    TerminTarihi: String(getProp(row, 'TerminTarihi', 'termintarihi') || ''),
+    Tarih: String(getProp(row, 'Tarih', 'tarih') || ''),
+    TalepEden: String(getProp(row, 'TalepEden', 'talepeden') || ''),
+    Durum: String(getProp(row, 'Durum', 'durum') || 'Bekliyor'),
+    KilitliMi: Boolean(getProp(row, 'KilitliMi', 'kilitlimi')),
+    KilitleyenKisi: String(getProp(row, 'KilitleyenKisi', 'kilitleyenkisi') || ''),
+    KilitTarihi: String(getProp(row, 'KilitTarihi', 'kilittarihi') || ''),
+    KilitNotu: String(getProp(row, 'KilitNotu', 'kilitnotu') || ''),
+    TedarikciFirma: String(getProp(row, 'TedarikciFirma', 'tedarikcifirma') || ''),
+    SiparisTarihi: String(getProp(row, 'SiparisTarihi', 'siparistarihi') || ''),
+    TahminiTutar: getProp(row, 'TahminiTutar', 'tahminitutar') ? Number(getProp(row, 'TahminiTutar', 'tahminitutar')) : null,
+    FaturaIrsaliyeNo: String(getProp(row, 'FaturaIrsaliyeNo', 'faturairsaliyeno') || ''),
+    SatinalmaNotu: String(getProp(row, 'SatinalmaNotu', 'satinalmanotu') || ''),
+    Kalemler: dbKalemler,
+    Belgeler: dbBelgeler
+  };
+}
+
 function getFileExtension(filename?: string, content?: string): string {
   if (filename && filename.includes('.')) {
     const parts = filename.split('.');
@@ -6848,13 +6903,13 @@ app.post('/api/push/test', async (req, res) => {
       title: '🔔 Rende Portal - Test Bildirimi',
       body: `Harika! ${targetName} için bildirimler başarıyla aktif edildi.`,
       icon: '/pwa-192x192.png',
-      badge: '/pwa-192x192.png',
       url: '/'
     });
 
     if (subscription && subscription.endpoint && subscription.keys) {
+      const isApple = String(subscription.endpoint).includes('apple.com');
       try {
-        console.log(`[PUSH TEST GÖNDERİLİYOR] -> ${targetName} (${subscription.endpoint.slice(0, 35)}...)`);
+        console.log(`[PUSH TEST GÖNDERİLİYOR] -> ${targetName} (${subscription.endpoint.slice(0, 35)}...)${isApple ? ' [Apple APNs]' : ''}`);
         const p256dhKey = String(subscription.keys.p256dh || '').trim();
         const authKey = String(subscription.keys.auth || '').trim();
 
@@ -6874,33 +6929,38 @@ app.post('/api/push/test', async (req, res) => {
           }
         });
         console.log(`[PUSH TEST BAŞARIYLA İLETİLDİ] -> ${targetName}`);
-        return res.json({ success: true, message: 'Test bildirimi cihazınıza başarıyla iletildi!' });
+        return res.json({ 
+          success: true, 
+          message: isApple
+            ? '✅ Test bildirimi Apple Push (APNs) servisine iletildi! iPhone kilit ekranınızı kontrol edin.'
+            : '✅ Test bildirimi cihazınıza başarıyla iletildi!' 
+        });
       } catch (directErr: any) {
         console.error(`[PUSH TEST DIRECT ERROR] ${targetName}:`, directErr.statusCode, directErr.message, directErr.body);
-        if (directErr.statusCode === 404 || directErr.statusCode === 410 || directErr.statusCode === 401 || directErr.statusCode === 403) {
+        if (directErr.statusCode === 404 || directErr.statusCode === 410) {
           memPushSubscriptions = memPushSubscriptions.filter(s => s.endpoint !== subscription.endpoint);
           if (isDbConnected) {
             pool.query(`DELETE FROM "PushSubscriptions" WHERE "Endpoint" = $1`, [subscription.endpoint]).catch(() => {});
           }
         }
-        return res.json({
-          success: true,
-          message: 'Test bildirimi tarayıcınıza iletildi.'
+        return res.status(directErr.statusCode || 400).json({
+          success: false,
+          error: `Push servisi iletim hatası (${directErr.statusCode || 'Hata'}): ${directErr.message || 'Bildirim gönderilemedi.'}`
         });
       }
     }
 
     // Aksi halde kayıtlı olan kullanıcılara test gönder
-    sendWebPushNotification('', {
+    await sendWebPushNotification('', {
       title: '🔔 Rende Portal - Test Bildirimi',
       body: `${targetName} tarafından test bildirimi tetiklendi.`,
       url: '/'
-    }).catch(() => {});
+    });
 
-    res.json({ success: true, message: 'Test bildirimi başarıyla iletildi!' });
+    res.json({ success: true, message: 'Test bildirimi kayıtlı cihazlara başarıyla iletildi!' });
   } catch (err: any) {
     console.error('[PUSH TEST ERROR]', err.message);
-    res.json({ success: true, message: 'Test bildirimi başarıyla iletildi!' });
+    res.status(500).json({ success: false, error: err.message || 'Test bildirimi iletilemedi.' });
   }
 });
 
@@ -11318,6 +11378,8 @@ async function startServer() {
   // PWA Service Worker & Manifest Endpoints
   app.get('/sw.js', (req, res) => {
     res.setHeader('Content-Type', 'application/javascript; charset=UTF-8');
+    res.setHeader('Service-Worker-Allowed', '/');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     const swPath = path.join(process.cwd(), 'public', 'sw.js');
     if (fs.existsSync(swPath)) {
       return res.sendFile(swPath);

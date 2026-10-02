@@ -48,12 +48,12 @@ function cleanTurkishMojibake(text: any): string {
 
 // ==========================================
 // PUSH BİLDİRİM VE KİLİT EKRANI UYARILARI
-// (Firefox PC, iOS Safari 16.4+, Android Chrome & Edge)
+// (iOS Safari 16.4+, Android Chrome, Edge & PC)
 // ==========================================
 self.addEventListener('push', (event: PushEvent) => {
   let data: any = {
     title: '🔔 Rende Portal Bildirimi',
-    body: 'Yeni bir işlem kaydedildi.',
+    body: 'Yeni bir işlem veya bildirim kaydedildi.',
     url: '/',
     data: {}
   };
@@ -69,26 +69,48 @@ self.addEventListener('push', (event: PushEvent) => {
   }
 
   const notifTitle = cleanTurkishMojibake(data.title || '🔔 Rende Portal');
-  const notifBody = cleanTurkishMojibake(data.body || 'Yeni bir işlem veya bildirim kaydedildi.');
+  const notifBody = cleanTurkishMojibake(data.body || 'Yeni bir işlem kaydedildi.');
   const notifUrl = (data.data && data.data.url) || data.url || '/';
+
+  let iconUrl = '/pwa-192x192.png';
+  try {
+    iconUrl = new URL('/pwa-192x192.png', self.location.origin).href;
+  } catch (e) {}
+
+  const uniqueTag = (data.tag || 'rende-push') + '-' + Date.now();
 
   const notifOptions: NotificationOptions = {
     body: notifBody,
-    icon: '/pwa-192x192.png',
-    badge: '/pwa-192x192.png',
-    tag: (data.tag || 'rende-notification') + '-' + Date.now() + '-' + Math.floor(Math.random() * 10000),
+    icon: iconUrl,
+    tag: uniqueTag,
     data: { url: notifUrl }
   };
 
-  // Açık olan pencerelere anlık veri senkronizasyonu tetikleme mesajı gönder
+  const showPromise = self.registration.showNotification(notifTitle, notifOptions).catch((err) => {
+    console.warn('[SW Push] Detaylı bildirim gösterilemedi, sade deneniyor:', err);
+    return self.registration.showNotification(notifTitle, {
+      body: notifBody
+    }).catch((e) => {
+      console.error('[SW Push] Sade bildirim de gösterilemedi:', e);
+    });
+  });
+
+  if (self.navigator && 'setAppBadge' in self.navigator) {
+    try {
+      (self.navigator as any).setAppBadge(1).catch(() => {});
+    } catch (e) {}
+  }
+
   const clientPromise = (self.clients && self.clients.matchAll)
     ? self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
         if (Array.isArray(windowClients)) {
           windowClients.forEach((client) => {
             try {
               client.postMessage({
-                type: 'DATA_SYNC_TRIGGER',
+                type: 'PUSH_NOTIFICATION_RECEIVED',
                 payload: {
+                  title: notifTitle,
+                  body: notifBody,
                   url: notifUrl
                 }
               });
@@ -98,15 +120,6 @@ self.addEventListener('push', (event: PushEvent) => {
       }).catch(() => {})
     : Promise.resolve();
 
-  // Tarayıcı ve işletim sistemi bildirim merkezinde göster
-  const showPromise = self.registration.showNotification(notifTitle, notifOptions).catch((err) => {
-    console.warn('[SW Push] Detaylı gösterim hatası, sade fallback deneniyor:', err);
-    return self.registration.showNotification(notifTitle, {
-      body: notifBody,
-      icon: '/pwa-192x192.png'
-    });
-  });
-
   event.waitUntil(Promise.all([showPromise, clientPromise]));
 });
 
@@ -115,12 +128,18 @@ self.addEventListener('notificationclick', (event: NotificationEvent) => {
     event.notification.close();
   } catch (e) {}
 
+  if (self.navigator && 'clearAppBadge' in self.navigator) {
+    try {
+      (self.navigator as any).clearAppBadge().catch(() => {});
+    } catch (e) {}
+  }
+
   const targetUrl = (event.notification && event.notification.data && event.notification.data.url) || '/';
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
       for (const client of windowClients) {
-        if ('focus' in client) {
+        if (client.url && 'focus' in client) {
           if ('navigate' in client) {
             (client as any).navigate(targetUrl).catch(() => {});
           }

@@ -113,7 +113,7 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
   const handleTogglePush = async () => {
     if (isIOS && !isStandalone) {
       setShowIosGuide(true);
-      setPushMsg('📱 iPhone kuralı: Önce Safari Paylaş menüsünden "Ana Ekrana Ekle" yapmalı ve Ana Ekrandan açmalısınız.');
+      setPushMsg('📱 iPhone kuralı: Apple güvenlik politikası gereği bildirimler Safari sekmesinde çalışmaz. Lütfen Safari Paylaş menüsünden "Ana Ekrana Ekle" yapıp Ana Ekrandan açın.');
       return;
     }
 
@@ -128,7 +128,12 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
         const res = await subscribeToPushNotifications(currentUserName, currentUserName.includes('2') ? 'admin2' : 'admin1', true);
         if (res.success) {
           setPushSubscribed(true);
-          setPushMsg('✅ Tebrikler! Bildirimler başarıyla aktifleştirildi.');
+          setPushMsg(isIOS 
+            ? '✅ Tebrikler! iPhone bildirimleri başarıyla aktifleştirildi. Kilit ekranında bildirimler görünecektir.' 
+            : '✅ Tebrikler! Bildirimler başarıyla aktifleştirildi.'
+          );
+          // iPhone veya masaüstünde anında test bildirimi ilet
+          sendTestPushNotification(currentUserName).catch(() => {});
         } else {
           setPushMsg(`❌ ${res.error || 'Bildirim izni verilemedi.'}`);
         }
@@ -141,13 +146,19 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
   };
 
   const handleTestPush = async () => {
+    if (isIOS && !isStandalone) {
+      setShowIosGuide(true);
+      setPushMsg('📱 iPhone kuralı: Test bildirimi alabilmek için lütfen uygulamayı Safari Paylaş menüsünden "Ana Ekrana Ekle" yapıp Ana Ekrandan açın.');
+      return;
+    }
+
     setPushLoading(true);
     setPushMsg(null);
     try {
       const res = await sendTestPushNotification(currentUserName);
       if (res.success) {
         setPushSubscribed(true);
-        setPushMsg(res.message || '✅ Test bildirimi başarıyla gönderildi! (Masaüstü ve ekran bildiriminiz tetiklendi)');
+        setPushMsg(res.message || '✅ Test bildirimi telefonunuzun kilit ekranına başarıyla gönderildi!');
       } else {
         setPushMsg(`❌ ${res.error || 'Test bildirimi gönderilemedi.'}`);
       }
@@ -643,6 +654,19 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                   </div>
                 )}
 
+                {/* iPhone Ana Ekran Modunda Hazır Bilgisi */}
+                {isIOS && isStandalone && !pushSubscribed && (
+                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs space-y-1.5">
+                    <div className="flex items-center gap-1.5 font-bold text-emerald-900 text-xs">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span>📱 iPhone Ana Ekran Modu Aktif</span>
+                    </div>
+                    <p className="text-[11px] text-emerald-900/90 leading-relaxed">
+                      Uygulama başarıyla ana ekrana eklenmiş. Aşağıdaki <strong>"Bildirimleri Aç (iPhone)"</strong> butonuna dokunup gelen ekranda <strong>"İzin Ver"</strong> demeniz yeterlidir.
+                    </p>
+                  </div>
+                )}
+
                 {pushMsg && (
                   <div className={`p-2 rounded-lg text-xs font-semibold ${
                     pushMsg.startsWith('✅') 
@@ -674,22 +698,22 @@ export const SecuritySettingsModal: React.FC<SecuritySettingsModalProps> = ({
                         ? 'Bildirimleri Kapat' 
                         : isIOS && !isStandalone 
                         ? 'iPhone Kurulumunu Göster' 
+                        : isIOS && isStandalone
+                        ? 'Bildirimleri Aç (iPhone)'
                         : 'Bildirimleri Aç'}
                     </span>
                   </button>
 
-                  {pushSubscribed && (
-                    <button
-                      type="button"
-                      onClick={handleTestPush}
-                      disabled={pushLoading}
-                      className="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
-                      title="Test Bildirimi Gönder"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      <span>Test Et</span>
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={handleTestPush}
+                    disabled={pushLoading}
+                    className="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
+                    title="Cihazınıza Canlı Test Bildirimi Gönderin"
+                  >
+                    <Send className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Test Et</span>
+                  </button>
                 </div>
               </div>
 

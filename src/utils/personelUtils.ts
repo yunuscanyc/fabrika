@@ -50,7 +50,7 @@ export function isPersonelCalisiyorMuTarihte(personel: Personel, tarih: string):
   }
 
   // 2. Eğer DurumAktifMi false ise veya CalismaDurumu 'Ayrıldı' / 'Ayrılmış' ise
-  if (personel.DurumAktifMi === false || personel.CalismaDurumu === 'Ayrıldı' || personel.CalismaDurumu === 'Ayrılmış') {
+  if (personel.DurumAktifMi === false || (personel as any).CalismaDurumu === 'Ayrıldı' || (personel as any).CalismaDurumu === 'Ayrılmış') {
     const donemler = getPersonelGirisCikisDonemleri(personel);
     const aktifDonemVar = donemler.some(d => {
       const giris = (d.GirisTarihi || '').slice(0, 10);

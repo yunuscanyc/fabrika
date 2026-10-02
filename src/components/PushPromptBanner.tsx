@@ -6,7 +6,8 @@ import {
   isStandalonePWA,
   getCurrentPushSubscription, 
   subscribeToPushNotifications, 
-  getNotificationPermission 
+  getNotificationPermission,
+  sendTestPushNotification
 } from '../utils/pushManager';
 
 interface PushPromptBannerProps {
@@ -31,20 +32,21 @@ export const PushPromptBanner: React.FC<PushPromptBannerProps> = ({ currentUserN
     const isSupported = isPushNotificationSupported() || (ios && !standalone);
     if (!isSupported) return;
 
-    const dismissed = localStorage.getItem('rende_push_prompt_dismissed');
+    const storageKey = standalone ? 'rende_push_prompt_dismissed_pwa' : 'rende_push_prompt_dismissed';
+    const dismissed = localStorage.getItem(storageKey);
     if (dismissed && Date.now() - parseInt(dismissed, 10) < 7 * 24 * 60 * 60 * 1000) {
       return;
     }
 
     if (ios && !standalone) {
-      // iPhone kullanıcısına 3 saniye sonra kurulum daveti göster
+      // iPhone kullanıcısına Safari içinde 3 saniye sonra kurulum daveti göster
       const timer = setTimeout(() => setShow(true), 3000);
       return () => clearTimeout(timer);
     }
 
     getCurrentPushSubscription().then(sub => {
       if (!sub && getNotificationPermission() !== 'denied') {
-        const timer = setTimeout(() => setShow(true), 3000);
+        const timer = setTimeout(() => setShow(true), 2500);
         return () => clearTimeout(timer);
       }
     }).catch(() => {});
@@ -62,9 +64,11 @@ export const PushPromptBanner: React.FC<PushPromptBannerProps> = ({ currentUserN
       const res = await subscribeToPushNotifications(currentUserName, adminId);
       if (res.success) {
         setSuccess(true);
+        // Otomatik test bildirimi tetikle
+        sendTestPushNotification(currentUserName).catch(() => {});
         setTimeout(() => {
           setShow(false);
-        }, 2500);
+        }, 3000);
       } else {
         alert(res.error || 'Bildirim izni alınamadı.');
         setShow(false);
@@ -78,7 +82,8 @@ export const PushPromptBanner: React.FC<PushPromptBannerProps> = ({ currentUserN
   };
 
   const handleDismiss = () => {
-    localStorage.setItem('rende_push_prompt_dismissed', Date.now().toString());
+    const storageKey = isStandalone ? 'rende_push_prompt_dismissed_pwa' : 'rende_push_prompt_dismissed';
+    localStorage.setItem(storageKey, Date.now().toString());
     setShow(false);
   };
 
@@ -99,7 +104,11 @@ export const PushPromptBanner: React.FC<PushPromptBannerProps> = ({ currentUserN
           <div className="space-y-1">
             <div className="flex items-center gap-1.5">
               <h4 className="text-xs font-bold text-white">
-                {isIOS && !isStandalone ? 'iPhone Bildirim Kurulumu' : 'Cep Telefonu Bildirimleri'}
+                {isIOS && !isStandalone 
+                  ? 'iPhone Bildirim Kurulumu' 
+                  : isIOS && isStandalone 
+                  ? 'iPhone Kilit Ekranı Bildirimleri' 
+                  : 'Cep Telefonu Bildirimleri'}
               </h4>
               <span className="text-[10px] bg-blue-500/30 text-blue-300 font-bold px-1.5 py-0.2 rounded border border-blue-400/30">
                 Anlık
@@ -108,6 +117,8 @@ export const PushPromptBanner: React.FC<PushPromptBannerProps> = ({ currentUserN
             <p className="text-[11px] text-slate-300 leading-snug">
               {isIOS && !isStandalone
                 ? "iPhone'da anlık kilit ekranı bildirimlerini almak için Safari'den 'Ana Ekrana Ekle' yapmanız gerekmektedir."
+                : isIOS && isStandalone
+                ? "iPhone kilit ekranınızda ceride ve ajanda bildirimlerini anında almak için tek tıkla bildirimleri açın."
                 : "Ceride günlüğü ve ajanda hatırlatma kayıtlarında anlık kilit ekranı bildirimi gelsin mi?"}
             </p>
           </div>
@@ -174,7 +185,7 @@ export const PushPromptBanner: React.FC<PushPromptBannerProps> = ({ currentUserN
           ) : (
             <>
               <Bell className="w-3.5 h-3.5" />
-              <span>Bildirimleri Aç</span>
+              <span>{isIOS && isStandalone ? 'Bildirimleri Aç (iPhone)' : 'Bildirimleri Aç'}</span>
             </>
           )}
         </button>
