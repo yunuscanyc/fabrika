@@ -6799,6 +6799,55 @@ app.post('/api/ajanda/bildirimler/hepsini-oku', async (req, res) => {
   }
 });
 
+app.post('/api/ajanda/bildirimler/kategori-oku', async (req, res) => {
+  try {
+    const { category, userName } = req.body;
+    const user = String(userName || req.headers['x-user-name'] || '1. Yönetici').trim();
+    const mgrAliases = ['1. Yönetici', '2. Yönetici', 'Yönetici', 'admin1', 'admin2', 'Yunus CAN', user];
+
+    const matchIds: number[] = [];
+
+    memAjandaBildirimler.forEach(item => {
+      const baslik = (item.Baslik || '').toLowerCase();
+      let match = false;
+      if (category === 'siparisler' && (baslik.includes('📦') || baslik.includes('sipariş') || baslik.includes('siparis'))) match = true;
+      else if (category === 'ceride' && (baslik.includes('📜') || baslik.includes('ceride'))) match = true;
+      else if (category === 'personel' && (baslik.includes('👥') || baslik.includes('personel') || baslik.includes('puantaj') || baslik.includes('izin'))) match = true;
+      else if (category === 'projeler' && (baslik.includes('🌿') || baslik.includes('proje'))) match = true;
+      else if (category === 'araclar' && (baslik.includes('🚛') || baslik.includes('araç') || baslik.includes('arac'))) match = true;
+      else if (category === 'makineler' && (baslik.includes('🪚') || baslik.includes('makine') || baslik.includes('makina'))) match = true;
+      else if (category === 'hatirlaticilar') match = true;
+
+      if (match) {
+        matchIds.push(item.Id);
+        mgrAliases.forEach(u => {
+          if (!item.OkuyanKisiler.includes(u)) item.OkuyanKisiler.push(u);
+        });
+      }
+    });
+
+    if (isDbConnected && matchIds.length > 0) {
+      try {
+        for (const mId of matchIds) {
+          const rowRes = await pool.query(`SELECT "OkuyanKisiler" FROM "AjandaBildirimleri" WHERE "Id" = $1`, [mId]);
+          if (rowRes.rows.length > 0) {
+            let okuyan: string[] = [];
+            try { okuyan = JSON.parse(rowRes.rows[0].OkuyanKisiler || '[]'); } catch { okuyan = []; }
+            mgrAliases.forEach(u => { if (!okuyan.includes(u)) okuyan.push(u); });
+            await pool.query(`UPDATE "AjandaBildirimleri" SET "OkuyanKisiler" = $1 WHERE "Id" = $2`, [JSON.stringify(okuyan), mId]);
+          }
+        }
+      } catch (e: any) {
+        console.error('[DB MARK KATEGORI OKUNDU ERROR]', e.message);
+      }
+    }
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/ajanda/bildirimler/temizle', async (req, res) => {
   try {
     memAjandaBildirimler = [];

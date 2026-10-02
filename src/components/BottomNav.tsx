@@ -4,8 +4,13 @@ import { TabType } from './Navbar';
 
 interface BadgeCounts {
   bakim?: number;
+  araclar?: number;
   hatirlatici?: number;
   siparis?: number;
+  ceride?: number;
+  personel?: number;
+  makineler?: number;
+  projeler?: number;
   ajandaBildirim?: number;
 }
 
@@ -60,6 +65,11 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           >
             <BookOpen className="w-4 h-4" />
             <span>Şantiye Ceridesi</span>
+            {Boolean(badgeCounts.ceride && badgeCounts.ceride > 0) && (
+              <span className="w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-black flex items-center justify-center animate-pulse">
+                {badgeCounts.ceride}
+              </span>
+            )}
           </button>
         </div>
       </div>
@@ -105,7 +115,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
         <button
           onClick={() => setActiveTab('personel')}
-          className={`flex flex-col items-center justify-center py-1 rounded-lg transition-all ${
+          className={`relative flex flex-col items-center justify-center py-1 rounded-lg transition-all ${
             activeTab === 'personel'
               ? 'text-blue-400 font-bold bg-blue-950/50'
               : 'text-slate-400 hover:text-slate-200'
@@ -113,11 +123,16 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         >
           <Users className="w-4 h-4 mb-0.5" />
           <span className="text-[9px] tracking-tight">İK</span>
+          {Boolean(badgeCounts.personel && badgeCounts.personel > 0) && (
+            <span className="absolute top-0.5 right-1 w-3.5 h-3.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center animate-pulse">
+              {badgeCounts.personel}
+            </span>
+          )}
         </button>
 
         <button
           onClick={() => setActiveTab('ceride')}
-          className={`flex flex-col items-center justify-center py-1 rounded-lg transition-all ${
+          className={`relative flex flex-col items-center justify-center py-1 rounded-lg transition-all ${
             activeTab === 'ceride'
               ? 'text-amber-400 font-bold bg-amber-950/50'
               : 'text-slate-400 hover:text-slate-200'
@@ -125,11 +140,16 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         >
           <BookOpen className="w-4 h-4 mb-0.5" />
           <span className="text-[9px] tracking-tight">Ceride</span>
+          {Boolean(badgeCounts.ceride && badgeCounts.ceride > 0) && (
+            <span className="absolute top-0.5 right-1 w-3.5 h-3.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center animate-pulse">
+              {badgeCounts.ceride}
+            </span>
+          )}
         </button>
 
         <button
           onClick={() => setActiveTab('makineler')}
-          className={`flex flex-col items-center justify-center py-1 rounded-lg transition-all ${
+          className={`relative flex flex-col items-center justify-center py-1 rounded-lg transition-all ${
             activeTab === 'makineler'
               ? 'text-blue-400 font-bold bg-blue-950/50'
               : 'text-slate-400 hover:text-slate-200'
@@ -137,11 +157,16 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         >
           <Cog className="w-4 h-4 mb-0.5" />
           <span className="text-[9px] tracking-tight">Makine</span>
+          {Boolean(badgeCounts.makineler && badgeCounts.makineler > 0) && (
+            <span className="absolute top-0.5 right-1 w-3.5 h-3.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center animate-pulse">
+              {badgeCounts.makineler}
+            </span>
+          )}
         </button>
 
         <button
           onClick={() => setActiveTab('projeler')}
-          className={`flex flex-col items-center justify-center py-1 rounded-lg transition-all ${
+          className={`relative flex flex-col items-center justify-center py-1 rounded-lg transition-all ${
             activeTab === 'projeler'
               ? 'text-blue-400 font-bold bg-blue-950/50'
               : 'text-slate-400 hover:text-slate-200'
@@ -149,6 +174,11 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         >
           <FolderGit2 className="w-4 h-4 mb-0.5" />
           <span className="text-[9px] tracking-tight">Proje</span>
+          {Boolean(badgeCounts.projeler && badgeCounts.projeler > 0) && (
+            <span className="absolute top-0.5 right-1 w-3.5 h-3.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center animate-pulse">
+              {badgeCounts.projeler}
+            </span>
+          )}
         </button>
 
         <button
@@ -161,9 +191,9 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         >
           <Truck className="w-4 h-4 mb-0.5" />
           <span className="text-[9px] tracking-tight">Araç</span>
-          {Boolean(badgeCounts.bakim && badgeCounts.bakim > 0) && (
-            <span className="absolute top-0.5 right-1 w-3.5 h-3.5 rounded-full bg-red-600 text-white text-[8px] font-bold flex items-center justify-center">
-              {badgeCounts.bakim}
+          {Boolean((badgeCounts.araclar || badgeCounts.bakim) && (badgeCounts.araclar || 0) + (badgeCounts.bakim || 0) > 0) && (
+            <span className="absolute top-0.5 right-1 w-3.5 h-3.5 rounded-full bg-red-600 text-white text-[8px] font-bold flex items-center justify-center animate-pulse">
+              {(badgeCounts.araclar || 0) + (badgeCounts.bakim || 0)}
             </span>
           )}
         </button>

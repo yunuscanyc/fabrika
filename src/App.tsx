@@ -33,12 +33,48 @@ export default function App() {
   const [unreadOrdersCount, setUnreadOrdersCount] = useState<number>(0);
   const [ajandaBildirimler, setAjandaBildirimler] = useState<AjandaBildirimi[]>([]);
   
-  // Okunmamış Ajanda Bildirimleri ve Hatırlatıcı ID'leri
+  // Bildirimin hangi modüle ait olduğunu tespit etme
+  const getNotificationCategory = useCallback((b: AjandaBildirimi): TabType => {
+    const baslik = (b.Baslik || '').toLowerCase();
+    const detay = (b.Detay || '').toLowerCase();
+
+    if (baslik.includes('📦') || baslik.includes('sipariş') || baslik.includes('siparis') || detay.includes('sipariş')) {
+      return 'siparisler';
+    }
+    if (baslik.includes('📜') || baslik.includes('ceride') || detay.includes('ceride')) {
+      return 'ceride';
+    }
+    if (baslik.includes('👥') || baslik.includes('personel') || baslik.includes('puantaj') || baslik.includes('izin') || detay.includes('personel') || detay.includes('puantaj')) {
+      return 'personel';
+    }
+    if (baslik.includes('🌿') || baslik.includes('proje') || detay.includes('proje')) {
+      return 'projeler';
+    }
+    if (baslik.includes('🚛') || baslik.includes('araç') || baslik.includes('arac') || baslik.includes('plaka') || baslik.includes('muayene') || baslik.includes('sigorta') || detay.includes('araç')) {
+      return 'araclar';
+    }
+    if (baslik.includes('🪚') || baslik.includes('makine') || baslik.includes('makina') || detay.includes('makine')) {
+      return 'makineler';
+    }
+    return 'hatirlaticilar';
+  }, []);
+
+  // Okunmamış bildirimlerin modüllere göre ayrıştırılması (her sekme kendi uyarısını gösterir)
   const unreadAjandaNotifs = ajandaBildirimler.filter(b => !b.Okundu && b.YapanKisi !== currentUserName);
   const unreadNotifHatirlaticiIds = unreadAjandaNotifs
     .map(b => b.HatirlaticiId)
     .filter((id): id is number => typeof id === 'number' && id > 0);
   const unreadAjandaCount = unreadAjandaNotifs.length;
+
+  const unreadBadgeCounts = {
+    siparisler: unreadOrdersCount + unreadAjandaNotifs.filter(b => getNotificationCategory(b) === 'siparisler').length,
+    ceride: unreadAjandaNotifs.filter(b => getNotificationCategory(b) === 'ceride').length,
+    personel: unreadAjandaNotifs.filter(b => getNotificationCategory(b) === 'personel').length,
+    projeler: unreadAjandaNotifs.filter(b => getNotificationCategory(b) === 'projeler').length,
+    araclar: unreadAjandaNotifs.filter(b => getNotificationCategory(b) === 'araclar').length,
+    makineler: unreadAjandaNotifs.filter(b => getNotificationCategory(b) === 'makineler').length,
+    hatirlaticilar: unreadAjandaNotifs.filter(b => getNotificationCategory(b) === 'hatirlaticilar').length,
+  };
 
   const [targetOpenHatirlaticiId, setTargetOpenHatirlaticiId] = useState<number | null>(null);
   const [personelSubTab, setPersonelSubTab] = useState<'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci'>('liste');
@@ -525,12 +561,38 @@ export default function App() {
     } catch (e) {}
   };
 
-  // Hatırlatıcılar sekmesi aktif olduğunda tüm bildirimleri otomatik okundu say ve sayacı 0'la
+  const handleMarkCategoryRead = useCallback(async (category: TabType) => {
+    const uName = currentUserName || sessionStorage.getItem('rende_user_name') || '1. Yönetici';
+    try {
+      fetch('/api/ajanda/bildirimler/kategori-oku', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category, userName: uName })
+      }).catch(() => {});
+
+      if (category === 'siparisler') {
+        setUnreadOrdersCount(0);
+      }
+
+      setAjandaBildirimler(prev => prev.map(b => {
+        if (getNotificationCategory(b) === category) {
+          return {
+            ...b,
+            Okundu: true,
+            OkuyanKisiler: [...(b.OkuyanKisiler || []), uName]
+          };
+        }
+        return b;
+      }));
+    } catch (e) {}
+  }, [currentUserName, getNotificationCategory]);
+
+  // Hangi sekme açıldıysa o sekmenin okunmamış bildirim sayacını sıfırla ve okundu yap
   useEffect(() => {
-    if (activeTab === 'hatirlaticilar' && unreadAjandaCount > 0) {
-      handleMarkAllAjandaRead();
+    if (activeTab && activeTab !== 'dashboard') {
+      handleMarkCategoryRead(activeTab);
     }
-  }, [activeTab, unreadAjandaCount]);
+  }, [activeTab, handleMarkCategoryRead]);
 
   const handleOpenHatirlaticiFromNotification = (hatirlaticiId: number) => {
     setActiveTab('hatirlaticilar');
@@ -1119,8 +1181,9 @@ export default function App() {
         onOpenNotificationSettings={() => setNotifModalOpen(true)}
         onLogout={handleLogout}
         userRole={userRole}
-        unreadOrdersCount={unreadOrdersCount}
-        unreadAjandaCount={unreadAjandaCount}
+        unreadOrdersCount={unreadBadgeCounts.siparisler}
+        unreadAjandaCount={unreadBadgeCounts.hatirlaticilar}
+        unreadBadgeCounts={unreadBadgeCounts}
         currentUserName={currentUserName}
         onMarkAllAjandaRead={handleMarkAllAjandaRead}
       />
@@ -1317,10 +1380,15 @@ export default function App() {
         userRole={userRole}
         onMarkAllAjandaRead={handleMarkAllAjandaRead}
         badgeCounts={{
+          siparis: unreadBadgeCounts.siparisler,
+          ceride: unreadBadgeCounts.ceride,
+          personel: unreadBadgeCounts.personel,
+          makineler: unreadBadgeCounts.makineler,
+          projeler: unreadBadgeCounts.projeler,
+          araclar: unreadBadgeCounts.araclar,
           bakim: ozet?.bakimBekleyenArac,
-          hatirlatici: ozet?.bugunBitenGorevler,
-          siparis: unreadOrdersCount,
-          ajandaBildirim: unreadAjandaCount,
+          hatirlatici: unreadBadgeCounts.hatirlaticilar,
+          ajandaBildirim: unreadBadgeCounts.hatirlaticilar,
         }}
       />
 

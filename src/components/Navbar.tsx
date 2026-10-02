@@ -5,6 +5,16 @@ import { PWAInstallPrompt } from './PWAInstallPrompt';
 
 export type TabType = 'dashboard' | 'personel' | 'ceride' | 'makineler' | 'projeler' | 'araclar' | 'hatirlaticilar' | 'siparisler';
 
+export interface UnreadBadgeCounts {
+  siparisler: number;
+  ceride: number;
+  personel: number;
+  projeler: number;
+  araclar: number;
+  makineler: number;
+  hatirlaticilar: number;
+}
+
 interface NavbarProps {
   activeTab: TabType;
   setActiveTab: (tab: TabType) => void;
@@ -18,6 +28,7 @@ interface NavbarProps {
   userRole?: 'admin' | 'ustabasi';
   unreadOrdersCount?: number;
   unreadAjandaCount?: number;
+  unreadBadgeCounts?: UnreadBadgeCounts;
   currentUserName?: string;
   onMarkAllAjandaRead?: () => void;
 }
@@ -35,9 +46,20 @@ export const Navbar: React.FC<NavbarProps> = ({
   userRole = 'admin',
   unreadOrdersCount = 0,
   unreadAjandaCount = 0,
+  unreadBadgeCounts,
   currentUserName = '',
   onMarkAllAjandaRead,
 }) => {
+  const counts = unreadBadgeCounts || {
+    siparisler: unreadOrdersCount,
+    ceride: 0,
+    personel: 0,
+    projeler: 0,
+    araclar: 0,
+    makineler: 0,
+    hatirlaticilar: unreadAjandaCount
+  };
+
   return (
     <header 
       className="sticky top-0 z-30 bg-slate-900 text-white border-b border-slate-800 shadow-md transition-all ios-pwa-header safe-top"
@@ -76,22 +98,22 @@ export const Navbar: React.FC<NavbarProps> = ({
             <nav className="hidden md:flex items-center gap-1.5 bg-slate-800/80 p-1 rounded-xl border border-slate-700/50">
               <button
                 onClick={() => setActiveTab('siparisler')}
-                className={`px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 ${
+                className={`relative px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 ${
                   activeTab === 'siparisler'
                     ? 'bg-amber-600 text-white shadow-sm'
                     : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
                 }`}
               >
                 <span>📦 Malzeme Siparişleri</span>
-                {unreadOrdersCount > 0 && (
+                {counts.siparisler > 0 && (
                   <span className="px-1.5 py-0.2 rounded-full bg-amber-400 text-slate-900 text-[10px] font-black">
-                    {unreadOrdersCount}
+                    {counts.siparisler}
                   </span>
                 )}
               </button>
               <button
                 onClick={() => setActiveTab('ceride')}
-                className={`px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 ${
+                className={`relative px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 ${
                   activeTab === 'ceride'
                     ? 'bg-amber-600 text-white shadow-sm'
                     : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
@@ -99,6 +121,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                 title="Şantiye & İşletme Ceridesi (Günlük Olay Defteri)"
               >
                 <span>📜 Şantiye Ceridesi</span>
+                {counts.ceride > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-red-500 text-white text-[10px] font-black animate-pulse">
+                    {counts.ceride}
+                  </span>
+                )}
               </button>
             </nav>
           ) : (
@@ -113,6 +140,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 📊 Özet Panel
               </button>
+
               <button
                 onClick={() => setActiveTab('siparisler')}
                 className={`relative px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
@@ -121,64 +149,95 @@ export const Navbar: React.FC<NavbarProps> = ({
                     : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
                 }`}
               >
-                <span>📦 Sipariş &amp; Satınalma</span>
-                {unreadOrdersCount > 0 && (
+                <span>📦 Sipariş</span>
+                {counts.siparisler > 0 && (
                   <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-black animate-bounce shadow">
-                    {unreadOrdersCount}
+                    {counts.siparisler}
                   </span>
                 )}
               </button>
+
               <button
                 onClick={() => setActiveTab('personel')}
-                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+                className={`relative px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
                   activeTab === 'personel'
                     ? 'bg-blue-600 text-white shadow-sm'
                     : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
                 }`}
               >
-                👥 Personel &amp; İK
+                <span>👥 Personel &amp; İK</span>
+                {counts.personel > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-black animate-pulse shadow-md ring-2 ring-slate-900">
+                    {counts.personel}
+                  </span>
+                )}
               </button>
+
               <button
                 onClick={() => setActiveTab('ceride')}
-                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+                className={`relative px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
                   activeTab === 'ceride'
                     ? 'bg-amber-600 text-white shadow-sm'
                     : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
                 }`}
                 title="Şantiye & İşletme Ceridesi (Günlük Olay Defteri)"
               >
-                📜 Ceride
+                <span>📜 Ceride</span>
+                {counts.ceride > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-black animate-pulse shadow-md ring-2 ring-slate-900">
+                    {counts.ceride}
+                  </span>
+                )}
               </button>
+
               <button
                 onClick={() => setActiveTab('makineler')}
-                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+                className={`relative px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
                   activeTab === 'makineler'
                     ? 'bg-blue-600 text-white shadow-sm'
                     : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
                 }`}
               >
-                🪚 Makineler
+                <span>🪚 Makineler</span>
+                {counts.makineler > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-black animate-pulse shadow-md ring-2 ring-slate-900">
+                    {counts.makineler}
+                  </span>
+                )}
               </button>
+
               <button
                 onClick={() => setActiveTab('projeler')}
-                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+                className={`relative px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
                   activeTab === 'projeler'
                     ? 'bg-blue-600 text-white shadow-sm'
                     : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
                 }`}
               >
-                🌿 Proje &amp; Ağaç
+                <span>🌿 Proje</span>
+                {counts.projeler > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-black animate-pulse shadow-md ring-2 ring-slate-900">
+                    {counts.projeler}
+                  </span>
+                )}
               </button>
+
               <button
                 onClick={() => setActiveTab('araclar')}
-                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+                className={`relative px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
                   activeTab === 'araclar'
                     ? 'bg-blue-600 text-white shadow-sm'
                     : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
                 }`}
               >
-                🚛 Araç &amp; Bakım
+                <span>🚛 Araç</span>
+                {counts.araclar > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-black animate-pulse shadow-md ring-2 ring-slate-900">
+                    {counts.araclar}
+                  </span>
+                )}
               </button>
+
               <button
                 onClick={() => {
                   setActiveTab('hatirlaticilar');
@@ -191,9 +250,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }`}
               >
                 <span>🔔 Ajanda</span>
-                {unreadAjandaCount > 0 && (
+                {counts.hatirlaticilar > 0 && (
                   <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-black animate-pulse shadow-md ring-2 ring-slate-900">
-                    {unreadAjandaCount}
+                    {counts.hatirlaticilar}
                   </span>
                 )}
               </button>
