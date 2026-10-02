@@ -32,9 +32,24 @@ import {
   Maximize2,
   ChevronLeft,
   ChevronRight,
-  FileImage
+  FileImage,
+  FileText
 } from 'lucide-react';
 import { CerideKaydi, CerideFotograf, Proje } from '../types';
+
+const isImageFile = (fileName: string) => {
+  const ext = (fileName || '').split('.').pop()?.toLowerCase();
+  return ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'].includes(ext || '');
+};
+
+const getFileIconAndColor = (fileName: string) => {
+  const ext = (fileName || '').split('.').pop()?.toLowerCase() || '';
+  if (ext === 'pdf') return { bg: 'bg-red-500/10 border-red-500/30 text-red-500', label: 'PDF' };
+  if (['doc', 'docx'].includes(ext)) return { bg: 'bg-blue-500/10 border-blue-500/30 text-blue-500', label: 'WORD' };
+  if (['xls', 'xlsx', 'csv'].includes(ext)) return { bg: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500', label: 'EXCEL' };
+  if (['txt', 'rtf'].includes(ext)) return { bg: 'bg-slate-500/10 border-slate-500/30 text-slate-500', label: 'TXT' };
+  return { bg: 'bg-amber-500/10 border-amber-500/30 text-amber-500', label: 'DOSYA' };
+};
 import { PageLoadingIndicator } from './PageLoadingIndicator';
 import { 
   formatTarihTR, 
@@ -253,7 +268,7 @@ export const CerideView: React.FC<CerideViewProps> = ({
     setFormSaat(getTurkiyeSaatStr());
   };
 
-  // Fotoğraf Seçimi & Sıkıştırma
+  // Fotoğraf & Belge Seçimi (Resimler sıkıştırılır, diğer dosyalar doğrudan yüklenir)
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -263,21 +278,43 @@ export const CerideView: React.FC<CerideViewProps> = ({
       const newPhotos: CerideFotograf[] = [];
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        if (!file.type.startsWith('image/')) continue;
+        
+        if (file.type.startsWith('image/')) {
+          const { dataUrl, sizeStr } = await compressImageFile(file);
+          newPhotos.push({
+            Id: `img_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 6)}`,
+            DosyaAdi: file.name,
+            DosyaBoyutu: sizeStr,
+            YuklemeTarihi: getTurkiyeTamZamanStr(),
+            DosyaIcerigi: dataUrl
+          });
+        } else {
+          // Diğer dosya türleri (PDF, DOCX, XLSX, TXT vb.)
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = (err) => reject(err);
+            reader.readAsDataURL(file);
+          });
+          
+          const approxBytes = Math.round(base64.length * 0.75);
+          const sizeStr = approxBytes > 1024 * 1024
+            ? `${(approxBytes / (1024 * 1024)).toFixed(1)} MB`
+            : `${(approxBytes / 1024).toFixed(0)} KB`;
 
-        const { dataUrl, sizeStr } = await compressImageFile(file);
-        newPhotos.push({
-          Id: `img_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 6)}`,
-          DosyaAdi: file.name,
-          DosyaBoyutu: sizeStr,
-          YuklemeTarihi: getTurkiyeTamZamanStr(),
-          DosyaIcerigi: dataUrl
-        });
+          newPhotos.push({
+            Id: `doc_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 6)}`,
+            DosyaAdi: file.name,
+            DosyaBoyutu: sizeStr,
+            YuklemeTarihi: getTurkiyeTamZamanStr(),
+            DosyaIcerigi: base64
+          });
+        }
       }
       setFormFotograflar(prev => [...prev, ...newPhotos]);
     } catch (err) {
-      console.error('Fotoğraf yükleme hatası:', err);
-      alert('Fotoğraflar işlenirken bir sorun oluştu.');
+      console.error('Dosya yükleme hatası:', err);
+      alert('Dosyalar işlenirken bir sorun oluştu.');
     } finally {
       setUploadingPhotos(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -941,32 +978,61 @@ export const CerideView: React.FC<CerideViewProps> = ({
                           </div>
                         </div>
 
-                        {/* Fotoğraf Galerisi Küçük Önizlemeleri */}
+                        {/* Fotoğraf & Belge Galerisi Küçük Önizlemeleri */}
                         {fotolar.length > 0 && (
                           <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80">
                             <div className="flex items-center gap-2 overflow-x-auto py-1">
-                              {fotolar.map((f, fIdx) => (
-                                <div
-                                  key={f.Id || fIdx}
-                                  onClick={() => setLightboxData({ images: fotolar, index: fIdx, title: item.Olay })}
-                                  className="relative group/thumb cursor-pointer shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 transition hover:ring-2 hover:ring-amber-500 shadow-2xs"
-                                >
-                                  <img 
-                                    src={f.DosyaIcerigi} 
-                                    alt={f.DosyaAdi || 'Ceride Fotoğrafı'} 
-                                    className="w-full h-full object-cover group-hover/thumb:scale-105 transition duration-200"
-                                    loading="lazy"
-                                  />
-                                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover/thumb:opacity-100 transition flex items-center justify-center text-white">
-                                    <Eye className="w-4 h-4" />
-                                  </div>
-                                  {f.DosyaBoyutu && (
-                                    <span className="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] px-1 rounded font-mono">
-                                      {f.DosyaBoyutu}
-                                    </span>
-                                  )}
-                                </div>
-                              ))}
+                              {fotolar.map((f, fIdx) => {
+                                const isImg = isImageFile(f.DosyaAdi);
+                                if (isImg) {
+                                  return (
+                                    <div
+                                      key={f.Id || fIdx}
+                                      onClick={() => {
+                                        const onlyImages = fotolar.filter(x => isImageFile(x.DosyaAdi));
+                                        const onlyImgIdx = onlyImages.findIndex(x => x.Id === f.Id || x.DosyaAdi === f.DosyaAdi);
+                                        setLightboxData({ images: onlyImages, index: onlyImgIdx >= 0 ? onlyImgIdx : 0, title: item.Olay });
+                                      }}
+                                      className="relative group/thumb cursor-pointer shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 transition hover:ring-2 hover:ring-amber-500 shadow-2xs"
+                                    >
+                                      <img 
+                                        src={f.DosyaIcerigi} 
+                                        alt={f.DosyaAdi || 'Ceride Fotoğrafı'} 
+                                        className="w-full h-full object-cover group-hover/thumb:scale-105 transition duration-200"
+                                        loading="lazy"
+                                      />
+                                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover/thumb:opacity-100 transition flex items-center justify-center text-white">
+                                        <Eye className="w-4 h-4" />
+                                      </div>
+                                      {f.DosyaBoyutu && (
+                                        <span className="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] px-1 rounded font-mono">
+                                          {f.DosyaBoyutu}
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                } else {
+                                  // PDF, Word, Excel, TXT, etc. File download card
+                                  const fileInfo = getFileIconAndColor(f.DosyaAdi);
+                                  return (
+                                    <a
+                                      key={f.Id || fIdx}
+                                      href={f.DosyaIcerigi}
+                                      download={f.DosyaAdi}
+                                      className={`flex flex-col items-center justify-center p-2 text-center border rounded-lg gap-1.5 shrink-0 w-20 h-20 sm:w-24 sm:h-24 hover:ring-2 hover:ring-amber-500 transition shadow-2xs cursor-pointer ${fileInfo.bg}`}
+                                      title={`${f.DosyaAdi} dosyasını indir (${f.DosyaBoyutu || ''})`}
+                                    >
+                                      <FileText className="w-5 h-5 sm:w-6 h-6" />
+                                      <span className="text-[9px] font-bold truncate max-w-full leading-tight text-slate-700 dark:text-slate-300 px-1">
+                                        {f.DosyaAdi}
+                                      </span>
+                                      <span className="text-[8px] uppercase font-extrabold tracking-wider bg-black/10 dark:bg-white/10 px-1 py-0.5 rounded-full">
+                                        {fileInfo.label}
+                                      </span>
+                                    </a>
+                                  );
+                                }
+                              })}
                             </div>
                           </div>
                         )}
@@ -1201,43 +1267,58 @@ export const CerideView: React.FC<CerideViewProps> = ({
                       className="hidden"
                     />
 
-                    {/* Harddisk / Dosya Seçici Inputu */}
+                    {/* Harddisk / Dosya Seçici Inputu (Resimler + PDF, Word, Excel, TXT) */}
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept="image/*"
+                      accept="image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain"
                       multiple
                       onChange={handleFileChange}
                       className="hidden"
                     />
                   </div>
 
-                  {/* Fotoğraf Önizleme Alanı */}
+                  {/* Fotoğraf & Belge Önizleme Alanı */}
                   <div className="flex-1 overflow-y-auto max-h-[460px]">
                     {formFotograflar.length > 0 ? (
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 p-2 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
-                        {formFotograflar.map((foto, idx) => (
-                          <div key={foto.Id || idx} className="relative group/pic rounded-xl overflow-hidden border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 aspect-square shadow-2xs">
-                            <img 
-                              src={foto.DosyaIcerigi} 
-                              alt={foto.DosyaAdi} 
-                              className="w-full h-full object-cover group-hover/pic:scale-105 transition-transform"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => handleRemovePhoto(idx)}
-                              className="absolute top-1.5 right-1.5 p-1 bg-red-600 hover:bg-red-700 text-white rounded-full transition shadow-md cursor-pointer opacity-90 group-hover/pic:opacity-100"
-                              title="Fotoğrafı Kaldır"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                            {foto.DosyaBoyutu && (
-                              <span className="absolute bottom-1 left-1 bg-black/70 text-white text-[8px] px-1 rounded font-mono">
-                                {foto.DosyaBoyutu}
-                              </span>
-                            )}
-                          </div>
-                        ))}
+                        {formFotograflar.map((foto, idx) => {
+                          const isImg = isImageFile(foto.DosyaAdi);
+                          return (
+                            <div key={foto.Id || idx} className="relative group/pic rounded-xl overflow-hidden border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 aspect-square shadow-2xs">
+                              {isImg && foto.DosyaIcerigi ? (
+                                <img 
+                                  src={foto.DosyaIcerigi} 
+                                  alt={foto.DosyaAdi} 
+                                  className="w-full h-full object-cover group-hover/pic:scale-105 transition-transform"
+                                />
+                              ) : (
+                                <div className={`w-full h-full flex flex-col items-center justify-center p-3 text-center border rounded-lg gap-1.5 ${getFileIconAndColor(foto.DosyaAdi).bg}`}>
+                                  <FileText className="w-7 h-7 sm:w-8 h-8" />
+                                  <span className="text-[9px] font-bold truncate max-w-full leading-tight text-slate-700 dark:text-slate-300">
+                                    {foto.DosyaAdi}
+                                  </span>
+                                  <span className="text-[8px] uppercase font-extrabold tracking-wider bg-black/10 dark:bg-white/10 px-1.5 py-0.5 rounded-full">
+                                    {getFileIconAndColor(foto.DosyaAdi).label}
+                                  </span>
+                                </div>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleRemovePhoto(idx)}
+                                className="absolute top-1.5 right-1.5 p-1 bg-red-600 hover:bg-red-700 text-white rounded-full transition shadow-md cursor-pointer opacity-90 group-hover/pic:opacity-100 z-10"
+                                title="Dosyayı Kaldır"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                              {foto.DosyaBoyutu && (
+                                <span className="absolute bottom-1 left-1 bg-black/70 text-white text-[8px] px-1 rounded font-mono z-10">
+                                  {foto.DosyaBoyutu}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     ) : (
                       <div 
