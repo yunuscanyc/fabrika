@@ -18,9 +18,11 @@ import {
   X,
   Info,
   Palmtree,
-  ShieldAlert
+  ShieldAlert,
+  Printer
 } from 'lucide-react';
 import { AylikPuantajRaporModal } from './AylikPuantajRaporModal';
+import { GunlukImzaCizelgesiModal } from './GunlukImzaCizelgesiModal';
 import { 
   getBugunIso, 
   formatTarihTR, 
@@ -65,6 +67,7 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
   const [kayitMesaji, setKayitMesaji] = useState('');
   const [hataMesaji, setHataMesaji] = useState('');
   const [raporModalAcik, setRaporModalAcik] = useState(false);
+  const [imzaCizelgesiAcik, setImzaCizelgesiAcik] = useState(false);
   const [eksikBannerGizli, setEksikBannerGizli] = useState(false);
 
   // Günün Çalışma ve Tatil Kuralları
@@ -595,6 +598,15 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
           </button>
 
           <button
+            onClick={() => setImzaCizelgesiAcik(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition"
+            title="Günlük Personel Puantaj ve İmza Çizelgesi (Yazıcı Formatı)"
+          >
+            <Printer className="w-4 h-4 text-rose-400" />
+            Puantaj İmza Listesi
+          </button>
+
+          <button
             onClick={handleKaydet}
             disabled={kaydediliyor || siliniyor}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg shadow-md transition disabled:opacity-50 tracking-wide"
@@ -988,6 +1000,14 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
         onClose={() => setRaporModalAcik(false)}
         personeller={personeller}
         puantajlar={tumPuantajlar}
+      />
+
+      {/* GÜNLÜK PERSONEL PUANTAJ VE İMZA ÇİZELGESİ MODALI */}
+      <GunlukImzaCizelgesiModal
+        isOpen={imzaCizelgesiAcik}
+        onClose={() => setImzaCizelgesiAcik(false)}
+        personeller={personeller}
+        varsayilanTarih={seciliTarih}
       />
     </div>
   );
