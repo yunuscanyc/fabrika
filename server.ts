@@ -8254,32 +8254,20 @@ app.post('/api/puantajlar', async (req, res) => {
 // Günlük Puantaj Sil (Kayıtlı Günü Silme)
 app.delete('/api/puantajlar', async (req, res) => {
   const tarih = req.query.tarih as string;
-  const personelId = req.query.personelId ? parseInt(req.query.personelId as string, 10) : null;
-  const tarihBaslangic = req.query.tarihBaslangic as string;
+  if (!tarih) return res.status(400).json({ error: 'Tarih parametresi gerekli' });
 
   if (isDbConnected && detectedTables.puantajlar) {
     try {
-      if (personelId && tarihBaslangic) {
-        await pool.query(`DELETE FROM ${detectedTables.puantajlar} WHERE "PersonelId" = $1 AND "Tarih"::date >= $2::date`, [personelId, tarihBaslangic]);
-      } else if (personelId) {
-        await pool.query(`DELETE FROM ${detectedTables.puantajlar} WHERE "PersonelId" = $1`, [personelId]);
-      } else if (tarih) {
-        await pool.query(`DELETE FROM ${detectedTables.puantajlar} WHERE "Tarih"::date = $1::date`, [tarih]);
-      }
+      await pool.query(`DELETE FROM ${detectedTables.puantajlar} WHERE "Tarih"::date = $1::date`, [tarih]);
+      memPuantajlar = memPuantajlar.filter(p => p.Tarih !== tarih);
+      return res.json({ success: true, message: `${tarih} tarihli puantaj kayıtları başarıyla silindi` });
     } catch (err: any) {
       console.error('[DB PUANTAJ DELETE ERROR]', err.message);
     }
   }
 
-  if (personelId && tarihBaslangic) {
-    memPuantajlar = memPuantajlar.filter(p => !(p.PersonelId === personelId && p.Tarih >= tarihBaslangic));
-  } else if (personelId) {
-    memPuantajlar = memPuantajlar.filter(p => p.PersonelId !== personelId);
-  } else if (tarih) {
-    memPuantajlar = memPuantajlar.filter(p => p.Tarih !== tarih);
-  }
-
-  res.json({ success: true, message: 'Puantaj kayıtları başarıyla silindi' });
+  memPuantajlar = memPuantajlar.filter(p => p.Tarih !== tarih);
+  res.json({ success: true, message: `${tarih} tarihli puantaj kayıtları başarıyla silindi` });
 });
 
 app.get('/api/mesai-ayarlari', (req, res) => {
@@ -10158,6 +10146,30 @@ app.put('/api/siparisler/:id', async (req, res) => {
           updatedSiparis.SiparisTarihi, updatedSiparis.TahminiTutar, updatedSiparis.FaturaIrsaliyeNo, updatedSiparis.SatinalmaNotu,
           updatedSiparis.GuncellemeTarihi, JSON.stringify(kalemler), isNaN(numId) ? -1 : numId, String(rawId)
         ]);
+
+        // Belgeleri ve fotoğrafları güncelle (eskileri sil, yenileri ekle)
+        if (detectedTables.malzemeSiparisBelgeler) {
+          await pool.query(`
+            DELETE FROM ${detectedTables.malzemeSiparisBelgeler} 
+            WHERE "SiparisId" = $1 OR "SiparisId"::text = $2::text
+          `, [isNaN(numId) ? -1 : numId, String(rawId)]);
+
+          if (Array.isArray(belgeler) && belgeler.length > 0) {
+            for (const b of belgeler) {
+              await pool.query(`
+                INSERT INTO ${detectedTables.malzemeSiparisBelgeler} (
+                  "SiparisId", "DosyaAdi", "DosyaBoyutu", "YuklemeTarihi", "DosyaIcerigi"
+                ) VALUES ($1, $2, $3, $4, $5)
+              `, [
+                isNaN(numId) ? -1 : numId, 
+                b.DosyaAdi || 'gorsel.jpg', 
+                b.DosyaBoyutu || '200 KB', 
+                b.YuklemeTarihi || today, 
+                b.DosyaIcerigi || b.DosyaVerisi || b.base64 || ''
+              ]);
+            }
+          }
+        }
       } catch (dbErr: any) {
         console.error('[DB SIPARIS UPDATE ERROR]', dbErr.message);
       }
