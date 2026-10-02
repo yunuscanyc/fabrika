@@ -537,12 +537,16 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
 
       {/* Eksik gün yoksa yeşil bilgilendirme */}
       {eksikGunler.length === 0 && (
-        <div className="bg-emerald-950/30 border border-emerald-800/40 rounded-xl px-4 py-2.5 text-emerald-300 text-xs flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="bg-slate-900 border border-emerald-500/40 rounded-xl px-4 py-3 text-slate-100 text-xs flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-2.5">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>Son 30 günün tüm geçmiş çalışma günleri eksiksiz olarak kaydedilmiş durumda.</span>
+            <span className="font-semibold text-white">
+              Son 30 günün tüm geçmiş çalışma günleri eksiksiz olarak kaydedilmiş durumda.
+            </span>
           </div>
-          <span className="text-[11px] text-emerald-400/70 font-mono">Puantaj Güncel</span>
+          <span className="text-[11px] font-bold font-mono text-emerald-300 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-lg shrink-0">
+            Puantaj Güncel
+          </span>
         </div>
       )}
 

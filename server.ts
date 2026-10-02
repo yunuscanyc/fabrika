@@ -8254,20 +8254,32 @@ app.post('/api/puantajlar', async (req, res) => {
 // Günlük Puantaj Sil (Kayıtlı Günü Silme)
 app.delete('/api/puantajlar', async (req, res) => {
   const tarih = req.query.tarih as string;
-  if (!tarih) return res.status(400).json({ error: 'Tarih parametresi gerekli' });
+  const personelId = req.query.personelId ? parseInt(req.query.personelId as string, 10) : null;
+  const tarihBaslangic = req.query.tarihBaslangic as string;
 
   if (isDbConnected && detectedTables.puantajlar) {
     try {
-      await pool.query(`DELETE FROM ${detectedTables.puantajlar} WHERE "Tarih"::date = $1::date`, [tarih]);
-      memPuantajlar = memPuantajlar.filter(p => p.Tarih !== tarih);
-      return res.json({ success: true, message: `${tarih} tarihli puantaj kayıtları başarıyla silindi` });
+      if (personelId && tarihBaslangic) {
+        await pool.query(`DELETE FROM ${detectedTables.puantajlar} WHERE "PersonelId" = $1 AND "Tarih"::date >= $2::date`, [personelId, tarihBaslangic]);
+      } else if (personelId) {
+        await pool.query(`DELETE FROM ${detectedTables.puantajlar} WHERE "PersonelId" = $1`, [personelId]);
+      } else if (tarih) {
+        await pool.query(`DELETE FROM ${detectedTables.puantajlar} WHERE "Tarih"::date = $1::date`, [tarih]);
+      }
     } catch (err: any) {
       console.error('[DB PUANTAJ DELETE ERROR]', err.message);
     }
   }
 
-  memPuantajlar = memPuantajlar.filter(p => p.Tarih !== tarih);
-  res.json({ success: true, message: `${tarih} tarihli puantaj kayıtları başarıyla silindi` });
+  if (personelId && tarihBaslangic) {
+    memPuantajlar = memPuantajlar.filter(p => !(p.PersonelId === personelId && p.Tarih >= tarihBaslangic));
+  } else if (personelId) {
+    memPuantajlar = memPuantajlar.filter(p => p.PersonelId !== personelId);
+  } else if (tarih) {
+    memPuantajlar = memPuantajlar.filter(p => p.Tarih !== tarih);
+  }
+
+  res.json({ success: true, message: 'Puantaj kayıtları başarıyla silindi' });
 });
 
 app.get('/api/mesai-ayarlari', (req, res) => {

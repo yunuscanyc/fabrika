@@ -11,6 +11,7 @@ import { PageLoadingIndicator } from './PageLoadingIndicator';
 import { SiparisYazdirModal } from './SiparisYazdirModal';
 import { UstabasiUyariModal } from './UstabasiUyariModal';
 import { MalzemeKatalogModal } from './MalzemeKatalogModal';
+import { CameraCaptureModal } from './CameraCaptureModal';
 
 interface SiparislerViewProps {
   userRole?: 'admin' | 'ustabasi';
@@ -54,6 +55,7 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
   // Modallar ve Seçili Kayıt
   const [showFormModal, setShowFormModal] = useState(false);
   const [showKatalogModal, setShowKatalogModal] = useState(false);
+  const [showCameraModal, setShowCameraModal] = useState(false);
   const [editingSiparis, setEditingSiparis] = useState<MalzemeSiparisi | null>(null);
   const [printSiparis, setPrintSiparis] = useState<MalzemeSiparisi | null>(null);
   const [lockedWarningSiparis, setLockedWarningSiparis] = useState<MalzemeSiparisi | null>(null);
@@ -336,18 +338,67 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
     setSatinalmaKilitNotu(siparis.KilitNotu || '');
   };
 
-  // Çoklu Dosya Yükleme (Base64)
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Görsel Sıkıştırma Yardımcısı (Max 1600px, 0.82 Kalite)
+  const compressImageFile = (file: File, maxDim = 1600, quality = 0.82): Promise<string> => {
+    return new Promise((resolve) => {
+      if (!file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+        return;
+      }
+
+      const img = new window.Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        let w = img.width;
+        let h = img.height;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          } else {
+            w = Math.round((w * maxDim) / h);
+            h = maxDim;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        } else {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        }
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      };
+      img.src = url;
+    });
+  };
+
+  // Çoklu Dosya Yükleme (Sıkıştırılmış Base64)
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    Array.from(files).forEach((file: File) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64 = reader.result as string;
-        const sizeStr = file.size > 1024 * 1024
-          ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
-          : `${(file.size / 1024).toFixed(0)} KB`;
+    for (const file of Array.from(files)) {
+      try {
+        const base64 = await compressImageFile(file);
+        const approxBytes = Math.round(base64.length * 0.75);
+        const sizeStr = approxBytes > 1024 * 1024
+          ? `${(approxBytes / (1024 * 1024)).toFixed(1)} MB`
+          : `${(approxBytes / 1024).toFixed(0)} KB`;
 
         setFormBelgeler(prev => [
           ...prev,
@@ -359,11 +410,32 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
             DosyaIcerigi: base64
           }
         ]);
-      };
-      reader.readAsDataURL(file);
-    });
+      } catch (fErr) {
+        console.error('Dosya yükleme hatası:', fErr);
+      }
+    }
 
     if (fileInputRef.current) fileInputRef.current.value = '';
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
+  };
+
+  // Canlı Kameradan Yakalanan Fotoğrafı Ekle
+  const handleCameraCapture = (base64: string, fileName: string) => {
+    const approxBytes = Math.round(base64.length * 0.75);
+    const sizeStr = approxBytes > 1024 * 1024
+      ? `${(approxBytes / (1024 * 1024)).toFixed(1)} MB`
+      : `${(approxBytes / 1024).toFixed(0)} KB`;
+
+    setFormBelgeler(prev => [
+      ...prev,
+      {
+        BelgeId: Date.now() + Math.random(),
+        DosyaAdi: fileName,
+        DosyaBoyutu: sizeStr,
+        YuklemeTarihi: new Date().toISOString().slice(0, 10),
+        DosyaIcerigi: base64
+      }
+    ]);
   };
 
   const handleRemoveBelge = (index: number) => {
@@ -1572,7 +1644,7 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
                   <div className="flex items-center gap-1.5">
                     <button
                       type="button"
-                      onClick={() => cameraInputRef.current?.click()}
+                      onClick={() => setShowCameraModal(true)}
                       className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-1"
                       title="Kameradan doğrudan fotoğraf çek"
                     >
@@ -1621,7 +1693,7 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
                     <div className="flex items-center justify-center gap-2">
                       <button
                         type="button"
-                        onClick={() => cameraInputRef.current?.click()}
+                        onClick={() => setShowCameraModal(true)}
                         className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-lg transition shadow-xs cursor-pointer"
                       >
                         📷 Kamera
@@ -1865,6 +1937,13 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
           userRole={userRole}
         />
       )}
+
+      {/* CANLI KAMERA FOTOĞRAF ÇEKME MODALI (MASAÜSTÜ & MOBİL UYUMLU) */}
+      <CameraCaptureModal
+        isOpen={showCameraModal}
+        onClose={() => setShowCameraModal(false)}
+        onCapture={handleCameraCapture}
+      />
     </div>
   );
 };

@@ -351,6 +351,15 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
           .print-modal-content tr {
             page-break-inside: avoid !important;
             break-inside: avoid !important;
+            background-color: transparent !important;
+          }
+          .print-modal-content td {
+            color: black !important;
+            border: 1px solid #64748b !important;
+            padding: 3px 3px !important;
+            background-color: transparent !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
           .print-modal-content h2, .print-modal-content h1 {
             color: black !important;
@@ -483,7 +492,7 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
 
                   return (
                     <React.Fragment key={item.personelId}>
-                      <tr className={`hover:bg-slate-800/30 transition ${isAcik ? 'bg-slate-800/40' : ''}`}>
+                      <tr className={`hover:bg-slate-800/30 transition print:bg-transparent ${isAcik ? 'bg-slate-800/40 print:bg-transparent' : ''}`}>
                         <td className="py-2 px-3 font-semibold text-white print:text-black print:py-1 print:px-2">
                           <div className="flex items-center gap-2">
                             <button
