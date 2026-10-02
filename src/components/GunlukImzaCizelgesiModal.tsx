@@ -39,25 +39,40 @@ export const GunlukImzaCizelgesiModal: React.FC<GunlukImzaCizelgesiModalProps> =
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
       {/* Yazdırma CSS'i */}
       <style dangerouslySetInnerHTML={{ __html: `
+        @page {
+          size: portrait;
+          margin: 1.2cm;
+        }
         @media print {
-          body * {
-            visibility: hidden;
+          /* Sayfadaki IP, URL, Tarih gibi tarayıcı başlık/altlıklarını gizler ve mükemmel yerleşimi garanti eder */
+          body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white !important;
+            color: black !important;
           }
-          .print-area, .print-area * {
-            visibility: visible;
+          /* Çift yazdırma sorununu engellemek için root ve diğer her şeyi tamamen gizler, sadece print-area kalır */
+          #root {
+            display: none !important;
+          }
+          body > *:not(.print-area) {
+            display: none !important;
           }
           .print-area {
-            position: absolute;
-            left: 0;
-            top: 0;
+            display: block !important;
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
             width: 100% !important;
             max-width: 100% !important;
             border: none !important;
-            background: white !important;
-            color: black !important;
             box-shadow: none !important;
             padding: 0 !important;
             margin: 0 !important;
+            visibility: visible !important;
+          }
+          .print-area * {
+            visibility: visible !important;
           }
           /* Sayfa Sonu Başlık Tekrarlama */
           .print-area table {
@@ -124,7 +139,7 @@ export const GunlukImzaCizelgesiModal: React.FC<GunlukImzaCizelgesiModalProps> =
 
             <button
               onClick={() => window.print()}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition shadow"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition shadow cursor-pointer"
               title="Yazdır / PDF Olarak Kaydet"
             >
               <Printer className="w-3.5 h-3.5" />
@@ -133,7 +148,7 @@ export const GunlukImzaCizelgesiModal: React.FC<GunlukImzaCizelgesiModalProps> =
 
             <button
               onClick={onClose}
-              className="flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-bold rounded-lg transition border border-slate-700"
+              className="flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-bold rounded-lg transition border border-slate-700 cursor-pointer"
               title="Kapat"
             >
               <X className="w-3.5 h-3.5" />
@@ -212,6 +227,30 @@ export const GunlukImzaCizelgesiModal: React.FC<GunlukImzaCizelgesiModalProps> =
                     </tr>
                   ))
                 )}
+
+                {/* Sisteme eklenmemiş veya çıktı sonrası başlayanlar için 4 adet el yazısıyla doldurulabilir boş satır */}
+                {Array.from({ length: 4 }).map((_, bIdx) => {
+                  const bosSiraNo = aktifCalisanlar.length + bIdx + 1;
+                  return (
+                    <tr key={`blank_${bIdx}`} className="border-b border-black/30 hover:bg-slate-50 transition-colors">
+                      <td className="py-3 px-2 text-center border-r border-black font-bold text-black bg-slate-50/50">
+                        {bosSiraNo}
+                      </td>
+                      <td className="py-3 px-3 border-r border-black">
+                        <div className="w-full border-b border-dashed border-slate-400 h-6 mt-1"></div>
+                        <span className="text-[8px] text-slate-400 font-bold block pt-1 print:hidden">El Yazısı ile İsim Yazma Alanı</span>
+                      </td>
+                      <td className="py-3 px-2 border-r border-black h-10"></td>
+                      <td className="py-3 px-2 border-r border-black h-10"></td>
+                      <td className="py-3 px-2 border-r border-black h-10"></td>
+                      <td className="py-3 px-2 border-r border-black h-10"></td>
+                      <td className="py-3 px-3 border-r border-black h-10"></td>
+                      <td className="py-3 px-4 h-10">
+                        <div className="w-full border-b border-dashed border-slate-400 h-6"></div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
 
