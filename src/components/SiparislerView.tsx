@@ -1637,14 +1637,18 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
               {/* 6. Çoklu Kroki / Fotoğraf Yükleme Alanı */}
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
                 <div className="flex items-center justify-between flex-wrap gap-2">
-                  <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                     <Upload className="w-4 h-4 text-blue-600" />
                     Kroki, Çizim &amp; Referans Fotoğrafları
-                  </label>
+                  </span>
                   <div className="flex items-center gap-1.5">
                     <button
                       type="button"
-                      onClick={() => setShowCameraModal(true)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setShowCameraModal(true);
+                      }}
                       className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-1"
                       title="Kameradan doğrudan fotoğraf çek"
                     >
@@ -1653,7 +1657,11 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => fileInputRef.current?.click()}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        fileInputRef.current?.click();
+                      }}
                       className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-1"
                       title="Harddisk veya galeriden seç"
                     >
@@ -1693,14 +1701,22 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
                     <div className="flex items-center justify-center gap-2">
                       <button
                         type="button"
-                        onClick={() => setShowCameraModal(true)}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setShowCameraModal(true);
+                        }}
                         className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-lg transition shadow-xs cursor-pointer"
                       >
                         📷 Kamera
                       </button>
                       <button
                         type="button"
-                        onClick={() => fileInputRef.current?.click()}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          fileInputRef.current?.click();
+                        }}
                         className="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold rounded-lg transition shadow-xs cursor-pointer"
                       >
                         📁 Harddisk / Galeri

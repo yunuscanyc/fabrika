@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Personel, GunlukPuantaj } from '../types';
 import { FileSpreadsheet, Printer, X, Download, Plus, Minus, Calendar, Clock } from 'lucide-react';
-import { formatTarihTR, getBugunIso, getGunIndex, getResmiTatil } from '../utils/dateUtils';
+import { formatTarihTR, getBugunIso, getGunIndex, getResmiTatil, getStandartNormalSaat } from '../utils/dateUtils';
 import { isPersonelCalisiyorMuAyda } from '../utils/personelUtils';
 
 const GUN_ISIMLERI = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
@@ -70,7 +70,8 @@ function getPersonelAyGunleri(
   personelId: number,
   yil: number,
   ay: number,
-  puantajlar: GunlukPuantaj[]
+  puantajlar: GunlukPuantaj[],
+  rejim: '5gun' | '6gun' = '5gun'
 ) {
   const gunSayisi = new Date(yil, ay, 0).getDate();
   const gunler = [];
@@ -114,7 +115,13 @@ function getPersonelAyGunleri(
       normalSaat = Number(kayit.NormalCalismaSaati || 0);
       fazlaSaat = Number(kayit.FazlaMesaiSaati || 0);
       tatilMesai = Number((kayit.HaftaTatiliMesaiSaati || 0) + (kayit.ResmiTatilMesaiSaati || 0));
-      eksikSaat = Number(kayit.SaatlikKesintiUcretsiz || 0);
+      
+      let kesinti = Number(kayit.SaatlikKesintiUcretsiz || 0);
+      if (durumKodu === 'UI' && kesinti === 0) {
+        // Günün standart çalışma saati (5 günlükte hafta içi 9s, 6 günlükte hafta içi 8s, Cumartesi 5s)
+        kesinti = getStandartNormalSaat(isoTarih, rejim);
+      }
+      eksikSaat = kesinti;
       aciklama = kayit.Aciklama || '';
     } else {
       if (tatil.isTatil) {
@@ -156,6 +163,7 @@ interface AylikPuantajRaporModalProps {
   onClose: () => void;
   personeller: Personel[];
   puantajlar: GunlukPuantaj[];
+  calismaRejimi?: '5gun' | '6gun';
 }
 
 export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
@@ -163,10 +171,23 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
   onClose,
   personeller,
   puantajlar,
+  calismaRejimi = '5gun'
 }) => {
   const [seciliYil, setSeciliYil] = useState(new Date().getFullYear());
   const [seciliAy, setSeciliAy] = useState(new Date().getMonth() + 1);
   const [acikPersonelId, setAcikPersonelId] = useState<number | null>(null);
+  const [rejim, setRejim] = useState<'5gun' | '6gun'>(calismaRejimi);
+
+  useEffect(() => {
+    fetch('/api/mesai-ayarlari')
+      .then(r => r.json())
+      .then(d => {
+        if (d && (d.CalismaRejimi === '5gun' || d.CalismaRejimi === '6gun')) {
+          setRejim(d.CalismaRejimi);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -226,13 +247,24 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
     const normalGun = pPuantaj.filter(x => x.DurumKodu === 'N' || x.NormalCalismaSaati > 0).length;
     const haftaTatiliGun = pPuantaj.filter(x => x.DurumKodu === 'HT').length;
     const resmiTatilGun = pPuantaj.filter(x => x.DurumKodu === 'RT').length;
-    const izinliGun = pPuantaj.filter(x => ['YI', 'UI', 'R', 'M'].includes(x.DurumKodu)).length;
+    // Ücretli İzinler (Yİ: Yıllık İzin, R: Raporlu, M: Mazeret İzni) - Ücretsiz izin Eksik Mesai olarak değerlendirilir
+    const izinliGun = pPuantaj.filter(x => ['YI', 'R', 'M'].includes(x.DurumKodu)).length;
     const devamsizGun = pPuantaj.filter(x => x.DurumKodu === 'D').length;
 
     const toplamNormalSaat = pPuantaj.reduce((sum, x) => sum + (x.NormalCalismaSaati || 0), 0);
     const toplamFazlaMesai = pPuantaj.reduce((sum, x) => sum + (x.FazlaMesaiSaati || 0), 0);
     const toplamTatilMesai = pPuantaj.reduce((sum, x) => sum + (x.HaftaTatiliMesaiSaati || 0) + (x.ResmiTatilMesaiSaati || 0), 0);
-    const toplamEksikSaat = pPuantaj.reduce((sum, x) => sum + (x.SaatlikKesintiUcretsiz || 0), 0);
+    
+    // Eksik saat hesabı: Saatlik kesintiler + Tam gün Ücretsiz İzin (UI) günleri (Rejime ve güne göre: 5 günlükte 9s, 6 günlükte hafta içi 8s, Cumartesi 5s)
+    const toplamEksikSaat = pPuantaj.reduce((sum, x) => {
+      const cleanDate = String(x.Tarih || '').slice(0, 10);
+      const stdSaat = getStandartNormalSaat(cleanDate, rejim);
+      const kesinti = Number(x.SaatlikKesintiUcretsiz || 0);
+      if (x.DurumKodu === 'UI') {
+        return sum + (kesinti > 0 ? kesinti : stdSaat);
+      }
+      return sum + kesinti;
+    }, 0);
 
     return {
       personelId: p.PersonelId,
@@ -488,7 +520,7 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
                 icmalListesi.map((item) => {
                   const isAcik = acikPersonelId === item.personelId;
                   const ayAdi = aylar.find(a => a.no === seciliAy)?.ad || '';
-                  const gunlerDetay = isAcik ? getPersonelAyGunleri(item.personelId, seciliYil, seciliAy, puantajlar) : [];
+                  const gunlerDetay = isAcik ? getPersonelAyGunleri(item.personelId, seciliYil, seciliAy, puantajlar, rejim) : [];
 
                   return (
                     <React.Fragment key={item.personelId}>
