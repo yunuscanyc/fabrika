@@ -7,20 +7,13 @@ import { Personel, PersonelGirisCikis } from '../types';
  */
 export function getPersonelGirisCikisDonemleri(personel: Personel): PersonelGirisCikis[] {
   if (Array.isArray(personel.GirisCikisGecmisi) && personel.GirisCikisGecmisi.length > 0) {
-    return personel.GirisCikisGecmisi.map((d, idx) => {
-      const isLast = idx === personel.GirisCikisGecmisi!.length - 1;
-      let cikis = d.CikisTarihi ? d.CikisTarihi.slice(0, 10) : null;
-      if (!cikis && isLast && personel.IstenCikisTarihi) {
-        cikis = personel.IstenCikisTarihi.slice(0, 10);
-      }
-      return {
-        Id: d.Id || (idx + 1),
-        GirisTarihi: (d.GirisTarihi || '').slice(0, 10),
-        CikisTarihi: cikis,
-        CikisNedeni: d.CikisNedeni || '',
-        Notlar: d.Notlar || ''
-      };
-    });
+    return personel.GirisCikisGecmisi.map((d, idx) => ({
+      Id: d.Id || (idx + 1),
+      GirisTarihi: (d.GirisTarihi || '').slice(0, 10),
+      CikisTarihi: d.CikisTarihi ? d.CikisTarihi.slice(0, 10) : null,
+      CikisNedeni: d.CikisNedeni || '',
+      Notlar: d.Notlar || ''
+    }));
   }
   
   if (personel.IseGirisTarihi) {
@@ -123,31 +116,14 @@ export function isPersonelCalisiyorMuAyda(personel: Personel, yil: number, ay: n
 }
 
 /**
- * Bir personelin belirli bir haftada (Hafta Başlangıç Pazartesi, Hafta Bitiş Pazar) istihdamda olup olmadığını belirler.
- * Haftalık yevmiyeci icmal raporunda o hafta henüz işe girmemiş ya da o haftadan önce ayrılmış kişileri listelememek için kullanılır.
+ * Bir personelin belirli bir haftada (Pazartesi - Pazar) istihdamda olup olmadığını belirler.
+ * Yevmiyeci haftalık icmal raporunda o hafta henüz işe girmemiş ya da o haftadan önce ayrılmış kişileri listelememek için kullanılır.
  */
-export function isPersonelCalisiyorMuHaftada(personel: Personel, haftaBasiIso: string, haftaSonuIso: string): boolean {
-  if (!personel || !haftaBasiIso || !haftaSonuIso) return false;
+export function isPersonelCalisiyorMuHaftada(personel: Personel, pztTarih: string, pzrTarih: string): boolean {
+  if (!personel || !pztTarih || !pzrTarih) return false;
 
-  const baslangic = haftaBasiIso.slice(0, 10);
-  const bitis = haftaSonuIso.slice(0, 10);
-
-  // 1. Genel pasiflik veya işten çıkış tarihi kontrolü
-  const cikisTarihi = (personel.IstenCikisTarihi || '').slice(0, 10);
-  if (cikisTarihi && baslangic >= cikisTarihi) {
-    return false;
-  }
-
-  // 2. Genel işe giriş tarihi kontrolü (Henüz bu hafta bitmeden işe başlamamışsa)
-  const girisTarihi = (personel.IseGirisTarihi || '').slice(0, 10);
-  if (girisTarihi && bitis < girisTarihi) {
-    return false;
-  }
-
-  // 3. DurumAktifMi false ise ve çıkış tarihi varsa
-  if (personel.DurumAktifMi === false && cikisTarihi && baslangic >= cikisTarihi) {
-    return false;
-  }
+  const haftaBasi = pztTarih.slice(0, 10);
+  const haftaSonu = pzrTarih.slice(0, 10);
 
   const donemler = getPersonelGirisCikisDonemleri(personel);
   if (donemler.length === 0) {
@@ -158,10 +134,10 @@ export function isPersonelCalisiyorMuHaftada(personel: Personel, haftaBasiIso: s
     const giris = (d.GirisTarihi || '').slice(0, 10);
     const cikis = (d.CikisTarihi || '').slice(0, 10);
 
-    // Eğer kişinin girişi haftanın bitişinden sonraysa (o hafta henüz işe başlamamışsa)
-    if (giris && giris > bitis) return false;
-    // Eğer kişinin çıkışı haftanın başlangıcından önceyse (o hafta başlamadan önce işten ayrılmışsa)
-    if (cikis && cikis < baslangic) return false;
+    // Eğer kişinin girişi bu haftanın sonundan (pazar) sonraysa (gelecekte işe başlayacaksa)
+    if (giris && giris > haftaSonu) return false;
+    // Eğer kişinin çıkışı bu haftanın başından (pazartesi) önceyse (geçmişte işten çıkmışsa)
+    if (cikis && cikis < haftaBasi) return false;
 
     return true;
   });

@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Personel, GunlukPuantaj } from '../types';
-import { FileSpreadsheet, Printer, X, Calendar, ChevronLeft, ChevronRight, Calculator, UserCheck } from 'lucide-react';
+import { FileSpreadsheet, Printer, X, Calendar, ChevronLeft, ChevronRight, Calculator, UserCheck, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { formatTarihTR, getBugunIso, tarihKaydir, getGunIndex } from '../utils/dateUtils';
-import { isPersonelCalisiyorMuHaftada, isPersonelCalisiyorMuTarihte } from '../utils/personelUtils';
+import { isPersonelCalisiyorMuHaftada } from '../utils/personelUtils';
 
 interface HaftalikYevmiyeciRaporModalProps {
   isOpen: boolean;
@@ -13,6 +13,7 @@ interface HaftalikYevmiyeciRaporModalProps {
 }
 
 const GUN_KISALTMALARI = ['Pzr', 'Pzt', 'Sal', 'Çrş', 'Prş', 'Cum', 'Cmt'];
+const GUN_ISIMLERI_TR = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
 
 export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalProps> = ({
   isOpen,
@@ -28,10 +29,6 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
     return tarihKaydir(bugun, farkToPzt);
   });
 
-  // Kullanıcı Talebi: "çalışılmamış (işe girişi olmayan) haftalarda görünmesin isimler"
-  // Varsayılan olarak yalnızca bu hafta çalışan / hakedişi olan ustalar gösterilir
-  const [sadeceCalisanlar, setSadeceCalisanlar] = useState<boolean>(true);
-
   // Haftanın 7 gününü hesapla (Pzt -> Pzr)
   const haftaGunleri = useMemo(() => {
     const gunler = [];
@@ -41,6 +38,7 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
       gunler.push({
         isoTarih: dStr,
         gunKisa: GUN_KISALTMALARI[idx],
+        gunAdi: GUN_ISIMLERI_TR[idx],
         tarihKisa: formatTarihTR(dStr).slice(0, 5) // "29.09"
       });
     }
@@ -54,118 +52,145 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
     setSeciliPazartesi(prev => tarihKaydir(prev, yon * 7));
   };
 
-  // Yevmiyeci Ustaları Filtrele (Yalnızca bu haftada istihdamda olan/işe girişi geçerli olanlar)
+  // Yevmiyeci Ustaları Bu Hafta İçin Filtrele
+  // Kullanıcı Talebi: "çalışılmamış (işe girişi olmayan) haftalarda görünmesin isimler"
   const yevmiyeciler = useMemo(() => {
-    const yevList = personeller.filter(p => (p.IsYevmiyeci || p.CalismaTuru === 'Yevmiyeci') && !p.SilindiMi);
+    return personeller.filter(p => {
+      const isYevmiyeci = Boolean(p.IsYevmiyeci || p.CalismaTuru === 'Yevmiyeci');
+      if (!isYevmiyeci) return false;
 
-    // Çift kayıtları normalize et (Örn: Pasif ve Aktif mükerrer kayıt varsa aktif olanı tercih et)
-    const benzersizMap = new Map<string, Personel>();
-    yevList.forEach(p => {
-      const normKey = (p.AdSoyad || '').trim().toLowerCase().replace(/\s+/g, ' ');
-      if (!benzersizMap.has(normKey)) {
-        benzersizMap.set(normKey, p);
-      } else if (!benzersizMap.get(normKey)!.DurumAktifMi && p.DurumAktifMi) {
-        benzersizMap.set(normKey, p);
-      }
-    });
+      // O hafta istihdamda mı (işe giriş bu haftadan sonra veya çıkış bu haftadan önce değil)
+      const istihdamdaMi = isPersonelCalisiyorMuHaftada(p, seciliPazartesi, pazarTarih);
+      if (!istihdamdaMi) return false;
 
-    return Array.from(benzersizMap.values()).filter(p => {
-      // İşe giriş tarihi bu haftadan sonra olan veya bu haftadan önce ayrılmış olanlar listelenmez!
-      return isPersonelCalisiyorMuHaftada(p, seciliPazartesi, pazarTarih);
+      return true;
     });
   }, [personeller, seciliPazartesi, pazarTarih]);
 
   // Her yevmiyecinin haftalık dökümü
-  const hamIcmalListesi = useMemo(() => {
+  const icmalListesi = useMemo(() => {
     return yevmiyeciler.map(y => {
       let calisilanGunSayisi = 0;
+      let toplamNormalSaat = 0;
       let toplamMesaiSaat = 0;
       let toplamKesintiSaat = 0;
+      const eksikNotlari: string[] = [];
+      const genelNotlar: string[] = [];
 
       const gunlukDetaylar = haftaGunleri.map(g => {
-        // Kişi bu tarihte fabrikada çalışıyor mu (işe giriş öncesi veya çıkış sonrası günler hakedişe dahil edilmez)
-        const isIstihdamda = isPersonelCalisiyorMuTarihte(y, g.isoTarih);
-        if (!isIstihdamda) {
-          const giris = (y.IseGirisTarihi || '').slice(0, 10);
-          const cikis = (y.IstenCikisTarihi || '').slice(0, 10);
-          const durumEtiket = (giris && g.isoTarih < giris) ? 'İşe Başlamadı' : (cikis && g.isoTarih >= cikis ? 'İşten Ayrıldı' : 'İstihdam Dışı');
-          return {
-            tarih: g.isoTarih,
-            durum: durumEtiket,
-            normalSaat: 0,
-            mesaiSaat: 0,
-            kesintiSaat: 0,
-            istihdamda: false
-          };
-        }
-
-        const kayit = puantajlar.find(p => p.PersonelId === y.PersonelId && String(p.Tarih || '').slice(0, 10) === g.isoTarih);
-        const normalSaat = kayit ? Number(kayit.NormalCalismaSaati || 0) : 0;
-        const mesaiSaat = kayit ? (Number(kayit.FazlaMesaiSaati || 0) + Number(kayit.HaftaTatiliMesaiSaati || 0) + Number(kayit.ResmiTatilMesaiSaati || 0)) : 0;
-        const kesintiSaat = kayit ? Number(kayit.SaatlikKesintiUcretsiz || 0) : 0;
+        const dStr = g.isoTarih;
+        const gunIdx = getGunIndex(dStr);
+        const gunAdi = GUN_ISIMLERI_TR[gunIdx];
+        const kayit = puantajlar.find(p => p.PersonelId === y.PersonelId && String(p.Tarih || '').slice(0, 10) === dStr);
+        const normalSaatRaw = kayit ? Number(kayit.NormalCalismaSaati || 0) : 0;
+        const fazlaSaat = kayit ? Number(kayit.FazlaMesaiSaati || 0) : 0;
+        const tatilMesai = kayit ? (Number(kayit.HaftaTatiliMesaiSaati || 0) + Number(kayit.ResmiTatilMesaiSaati || 0)) : 0;
+        const mesaiSaat = fazlaSaat + tatilMesai;
+        const kesintiSaatRaw = kayit ? Number(kayit.SaatlikKesintiUcretsiz || 0) : 0;
         const durum = kayit ? kayit.DurumKodu : '-';
+        const aciklama = kayit ? (kayit.Aciklama || '').trim() : '';
 
-        // Yevmiyeci için fiilen çalışılan gün:
-        // Yevmiyeci ustalar çalıştıkları gün kadar yevmiye alırlar.
-        // Fiilen çalışma saati (normalSaat > 0) veya tatil günü mesaisi (mesaiSaat > 0) varsa çalışılan gün sayılır.
-        const isCalisilanGun = normalSaat > 0 || (durum === 'HT' && mesaiSaat > 0) || (durum === 'RT' && (normalSaat > 0 || mesaiSaat > 0));
-        if (isCalisilanGun) {
-          calisilanGunSayisi += 1;
+        if (aciklama && !genelNotlar.includes(aciklama)) {
+          genelNotlar.push(aciklama);
         }
+
+        let isCalisti = false;
+        let normalSaat = 0;
+        let eksikSaat = 0;
+        let eksikNot = '';
+
+        if (kayit) {
+          if (durum === 'N' || durum === 'RT' || (durum === 'HT' && mesaiSaat > 0) || normalSaatRaw > 0) {
+            isCalisti = true;
+            calisilanGunSayisi += 1;
+
+            // Standart yevmiyeci tam gün çalışma süresi 8 saattir.
+            // Kullanıcı Talebi: "yevmiyeci tam gün çalışmadıysa eksik mesaisi de yazılsın açıklamada şu gün eksik çalıştı yazsın"
+            if (kesintiSaatRaw > 0) {
+              eksikSaat = kesintiSaatRaw;
+              normalSaat = Math.max(0, (normalSaatRaw > 0 ? normalSaatRaw : 8.0) - kesintiSaatRaw);
+              eksikNot = `${gunAdi} (${eksikSaat.toFixed(1)}s eksik kesinti)`;
+              eksikNotlari.push(`${gunAdi} günü ${eksikSaat.toFixed(1)}s eksik çalıştı`);
+            } else if (normalSaatRaw > 0 && normalSaatRaw < 8.0) {
+              eksikSaat = 8.0 - normalSaatRaw;
+              normalSaat = normalSaatRaw;
+              eksikNot = `${gunAdi} (${eksikSaat.toFixed(1)}s eksik / ${normalSaat.toFixed(1)}s fiili)`;
+              eksikNotlari.push(`${gunAdi} günü ${eksikSaat.toFixed(1)}s eksik çalıştı (${normalSaat.toFixed(1)}s fiili)`);
+            } else if (normalSaatRaw >= 8.0) {
+              normalSaat = normalSaatRaw;
+            } else {
+              normalSaat = 8.0;
+            }
+          } else if (durum === 'D' || durum === 'UI') {
+            eksikSaat = 8.0;
+            eksikNot = `${gunAdi} (Gelmedi/Devamsız)`;
+            eksikNotlari.push(`${gunAdi} günü devamsız/gelmedi`);
+          }
+        }
+
+        toplamNormalSaat += normalSaat;
         toplamMesaiSaat += mesaiSaat;
-        toplamKesintiSaat += kesintiSaat;
+        toplamKesintiSaat += eksikSaat;
 
         return {
           tarih: g.isoTarih,
+          gunKisa: g.gunKisa,
+          gunAdi,
           durum,
           normalSaat,
           mesaiSaat,
-          kesintiSaat,
-          istihdamda: true
+          kesintiSaat: eksikSaat,
+          eksikSaat,
+          eksikNot,
+          isCalisti,
+          aciklama
         };
       });
 
       const yevmiyeTutar = Number(y.GunlukYevmiye || 0);
-      const saatlikYevmiye = yevmiyeTutar > 0 ? yevmiyeTutar / 8 : 0;
-      const yevmiyeHakedis = calisilanGunSayisi * yevmiyeTutar;
+      const saatlikYevmiye = yevmiyeTutar > 0 ? yevmiyeTutar / 8.0 : 0;
+
+      // Fiili normal saat x saatlik yevmiye
+      const yevmiyeHakedis = toplamNormalSaat * saatlikYevmiye;
       const mesaiHakedis = toplamMesaiSaat * (saatlikYevmiye * 1.5);
-      const kesintiTutar = (toplamKesintiSaat > 0 && saatlikYevmiye > 0) ? (toplamKesintiSaat * saatlikYevmiye) : 0;
-      const toplamHakedis = Math.max(0, yevmiyeHakedis + mesaiHakedis - kesintiTutar);
+      const kesintiTutar = toplamKesintiSaat * saatlikYevmiye;
+      const toplamHakedis = Math.max(0, yevmiyeHakedis + mesaiHakedis);
+      const toplamSaat = toplamNormalSaat + toplamMesaiSaat;
+
+      const eksikAciklamaMetni = eksikNotlari.length > 0 
+        ? eksikNotlari.join(' • ')
+        : (genelNotlar.length > 0 ? genelNotlar.join(', ') : 'Tam Gün Çalışma');
 
       return {
         yevmiyeciId: y.PersonelId,
         adSoyad: y.AdSoyad,
         gorev: y.Gorev || y.Departman || 'Saha Ustası',
         gunlukYevmiye: yevmiyeTutar,
+        saatlikYevmiye,
         gunlukDetaylar,
         calisilanGunSayisi,
+        toplamNormalSaat,
         toplamMesaiSaat,
         toplamKesintiSaat,
+        toplamSaat,
         kesintiTutar,
         yevmiyeHakedis,
         mesaiHakedis,
-        toplamHakedis
+        toplamHakedis,
+        eksikNotlari,
+        eksikAciklamaMetni
       };
     });
   }, [yevmiyeciler, haftaGunleri, puantajlar]);
-
-  // Kullanıcı Talebi: "çalışılmamış (işe girişi olmayan) haftalarda görünmesin isimler"
-  // Sadece çalışanlar filtresi açıkken veya çalışılmamış haftalarda (0 gün, 0 mesai) usta isimleri gizlenir
-  const icmalListesi = useMemo(() => {
-    if (!sadeceCalisanlar) {
-      // Tüm istihdamdaki ustalar listesinde dahi yalnızca o hafta işe girişi aktif olanlar gösterilir
-      return hamIcmalListesi;
-    }
-    // Sadece bu hafta fiilen çalışmış veya mesaisi/hakedişi olanlar görünür
-    return hamIcmalListesi.filter(item => item.calisilanGunSayisi > 0 || item.toplamMesaiSaat > 0);
-  }, [hamIcmalListesi, sadeceCalisanlar]);
 
   // Genel Toplamlar
   const genelToplamlar = useMemo(() => {
     return icmalListesi.reduce((acc, curr) => {
       acc.toplamGun += curr.calisilanGunSayisi;
+      acc.toplamNormalSaat += curr.toplamNormalSaat;
       acc.toplamMesai += curr.toplamMesaiSaat;
       acc.toplamKesinti += curr.toplamKesintiSaat;
+      acc.toplamSaat += curr.toplamSaat;
       acc.toplamYevmiyeTutar += curr.yevmiyeHakedis;
       acc.toplamMesaiTutar += curr.mesaiHakedis;
       acc.toplamKesintiTutar += curr.kesintiTutar;
@@ -173,8 +198,10 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
       return acc;
     }, {
       toplamGun: 0,
+      toplamNormalSaat: 0,
       toplamMesai: 0,
       toplamKesinti: 0,
+      toplamSaat: 0,
       toplamYevmiyeTutar: 0,
       toplamMesaiTutar: 0,
       toplamKesintiTutar: 0,
@@ -186,13 +213,13 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
   const handleCsvExport = () => {
     let csv = `RENDE İNŞAAT MOBİLYA A.Ş. - YEVMİYECİ HAFTALIK İCMAL HAKEDİŞ CETVELİ\n`;
     csv += `Hafta Dönemi: ${formatTarihTR(seciliPazartesi)} - ${formatTarihTR(pazarTarih)} - Rapor Tarihi: ${formatTarihTR(getBugunIso())}\n\n`;
-    csv += `Usta Ad Soyad;Görevi;Günlük Yevmiye;Çalışılan Gün;Toplam Mesai (Sa);Eksik Kesinti (Sa);Yevmiye Hakedişi (TL);Mesai Hakedişi (TL);Toplam Hakediş (TL);İmza\n`;
+    csv += `Usta Ad Soyad;Görevi;Günlük Yevmiye;Çalışılan Gün;Toplam Normal Saat;Toplam Mesai (Sa);Eksik Kesinti (Sa);Toplam Saat (Sa);Yevmiye Hakedişi (TL);Mesai Hakedişi (TL);Toplam Hakediş (TL);Eksik Çalışma Açıklaması;İmza\n`;
 
     icmalListesi.forEach(item => {
-      csv += `${item.adSoyad};${item.gorev};${item.gunlukYevmiye} TL;${item.calisilanGunSayisi} Gün;${item.toplamMesaiSaat.toFixed(1)} s;${item.toplamKesintiSaat.toFixed(1)} s;${item.yevmiyeHakedis.toLocaleString('tr-TR')} TL;${item.mesaiHakedis.toLocaleString('tr-TR')} TL;${item.toplamHakedis.toLocaleString('tr-TR')} TL;\n`;
+      csv += `${item.adSoyad};${item.gorev};${item.gunlukYevmiye} TL;${item.calisilanGunSayisi} Gün;${item.toplamNormalSaat.toFixed(1)} s;${item.toplamMesaiSaat.toFixed(1)} s;${item.toplamKesintiSaat.toFixed(1)} s;${item.toplamSaat.toFixed(1)} s;${item.yevmiyeHakedis.toLocaleString('tr-TR')} TL;${item.mesaiHakedis.toLocaleString('tr-TR')} TL;${item.toplamHakedis.toLocaleString('tr-TR')} TL;"${item.eksikAciklamaMetni}";\n`;
     });
 
-    csv += `\nGENEL TOPLAM;;;${genelToplamlar.toplamGun} Gün;${genelToplamlar.toplamMesai.toFixed(1)} s;${genelToplamlar.toplamKesinti.toFixed(1)} s;${genelToplamlar.toplamYevmiyeTutar.toLocaleString('tr-TR')} TL;${genelToplamlar.toplamMesaiTutar.toLocaleString('tr-TR')} TL;${genelToplamlar.toplamHakedis.toLocaleString('tr-TR')} TL;\n`;
+    csv += `\nGENEL TOPLAM (${icmalListesi.length} Usta);;;${genelToplamlar.toplamGun} Gün;${genelToplamlar.toplamNormalSaat.toFixed(1)} s;${genelToplamlar.toplamMesai.toFixed(1)} s;${genelToplamlar.toplamKesinti.toFixed(1)} s;${genelToplamlar.toplamSaat.toFixed(1)} s;${genelToplamlar.toplamYevmiyeTutar.toLocaleString('tr-TR')} TL;${genelToplamlar.toplamMesaiTutar.toLocaleString('tr-TR')} TL;${genelToplamlar.toplamHakedis.toLocaleString('tr-TR')} TL;;\n`;
 
     const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -210,15 +237,16 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
 
     const rowsHtml = icmalListesi.map((item, idx) => {
       const gunCells = item.gunlukDetaylar.map(d => {
-        const isCalisti = d.normalSaat > 0 || d.mesaiSaat > 0;
         let content = '<span style="color: #94a3b8;">-</span>';
-        if (isCalisti) {
-          content = '<span style="color: #15803d; font-weight: bold;">✓</span>';
+        if (d.isCalisti) {
+          if (d.eksikSaat > 0) {
+            content = `<span style="color: #d97706; font-weight: bold;">${d.normalSaat}s</span><br/><span style="font-size: 7pt; color: #b91c1c; font-weight: bold;">-${d.eksikSaat}s</span>`;
+          } else {
+            content = '<span style="color: #15803d; font-weight: bold;">✓ 8s</span>';
+          }
           if (d.mesaiSaat > 0) {
             content += `<br/><span style="font-size: 7.5pt; font-weight: bold; color: #1d4ed8;">+${d.mesaiSaat}s</span>`;
           }
-        } else if (!d.istihdamda) {
-          content = `<span style="color: #94a3b8; font-size: 7pt;">${d.durum === 'İşe Başlamadı' ? 'Giriş Yok' : (d.durum === 'İşten Ayrıldı' ? 'Ayrıldı' : '-')}</span>`;
         } else if (d.durum === 'D' || d.durum === 'UI') {
           content = '<span style="color: #b91c1c; font-size: 8pt; font-weight: bold;">Eksik</span>';
         }
@@ -231,13 +259,15 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
           <td style="padding: 4px 6px; text-align: center; border: 1px solid #334155; font-family: monospace; font-weight: bold;">${item.gunlukYevmiye > 0 ? `${item.gunlukYevmiye.toLocaleString('tr-TR')} ₺` : 'Belirtilmedi'}</td>
           ${gunCells}
           <td style="padding: 4px 6px; text-align: center; border: 1px solid #334155; font-family: monospace; font-weight: bold;">${item.calisilanGunSayisi} Gün</td>
-          <td style="padding: 4px 6px; text-align: center; border: 1px solid #334155; font-family: monospace;">${item.toplamMesaiSaat > 0 ? `+${item.toplamMesaiSaat.toFixed(1)}s` : '-'}</td>
-          <td style="padding: 4px 6px; text-align: center; border: 1px solid #334155; font-family: monospace; color: ${item.toplamKesintiSaat > 0 ? '#b91c1c' : '#000'};">${item.toplamKesintiSaat > 0 ? `-${item.toplamKesintiSaat.toFixed(1)}s` : '-'}</td>
+          <td style="padding: 4px 6px; text-align: center; border: 1px solid #334155; font-family: monospace; font-weight: bold; background-color: #f1f5f9;">${item.toplamSaat.toFixed(1)}s</td>
+          <td style="padding: 4px 6px; text-align: center; border: 1px solid #334155; font-family: monospace; color: ${item.toplamMesaiSaat > 0 ? '#1d4ed8' : '#000'}; font-weight: bold;">${item.toplamMesaiSaat > 0 ? `+${item.toplamMesaiSaat.toFixed(1)}s` : '-'}</td>
+          <td style="padding: 4px 6px; text-align: center; border: 1px solid #334155; font-family: monospace; color: ${item.toplamKesintiSaat > 0 ? '#b91c1c' : '#000'}; font-weight: bold;">${item.toplamKesintiSaat > 0 ? `-${item.toplamKesintiSaat.toFixed(1)}s` : '-'}</td>
           <td style="padding: 4px 6px; text-align: right; border: 1px solid #334155; font-family: monospace;">${item.yevmiyeHakedis.toLocaleString('tr-TR')} ₺</td>
           <td style="padding: 4px 6px; text-align: right; border: 1px solid #334155; font-family: monospace;">${item.mesaiHakedis > 0 ? `${item.mesaiHakedis.toLocaleString('tr-TR')} ₺` : '-'}</td>
           <td style="padding: 4px 6px; text-align: right; border: 1.5px solid #000; font-family: monospace; font-weight: bold; background-color: #f8fafc;">${item.toplamHakedis.toLocaleString('tr-TR')} ₺</td>
-          <td style="padding: 4px 10px; text-align: center; border: 1px solid #334155; min-width: 60px;">
-            <div style="border-bottom: 1px solid #94a3b8; height: 16px; width: 50px; margin: 0 auto;"></div>
+          <td style="padding: 4px 6px; font-size: 7.5pt; border: 1px solid #334155; color: ${item.eksikNotlari.length > 0 ? '#b45309' : '#475569'};">${item.eksikAciklamaMetni}</td>
+          <td style="padding: 4px 10px; text-align: center; border: 1px solid #334155; min-width: 50px;">
+            <div style="border-bottom: 1px solid #94a3b8; height: 16px; width: 45px; margin: 0 auto;"></div>
           </td>
         </tr>
       `;
@@ -254,11 +284,13 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
         <td colspan="2" style="padding: 6px; border: 2px solid #000; font-weight: 900;">GENEL TOPLAM (${icmalListesi.length} Usta)</td>
         <td colspan="7" style="padding: 6px; text-align: right; border: 2px solid #000; font-size: 8pt; color: #334155;">Haftalık Toplamlar:</td>
         <td style="padding: 6px; text-align: center; border: 2px solid #000; font-family: monospace;">${genelToplamlar.toplamGun} Gün</td>
-        <td style="padding: 6px; text-align: center; border: 2px solid #000; font-family: monospace;">${genelToplamlar.toplamMesai > 0 ? `${genelToplamlar.toplamMesai.toFixed(1)}s` : '-'}</td>
-        <td style="padding: 6px; text-align: center; border: 2px solid #000; font-family: monospace; color: #b91c1c;">${genelToplamlar.toplamKesinti > 0 ? `${genelToplamlar.toplamKesinti.toFixed(1)}s` : '-'}</td>
+        <td style="padding: 6px; text-align: center; border: 2px solid #000; font-family: monospace; font-weight: 900; background-color: #cbd5e1;">${genelToplamlar.toplamSaat.toFixed(1)}s</td>
+        <td style="padding: 6px; text-align: center; border: 2px solid #000; font-family: monospace; color: #1d4ed8;">${genelToplamlar.toplamMesai > 0 ? `+${genelToplamlar.toplamMesai.toFixed(1)}s` : '-'}</td>
+        <td style="padding: 6px; text-align: center; border: 2px solid #000; font-family: monospace; color: #b91c1c;">${genelToplamlar.toplamKesinti > 0 ? `-${genelToplamlar.toplamKesinti.toFixed(1)}s` : '-'}</td>
         <td style="padding: 6px; text-align: right; border: 2px solid #000; font-family: monospace;">${genelToplamlar.toplamYevmiyeTutar.toLocaleString('tr-TR')} ₺</td>
         <td style="padding: 6px; text-align: right; border: 2px solid #000; font-family: monospace;">${genelToplamlar.toplamMesaiTutar.toLocaleString('tr-TR')} ₺</td>
         <td style="padding: 6px; text-align: right; border: 2px solid #000; font-family: monospace; font-weight: 900; background-color: #cbd5e1;">${genelToplamlar.toplamHakedis.toLocaleString('tr-TR')} ₺</td>
+        <td style="padding: 6px; text-align: center; border: 2px solid #000; font-size: 7.5pt;">${icmalListesi.length} Usta</td>
         <td style="padding: 6px; text-align: center; border: 2px solid #000; font-size: 8pt;">Haftalık İcmal</td>
       </tr>
     `;
@@ -311,7 +343,7 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
           table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 8.5pt;
+            font-size: 8pt;
           }
           th {
             background-color: #f1f5f9;
@@ -365,11 +397,13 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
               <th>Günlük Yevmiye</th>
               ${gunHeaderCols}
               <th>Çalışılan Gün</th>
+              <th>Toplam Saat</th>
               <th>Fazla Mesai</th>
               <th>Eksik Kesinti</th>
               <th>Yevmiye Hakedişi</th>
               <th>Mesai Hakedişi</th>
               <th style="background-color: #e2e8f0;">Net Toplam Hakediş</th>
+              <th>Açıklama / Eksik Çalışma Notu</th>
               <th>İmza</th>
             </tr>
           </thead>
@@ -382,7 +416,7 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
         </table>
 
         <div class="rule-note">
-          * Yevmiyeci Hesaplama Esasları: Yevmiyeci ustaların fiili çalıştığı günler (✓) yevmiye ücretiyle çarpılır. Hafta içi ve hafta sonu fazla mesaileri saatlik yevmiyenin %50 artırımlı tutarıyla (x1.5) eklenir. Saatlik ücretsiz kesintiler varsa hakedişten düşülür.
+          * Yevmiyeci Hesaplama Esasları: Yevmiyeci ustaların fiili çalıştığı günler (✓) ve tam gün çalışılmayan eksik saatler (8 saat esası) saatlik yevmiye bazında netleştirilir. Fazla mesailer %50 artırımlı tutarla (x1.5) eklenir. Eksik çalışılan günler açıklamada belirtilmiştir.
         </div>
 
         <div class="signatures">
@@ -518,7 +552,7 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
 
       <div 
         onClick={(e) => e.stopPropagation()}
-        className="bg-slate-900 border border-slate-800 text-slate-100 rounded-2xl w-full max-w-6xl overflow-hidden shadow-2xl my-6 print-modal-content"
+        className="bg-slate-900 border border-slate-800 text-slate-100 rounded-2xl w-full max-w-7xl overflow-hidden shadow-2xl my-6 print-modal-content"
       >
         {/* MODAL BAŞLIĞI */}
         <div className="px-6 py-4 bg-slate-950 border-b border-slate-800 flex flex-wrap items-center justify-between gap-4 no-print">
@@ -531,7 +565,7 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
                 <span>🔨 Yevmiyeci Ustalar Haftalık İcmal Raporu</span>
               </h2>
               <p className="text-xs text-slate-400">
-                Haftalık puantaj, günlük yevmiye, mesai ve hakediş hesaplama cetveli
+                Haftalık puantaj, günlük yevmiye, toplam saat, eksik mesai ve hakediş hesaplama cetveli
               </p>
             </div>
           </div>
@@ -588,39 +622,18 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
             </button>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Çalışanlar / Tüm Ustalar Filtresi */}
-            <div className="flex items-center bg-slate-900 border border-slate-700/80 rounded-lg p-0.5 text-xs">
-              <button
-                type="button"
-                onClick={() => setSadeceCalisanlar(true)}
-                className={`px-3 py-1.5 rounded-md font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                  sadeceCalisanlar
-                    ? 'bg-amber-600 text-white shadow-xs'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-                title="Yalnızca bu hafta fiilen çalışması veya mesaisi olan ustaları listeler"
-              >
-                <UserCheck className="w-3.5 h-3.5" />
-                <span>Sadece Bu Hafta Çalışanlar ({hamIcmalListesi.filter(x => x.calisilanGunSayisi > 0 || x.toplamMesaiSaat > 0).length})</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setSadeceCalisanlar(false)}
-                className={`px-3 py-1.5 rounded-md font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                  !sadeceCalisanlar
-                    ? 'bg-amber-600 text-white shadow-xs'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-                title="Bu hafta istihdamda olan (işe başlamış) tüm kayıtlı yevmiyecileri listeler"
-              >
-                <span>Tüm İstihdamdaki Ustalar ({yevmiyeciler.length})</span>
-              </button>
-            </div>
-
-            <div className="text-xs text-slate-400 font-mono hidden md:block">
-              Listelenen: <strong className="text-white font-bold">{icmalListesi.length} Usta</strong>
-            </div>
+          <div className="flex items-center gap-4 text-xs text-slate-400">
+            <span>
+              Bu Hafta Aktif Usta: <strong className="text-white font-mono">{icmalListesi.length} Personel</strong>
+            </span>
+            <span className="text-slate-600">|</span>
+            <span>
+              Toplam Saat: <strong className="text-cyan-300 font-mono font-bold">{genelToplamlar.toplamSaat.toFixed(1)} s</strong>
+            </span>
+            <span className="text-slate-600">|</span>
+            <span>
+              Toplam Net Hakediş: <strong className="text-amber-300 font-mono font-bold">{genelToplamlar.toplamHakedis.toLocaleString('tr-TR')} ₺</strong>
+            </span>
           </div>
         </div>
 
@@ -636,15 +649,9 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
           {icmalListesi.length === 0 ? (
             <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-8 text-center text-slate-400">
               <UserCheck className="w-10 h-10 mx-auto mb-2 text-slate-600" />
-              <p className="text-sm font-semibold text-slate-300">
-                {sadeceCalisanlar
-                  ? "Bu Hafta Çalışması / Hakedişi Bulunan Yevmiyeci Usta Yok"
-                  : "Bu Hafta İçin İstihdamda Olan Yevmiyeci Usta Bulunmuyor"}
-              </p>
-              <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-                {sadeceCalisanlar
-                  ? "Seçili hafta döneminde fiilen çalışma veya mesai girişi olan usta bulunmuyor. İşe henüz başlamamış veya çalışmamış ustalar gizlenmiştir."
-                  : "Seçili hafta döneminde işe giriş tarihi aktif olan yevmiyeci usta kaydı bulunmamaktadır."}
+              <p className="text-sm font-semibold text-slate-300">Bu Haftada Aktif / Çalışan Yevmiyeci Usta Bulunamadı</p>
+              <p className="text-xs text-slate-500 mt-1">
+                Seçili hafta döneminde ({formatTarihTR(seciliPazartesi)} — {formatTarihTR(pazarTarih)}) işe girişi olan veya çalışan yevmiyeci personel bulunmamaktadır.
               </p>
             </div>
           ) : (
@@ -661,11 +668,13 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
                       </th>
                     ))}
                     <th className="py-3 px-2 text-center bg-slate-900 border-l border-slate-800">Çalışılan Gün</th>
-                    <th className="py-3 px-2 text-center bg-slate-900">Toplam Mesai</th>
+                    <th className="py-3 px-2 text-center bg-cyan-950/40 text-cyan-300 font-bold">Toplam Saat</th>
+                    <th className="py-3 px-2 text-center bg-blue-950/30 text-blue-300">Fazla Mesai</th>
                     <th className="py-3 px-2 text-center bg-rose-950/30 text-rose-300">Eksik Kesinti</th>
                     <th className="py-3 px-3 text-right bg-blue-950/40 text-blue-300 font-bold border-l border-slate-800">Yevmiye Hakedişi</th>
                     <th className="py-3 px-3 text-right bg-blue-950/40 text-blue-300 font-bold">Mesai Hakedişi</th>
-                    <th className="py-3 px-3 text-right bg-amber-950/50 text-amber-300 font-bold border-l border-slate-800">Net Toplam Hakediş</th>
+                    <th className="py-3 px-3 text-right bg-amber-950/50 text-amber-300 font-bold border-l border-slate-800">Net Hakediş</th>
+                    <th className="py-3 px-4 text-left min-w-[180px]">Açıklama / Eksik Detayı</th>
                     <th className="py-3 px-4 text-center print:table-cell hidden">İmza</th>
                   </tr>
                 </thead>
@@ -682,24 +691,35 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
                       </td>
 
                       {item.gunlukDetaylar.map((d, idx) => {
-                        const isCalisti = d.normalSaat > 0 || d.mesaiSaat > 0;
                         return (
-                          <td key={d.tarih} className={`py-2.5 px-1 text-center font-mono ${idx === 6 ? 'bg-amber-950/10' : ''}`}>
-                            {isCalisti ? (
-                              <div className="inline-flex flex-col items-center">
-                                <span className="text-emerald-400 font-bold text-[11px]">✓</span>
+                          <td key={d.tarih} className={`py-2 px-1 text-center font-mono ${idx === 6 ? 'bg-amber-950/10' : ''}`}>
+                            {d.isCalisti ? (
+                              <div className="inline-flex flex-col items-center justify-center">
+                                {d.eksikSaat > 0 ? (
+                                  <div className="flex flex-col items-center leading-tight">
+                                    <span className="text-amber-400 font-bold text-[10px]" title={`${d.normalSaat} saat fiili çalışma`}>
+                                      {d.normalSaat.toFixed(1)}s
+                                    </span>
+                                    <span className="text-[9px] text-rose-400 font-semibold bg-rose-950/80 px-1 rounded border border-rose-900" title={`${d.eksikSaat} saat eksik`}>
+                                      -{d.eksikSaat}s
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <div className="flex flex-col items-center leading-tight">
+                                    <span className="text-emerald-400 font-bold text-[11px]">✓</span>
+                                    <span className="text-[9px] text-slate-400 font-normal">8s</span>
+                                  </div>
+                                )}
                                 {d.mesaiSaat > 0 && (
-                                  <span className="text-[9px] text-blue-400 font-bold bg-blue-950 px-1 rounded border border-blue-800">
+                                  <span className="text-[9px] text-blue-400 font-bold bg-blue-950/90 px-1 rounded border border-blue-800 mt-0.5">
                                     +{d.mesaiSaat}s
                                   </span>
                                 )}
                               </div>
-                            ) : !d.istihdamda ? (
-                              <span className="text-slate-600 text-[9px]" title={d.durum}>
-                                {d.durum === 'İşe Başlamadı' ? 'Giriş Yok' : (d.durum === 'İşten Ayrıldı' ? 'Ayrıldı' : '-')}
-                              </span>
                             ) : d.durum === 'D' || d.durum === 'UI' ? (
-                              <span className="text-rose-400 font-semibold text-[10px]" title="Eksik Gün / İzin">Eksik</span>
+                              <span className="text-rose-400 font-bold text-[10px] bg-rose-950/50 px-1 py-0.5 rounded border border-rose-900">
+                                Gelmedi
+                              </span>
                             ) : (
                               <span className="text-slate-600 text-[10px]">-</span>
                             )}
@@ -711,12 +731,16 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
                         {item.calisilanGunSayisi} Gün
                       </td>
 
+                      <td className="py-2.5 px-2 text-center font-mono font-bold text-cyan-300 bg-cyan-950/30">
+                        {item.toplamSaat > 0 ? `${item.toplamSaat.toFixed(1)} s` : '-'}
+                      </td>
+
                       <td className="py-2.5 px-2 text-center font-mono font-bold text-blue-400 bg-slate-950/40">
-                        {item.toplamMesaiSaat > 0 ? `${item.toplamMesaiSaat} s` : '-'}
+                        {item.toplamMesaiSaat > 0 ? `+${item.toplamMesaiSaat.toFixed(1)} s` : '-'}
                       </td>
 
                       <td className="py-2.5 px-2 text-center font-mono font-bold text-rose-400 bg-rose-950/20">
-                        {item.toplamKesintiSaat > 0 ? `-${item.toplamKesintiSaat} s` : '-'}
+                        {item.toplamKesintiSaat > 0 ? `-${item.toplamKesintiSaat.toFixed(1)} s` : '-'}
                       </td>
 
                       <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-200 bg-blue-950/20 border-l border-slate-800">
@@ -729,6 +753,20 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
 
                       <td className="py-2.5 px-3 text-right font-mono font-black text-amber-300 bg-amber-950/30 text-sm border-l border-slate-800">
                         {item.toplamHakedis.toLocaleString('tr-TR')} ₺
+                      </td>
+
+                      <td className="py-2.5 px-4 text-left">
+                        {item.eksikNotlari.length > 0 ? (
+                          <div className="flex items-center gap-1.5 text-amber-300 font-medium text-[11px]">
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                            <span>{item.eksikAciklamaMetni}</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 text-emerald-400/90 text-[11px]">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                            <span>{item.eksikAciklamaMetni}</span>
+                          </div>
+                        )}
                       </td>
 
                       <td className="py-2.5 px-4 text-center print:table-cell hidden border-b">
@@ -747,16 +785,19 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
                       -
                     </td>
                     <td colSpan={7} className="py-3 px-2 text-right text-slate-300 border-l border-slate-800">
-                      Haftalık Toplam Gün &amp; Mesai:
+                      Haftalık Toplamlar:
                     </td>
                     <td className="py-3 px-2 text-center font-mono text-emerald-400 font-black">
                       {genelToplamlar.toplamGun} Gün
                     </td>
+                    <td className="py-3 px-2 text-center font-mono text-cyan-300 font-black">
+                      {genelToplamlar.toplamSaat.toFixed(1)} s
+                    </td>
                     <td className="py-3 px-2 text-center font-mono text-blue-400 font-black">
-                      {genelToplamlar.toplamMesai} s
+                      {genelToplamlar.toplamMesai > 0 ? `+${genelToplamlar.toplamMesai.toFixed(1)} s` : '-'}
                     </td>
                     <td className="py-3 px-2 text-center font-mono text-rose-400 font-black">
-                      {genelToplamlar.toplamKesinti > 0 ? `-${genelToplamlar.toplamKesinti} s` : '-'}
+                      {genelToplamlar.toplamKesinti > 0 ? `-${genelToplamlar.toplamKesinti.toFixed(1)} s` : '-'}
                     </td>
                     <td className="py-3 px-3 text-right font-mono text-slate-200 font-black border-l border-slate-800">
                       {genelToplamlar.toplamYevmiyeTutar.toLocaleString('tr-TR')} ₺
@@ -766,6 +807,9 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
                     </td>
                     <td className="py-3 px-3 text-right font-mono text-amber-300 font-black text-sm bg-amber-950/50 border-l border-slate-800">
                       {genelToplamlar.toplamHakedis.toLocaleString('tr-TR')} ₺
+                    </td>
+                    <td className="py-3 px-4 text-xs text-slate-400">
+                      {icmalListesi.length} Usta Listelendi
                     </td>
                     <td className="py-3 px-4 print:table-cell hidden"></td>
                   </tr>
