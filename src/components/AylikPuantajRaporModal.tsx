@@ -15,6 +15,18 @@ function getDurumBadge(durumKodu: string, durumEtiket?: string, tatilAd?: string
           ⏳ {durumEtiket || 'İstihdam Dışı'}
         </span>
       );
+    case 'BUGUN_BITMEDI':
+      return (
+        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+          ⏳ Bugün (Mesai Devam Ediyor)
+        </span>
+      );
+    case 'GELECEK_GUN':
+      return (
+        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-slate-800/40 text-slate-500 border border-slate-700/40">
+          📅 Gelecek Gün
+        </span>
+      );
     case 'N':
       return (
         <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
@@ -77,7 +89,8 @@ function getPersonelAyGunleri(
   yil: number,
   ay: number,
   puantajlar: GunlukPuantaj[],
-  rejim: '5gun' | '6gun' = '5gun'
+  rejim: '5gun' | '6gun' = '5gun',
+  bugunIso?: string
 ) {
   const gunSayisi = new Date(yil, ay, 0).getDate();
   const gunler = [];
@@ -91,6 +104,8 @@ function getPersonelAyGunleri(
     const tatil = getResmiTatil(isoTarih);
     const isHaftaSonu = gunIdx === 0 || gunIdx === 6;
     const istihdamdaMi = isPersonelCalisiyorMuTarihte(personel, isoTarih);
+    const isBugunMu = Boolean(bugunIso && isoTarih === bugunIso);
+    const isGelecekTarih = Boolean(bugunIso && isoTarih > bugunIso);
 
     // Personelin bu tarihteki puantaj kaydını bul
     const kayit = puantajlar.find(x => {
@@ -142,7 +157,13 @@ function getPersonelAyGunleri(
       eksikSaat = kesinti;
       aciklama = kayit.Aciklama || '';
     } else {
-      if (tatil.isTatil) {
+      if (isBugunMu) {
+        durumKodu = 'BUGUN_BITMEDI';
+        durumEtiket = 'Bugün (Mesai Devam Ediyor)';
+      } else if (isGelecekTarih) {
+        durumKodu = 'GELECEK_GUN';
+        durumEtiket = 'Gelecek Gün';
+      } else if (tatil.isTatil) {
         durumKodu = 'RT';
         durumEtiket = `Resmi Tatil (${tatil.ad || ''})`;
       } else if (isHaftaSonu) {
@@ -196,6 +217,20 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
   const [seciliAy, setSeciliAy] = useState(new Date().getMonth() + 1);
   const [acikPersonelId, setAcikPersonelId] = useState<number | null>(null);
   const [rejim, setRejim] = useState<'5gun' | '6gun'>(calismaRejimi);
+  const [cariHesapTuru, setCariHesapTuru] = useState<'buguneKadar' | 'tumAy'>('buguneKadar');
+
+  const bugun = new Date();
+  const bugunYil = bugun.getFullYear();
+  const bugunAy = bugun.getMonth() + 1;
+  const bugunGun = bugun.getDate(); // Örneğin bugün 3
+  const bugunIso = `${bugunYil}-${String(bugunAy).padStart(2, '0')}-${String(bugunGun).padStart(2, '0')}`;
+
+  const isCariAy = (seciliYil === bugunYil && seciliAy === bugunAy);
+  const isGelecekAy = (seciliYil > bugunYil || (seciliYil === bugunYil && seciliAy > bugunAy));
+  const isGecmisAy = (seciliYil < bugunYil || (seciliYil === bugunYil && seciliAy < bugunAy));
+
+  // Cari ayda bugün henüz bitmediği için düne kadar tamamlanan gün sayısı (Örn: ayın 3'ü ise 2 gün = 16 saat)
+  const tamamlananGunSayisiCari = Math.max(0, bugunGun - 1);
 
   useEffect(() => {
     fetch('/api/mesai-ayarlari')
@@ -264,75 +299,101 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
       return !isNaN(d.getTime()) && d.getFullYear() === seciliYil && (d.getMonth() + 1) === seciliAy;
     });
 
-    // Ay içindeki fiili istihdam günlerini tespit et (Kıst Dönem / Ay Ortası Giriş-Çıkış Kontrolü)
+    // Ay içindeki fiili istihdam günlerini tespit et
     const ayTakvimGunSayisi = new Date(seciliYil, seciliAy, 0).getDate();
     let aktifIstihdamGunSayisi = 0;
+    let tamamlananIstihdamGunu = 0;
+
     for (let g = 1; g <= ayTakvimGunSayisi; g++) {
       const gStr = String(g).padStart(2, '0');
       const mStr = String(seciliAy).padStart(2, '0');
       const isoD = `${seciliYil}-${mStr}-${gStr}`;
+
       if (isPersonelCalisiyorMuTarihte(p, isoD)) {
         aktifIstihdamGunSayisi++;
+
+        if (isCariAy) {
+          if (g < bugunGun) {
+            tamamlananIstihdamGunu++;
+          } else if (g === bugunGun) {
+            // Bugün personelin puantaj kaydı tamamlanıp işlenmişse dahil et; yoksa bugün henüz bitmediği için hariç tut
+            const bugunKayit = pPuantaj.find(x => String(x.Tarih || '').slice(0, 10) === isoD);
+            if (bugunKayit && (Number(bugunKayit.NormalCalismaSaati || 0) > 0 || ['N', 'HT', 'RT', 'UI', 'D', 'YI', 'R', 'M'].includes(bugunKayit.DurumKodu))) {
+              tamamlananIstihdamGunu++;
+            }
+          }
+        } else if (isGecmisAy) {
+          tamamlananIstihdamGunu++;
+        }
       }
     }
 
-    // Kıst dönem tespiti:
-    // Eğer personel ayın tüm günlerinde istihdamda ise (veya giriş-çıkış kaydı girilmemiş tam aktifse):
-    // Standard maktu kuralı uygulanır: Baz Gün = 30 Gün, Baz Saat = 240 Saat (30g × 8s).
-    // Ancak personel ay ortasında işe girmiş veya ayrılmışsa:
-    // SGK ve İş Kanunu esasıyla "Kıst Dönem" uygulanır: Baz Gün = Ay içindeki fiili istihdam gün sayısı, Baz Saat = Baz Gün × 8 Saat.
-    const kistDonemMi = aktifIstihdamGunSayisi > 0 && aktifIstihdamGunSayisi < ayTakvimGunSayisi;
-    const bazGun = kistDonemMi ? aktifIstihdamGunSayisi : (aktifIstihdamGunSayisi === 0 ? 0 : 30);
-    const bazSaat = kistDonemMi ? (aktifIstihdamGunSayisi * 8.0) : (aktifIstihdamGunSayisi === 0 ? 0 : 240.0);
+    // Baz Gün ve Baz Saat Belirleme:
+    let bazGun = 0;
+    let bazSaat = 0;
+    let kistDonemMi = false;
+    let durumEtiketKisa = '';
 
-    const normalGun = pPuantaj.filter(x => {
+    if (isGelecekAy) {
+      bazGun = 0;
+      bazSaat = 0;
+      durumEtiketKisa = 'Gelecek Ay';
+    } else if (isCariAy && cariHesapTuru === 'buguneKadar') {
+      // Cari ayda bugüne kadar tamamlanan günler baz alınır (Bugün henüz bitmediği için 2 gün = 16 saat)
+      bazGun = tamamlananIstihdamGunu;
+      bazSaat = tamamlananIstihdamGunu * 8.0;
+      kistDonemMi = true;
+      durumEtiketKisa = `Cari (${tamamlananIstihdamGunu}g / ${bazSaat}s)`;
+    } else {
+      // Geçmiş ay veya Tam Ay Projeksiyonu
+      if (aktifIstihdamGunSayisi >= ayTakvimGunSayisi) {
+        bazGun = 30;
+        bazSaat = 240.0;
+        kistDonemMi = false;
+        durumEtiketKisa = 'Tam Ay (30g / 240s)';
+      } else {
+        bazGun = aktifIstihdamGunSayisi;
+        bazSaat = aktifIstihdamGunSayisi * 8.0;
+        kistDonemMi = true;
+        durumEtiketKisa = `Kıst (${aktifIstihdamGunSayisi}g / ${bazSaat}s)`;
+      }
+    }
+
+    // Geçerli puantaj kayıtları (Cari ayda henüz tamamlanmamış bugün veya gelecek günler hesaba katılmaz)
+    const gecerliPuantaj = pPuantaj.filter(x => {
       const clean = String(x.Tarih || '').slice(0, 10);
-      return (x.DurumKodu === 'N' || x.NormalCalismaSaati > 0) && isPersonelCalisiyorMuTarihte(p, clean);
-    }).length;
-    const haftaTatiliGun = pPuantaj.filter(x => {
-      const clean = String(x.Tarih || '').slice(0, 10);
-      return x.DurumKodu === 'HT' && isPersonelCalisiyorMuTarihte(p, clean);
-    }).length;
-    const resmiTatilGun = pPuantaj.filter(x => {
-      const clean = String(x.Tarih || '').slice(0, 10);
-      return x.DurumKodu === 'RT' && isPersonelCalisiyorMuTarihte(p, clean);
-    }).length;
+      if (!isPersonelCalisiyorMuTarihte(p, clean)) return false;
+
+      if (isCariAy && cariHesapTuru === 'buguneKadar') {
+        if (clean > bugunIso) return false;
+        if (clean === bugunIso) {
+          return (Number(x.NormalCalismaSaati || 0) > 0 || ['N', 'HT', 'RT', 'UI', 'D', 'YI', 'R', 'M'].includes(x.DurumKodu));
+        }
+      }
+      if (isGelecekAy) return false;
+      return true;
+    });
+
+    const normalGun = gecerliPuantaj.filter(x => x.DurumKodu === 'N' || x.NormalCalismaSaati > 0).length;
+    const haftaTatiliGun = gecerliPuantaj.filter(x => x.DurumKodu === 'HT').length;
+    const resmiTatilGun = gecerliPuantaj.filter(x => x.DurumKodu === 'RT').length;
     
     // Ücretli İzinler (Yİ: Yıllık İzin, R: Raporlu, M: Mazeret İzni) - DÜŞÜLMEZ!
-    const ucretliIzinGun = pPuantaj.filter(x => {
-      const clean = String(x.Tarih || '').slice(0, 10);
-      return ['YI', 'R', 'M'].includes(x.DurumKodu) && isPersonelCalisiyorMuTarihte(p, clean);
-    }).length;
+    const ucretliIzinGun = gecerliPuantaj.filter(x => ['YI', 'R', 'M'].includes(x.DurumKodu)).length;
 
     // Ücretsiz İzin (UI) ve Devamsız (D) - Sadece istihdamda olduğu günlerdeki kesintiler bazdan düşülür!
-    const ucretsizIzinGun = pPuantaj.filter(x => {
-      const clean = String(x.Tarih || '').slice(0, 10);
-      return x.DurumKodu === 'UI' && isPersonelCalisiyorMuTarihte(p, clean);
-    }).length;
-    const devamsizGun = pPuantaj.filter(x => {
-      const clean = String(x.Tarih || '').slice(0, 10);
-      return x.DurumKodu === 'D' && isPersonelCalisiyorMuTarihte(p, clean);
-    }).length;
+    const ucretsizIzinGun = gecerliPuantaj.filter(x => x.DurumKodu === 'UI').length;
+    const devamsizGun = gecerliPuantaj.filter(x => x.DurumKodu === 'D').length;
     const devamsizVeUcretsizGun = ucretsizIzinGun + devamsizGun;
 
-    const toplamNormalSaat = pPuantaj.reduce((sum, x) => {
-      const clean = String(x.Tarih || '').slice(0, 10);
-      return isPersonelCalisiyorMuTarihte(p, clean) ? sum + (x.NormalCalismaSaati || 0) : sum;
-    }, 0);
-    const toplamFazlaMesai = pPuantaj.reduce((sum, x) => {
-      const clean = String(x.Tarih || '').slice(0, 10);
-      return isPersonelCalisiyorMuTarihte(p, clean) ? sum + (x.FazlaMesaiSaati || 0) : sum;
-    }, 0);
-    const toplamTatilMesai = pPuantaj.reduce((sum, x) => {
-      const clean = String(x.Tarih || '').slice(0, 10);
-      return isPersonelCalisiyorMuTarihte(p, clean) ? sum + (x.HaftaTatiliMesaiSaati || 0) + (x.ResmiTatilMesaiSaati || 0) : sum;
-    }, 0);
+    // Normal çalışma saati (Günde 8 saat esasıyla)
+    const toplamNormalSaat = normalGun * 8.0;
+    const toplamFazlaMesai = gecerliPuantaj.reduce((sum, x) => sum + (x.FazlaMesaiSaati || 0), 0);
+    const toplamTatilMesai = gecerliPuantaj.reduce((sum, x) => sum + (x.HaftaTatiliMesaiSaati || 0) + (x.ResmiTatilMesaiSaati || 0), 0);
     
     // Eksik saat hesabı: Saatlik ücretsiz kesintiler + Tam gün Ücretsiz İzin (UI) ve Devamsızlık (D) günleri
-    const toplamEksikSaat = pPuantaj.reduce((sum, x) => {
+    const toplamEksikSaat = gecerliPuantaj.reduce((sum, x) => {
       const cleanDate = String(x.Tarih || '').slice(0, 10);
-      if (!isPersonelCalisiyorMuTarihte(p, cleanDate)) return sum;
-
       const stdSaat = getStandartNormalSaat(cleanDate, rejim);
       const kesinti = Number(x.SaatlikKesintiUcretsiz || 0);
       if (x.DurumKodu === 'UI' || x.DurumKodu === 'D') {
@@ -348,7 +409,7 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
     const artirimliMesaiGunu = artirimliMesaiSaati / 8.0;
     const eksikGun = toplamEksikSaat / 8.0;
 
-    // Net Hakediş (Tam ayda 30 gün / 240 saat, Kıst dönemde personelin fiili baz günü / baz saati üzerinden):
+    // Net Hakediş (Tam ayda 30 gün / 240 saat, Cari ayda ve kıst dönemde fiili baz gün / baz saat üzerinden):
     const netGun = Math.max(0, bazGun - eksikGun + artirimliMesaiGunu);
     const netSaat = Math.max(0, bazSaat - toplamEksikSaat + artirimliMesaiSaati);
 
@@ -360,6 +421,8 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
       bazGun,
       bazSaat,
       aktifIstihdamGunSayisi,
+      tamamlananIstihdamGunu,
+      durumEtiketKisa,
       normalGun,
       haftaTatiliGun,
       resmiTatilGun,
@@ -408,13 +471,12 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
   const handleCsvExport = () => {
     const ayAdi = aylar.find(a => a.no === seciliAy)?.ad || '';
     let csv = `RENDE İNŞAAT MOBİLYA TURİZM A.Ş. - AYLIK PUANTAJ & BORDRO İCMAL CETVELİ\n`;
-    csv += `Dönem: ${ayAdi} ${seciliYil} - Rapor Tarihi: ${formatTarihTR(getBugunIso())}\n`;
-    csv += `Hesaplama Esası: Tam ay çalışanlar için standart 30 gün (240 saat: 8 saat/gün esası); ay ortasında işe giren veya ayrılanlar için ay içindeki fiili istihdam gün sayısı (Kıst Dönem: Fiili Gün × 8 Saat) baz alınmıştır. Ücretsiz izin ve devamsızlıklar bazdan düşülmüş, ücretli izinler korunmuş, fazla mesailer %50 (x1.5) ve tatil mesaileri %100 (x2.0) artırımlı eklenmiştir.\n\n`;
+    csv += `Dönem: ${ayAdi} ${seciliYil} ${isCariAy && cariHesapTuru === 'buguneKadar' ? `(Cari Ay - ${bugunGun} ${ayAdi} İtibarıyla Tamamlanan ${tamamlananGunSayisiCari} Gün / ${tamamlananGunSayisiCari * 8} Saat)` : ''} - Rapor Tarihi: ${formatTarihTR(getBugunIso())}\n`;
+    csv += `Hesaplama Esası: ${isCariAy && cariHesapTuru === 'buguneKadar' ? `Cari ay içerisinde bulunulduğu ve bugün (${bugunGun} ${ayAdi}) henüz bitmediği için tamamlanan ${tamamlananGunSayisiCari} gün (${tamamlananGunSayisiCari * 8} saat) baz alınmıştır.` : 'Tam ay çalışanlar için standart 30 gün (240 saat: 8 saat/gün esası); kıst dönem çalışanlar için fiili istihdam gün sayısı baz alınmıştır.'} Ücretsiz izin ve devamsızlıklar bazdan düşülmüş, ücretli izinler korunmuş, fazla mesailer %50 (x1.5) ve tatil mesaileri %100 (x2.0) artırımlı eklenmiştir.\n\n`;
     csv += `Personel;Departman;İstihdam Türü;Baz Gün;Normal Gün;Hafta Tatili;Resmi Tatil;Ücretli İzin (Yİ/R/M);Devamsız & Ü.İzin;Normal Saat;Fazla Mesai (%50);Tatil Mesaisi (%100);Eksik Saat;Net Gün;Net Saat;İmza\n`;
 
     icmalListesi.forEach(item => {
-      const istihdamTuru = item.kistDonemMi ? `Kıst Dönem (${item.bazGun} Gün)` : `Tam Ay (30 Gün)`;
-      csv += `${item.adSoyad};${item.departman};${istihdamTuru};${item.bazGun};${item.normalGun};${item.haftaTatiliGun};${item.resmiTatilGun};${item.ucretliIzinGun};${item.devamsizVeUcretsizGun};${item.toplamNormalSaat.toFixed(1)};${item.toplamFazlaMesai.toFixed(1)};${item.toplamTatilMesai.toFixed(1)};${item.toplamEksikSaat.toFixed(1)};${item.netGun.toFixed(2)};${item.netSaat.toFixed(1)};\n`;
+      csv += `${item.adSoyad};${item.departman};${item.durumEtiketKisa};${item.bazGun};${item.normalGun};${item.haftaTatiliGun};${item.resmiTatilGun};${item.ucretliIzinGun};${item.devamsizVeUcretsizGun};${item.toplamNormalSaat.toFixed(1)};${item.toplamFazlaMesai.toFixed(1)};${item.toplamTatilMesai.toFixed(1)};${item.toplamEksikSaat.toFixed(1)};${item.netGun.toFixed(2)};${item.netSaat.toFixed(1)};\n`;
     });
 
     csv += `GENEL TOPLAM (${icmalListesi.length} Personel);-;-;-;${genelToplam.normalGun};${genelToplam.haftaTatiliGun};${genelToplam.resmiTatilGun};${genelToplam.ucretliIzinGun};${genelToplam.devamsizVeUcretsizGun};${genelToplam.toplamNormalSaat.toFixed(1)};${genelToplam.toplamFazlaMesai.toFixed(1)};${genelToplam.toplamTatilMesai.toFixed(1)};${genelToplam.toplamEksikSaat.toFixed(1)};${genelToplam.netGun.toFixed(2)};${genelToplam.netSaat.toFixed(1)};\n`;
@@ -437,7 +499,7 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
       <tr>
         <td style="padding: 4px 6px; font-weight: bold; border: 1px solid #334155;">
           ${idx + 1}. ${item.adSoyad}
-          ${item.kistDonemMi ? `<span style="font-size: 7pt; color: #b45309; font-weight: bold; margin-left: 4px;">(Kıst: ${item.bazGun}g)</span>` : ''}
+          <span style="font-size: 7pt; color: #b45309; font-weight: bold; margin-left: 4px;">(${item.durumEtiketKisa})</span>
         </td>
         <td style="padding: 4px 6px; border: 1px solid #334155;">${item.departman}</td>
         <td style="padding: 4px 6px; text-align: center; border: 1px solid #334155;">${item.normalGun}</td>
@@ -470,7 +532,7 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
         <td style="padding: 6px; text-align: center; border: 2px solid #000; font-family: monospace;">${genelToplam.toplamTatilMesai > 0 ? genelToplam.toplamTatilMesai.toFixed(1) : '-'}</td>
         <td style="padding: 6px; text-align: center; border: 2px solid #000; font-family: monospace; color: #b91c1c;">${genelToplam.toplamEksikSaat > 0 ? genelToplam.toplamEksikSaat.toFixed(1) : '-'}</td>
         <td style="padding: 6px; text-align: center; border: 2px solid #000; font-family: monospace; font-weight: 900; background-color: #cbd5e1;">${genelToplam.netGun.toFixed(2)}</td>
-        <td style="padding: 6px; text-align: center; border: 2px solid #000; font-family: monospace; font-weight: 900; background-color: #cbd5e1;">${genelToplam.netSaat.toFixed(1)}</td>
+        <td style="padding: 6px; text-align: border: 2px solid #000; font-family: monospace; font-weight: 900; background-color: #cbd5e1;">${genelToplam.netSaat.toFixed(1)}</td>
         <td style="padding: 6px; text-align: center; border: 2px solid #000; font-size: 8pt;">Genel İcmal</td>
       </tr>
     `;
@@ -564,7 +626,7 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
           <div class="company-title">RENDE İNŞAAT MOBİLYA TURİZM SAN. VE TİC. A.Ş.</div>
           <div class="report-title">AYLIK PERSONEL PUANTAJ & BORDRO İCMAL CETVELİ</div>
           <div class="sub-bar">
-            <span><strong>Dönem:</strong> ${ayAdi} ${seciliYil}</span>
+            <span><strong>Dönem:</strong> ${ayAdi} ${seciliYil} ${isCariAy && cariHesapTuru === 'buguneKadar' ? `(Cari Ay - ${bugunGun} ${ayAdi} İtibarıyla: ${tamamlananGunSayisiCari} Gün / ${tamamlananGunSayisiCari * 8}s)` : ''}</span>
             <span><strong>Rapor Tarihi:</strong> ${bugunTarih}</span>
             <span><strong>Toplam Personel:</strong> ${icmalListesi.length} Kişi</span>
           </div>
@@ -598,7 +660,7 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
         </table>
 
         <div class="rule-note">
-          * Bordro Hesaplama Esasları: Tam ay istihdamda olan personeller için standart 30 gün (240 saat: 8 saat/gün esası) uygulanır. Ay içinde işe giren veya işten ayrılan personeller için ay içindeki fiili istihdam gün sayısı (Kıst Dönem: Fiili Gün × 8 Saat) baz alınır. Devamsızlık ve ücretsiz izinler baz hakedişten düşülmüş, ücretli izinler (yıllık izin, rapor, mazeret, hafta tatili, resmi tatil) tam ödenmiştir. Fazla mesailer %50 (x1.5), tatil mesaileri %100 (x2.0) artırımlı olarak net gün ve saate yansıtılmıştır.
+          * Bordro Hesaplama Esasları: ${isCariAy && cariHesapTuru === 'buguneKadar' ? `Cari ay devam ettiğinden ve bugün (${bugunGun} ${ayAdi}) henüz bitmediğinden, bugüne kadar tamamlanan ${tamamlananGunSayisiCari} gün (${tamamlananGunSayisiCari * 8} saat) baz alınmıştır.` : 'Tam ay çalışan personeller için standart 30 gün (240 saat: 8 saat/gün esası), kıst dönem personeller için fiili istihdam günü baz alınmıştır.'} Devamsızlık ve ücretsiz izinler baz hakedişten düşülmüş, ücretli izinler (yıllık izin, rapor, mazeret, hafta tatili, resmi tatil) tam ödenmiştir. Fazla mesailer %50 (x1.5), tatil mesaileri %100 (x2.0) artırımlı olarak net gün ve saate yansıtılmıştır.
         </div>
 
         <div class="signatures">
@@ -818,6 +880,35 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
               </select>
             </div>
 
+            {isCariAy && (
+              <div className="flex items-center bg-slate-900 border border-slate-700/80 rounded-lg p-0.5 text-xs print:hidden">
+                <button
+                  type="button"
+                  onClick={() => setCariHesapTuru('buguneKadar')}
+                  className={`px-3 py-1.5 rounded-md font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                    cariHesapTuru === 'buguneKadar'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                  title={`Bugün ayın ${bugunGun}'ü ve mesai bitmediği için tamamlanan ${tamamlananGunSayisiCari} gün (${tamamlananGunSayisiCari * 8} saat) baz alınır`}
+                >
+                  <span>📅 Bugüne Kadar ({tamamlananGunSayisiCari} Gün / {tamamlananGunSayisiCari * 8}s)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCariHesapTuru('tumAy')}
+                  className={`px-3 py-1.5 rounded-md font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                    cariHesapTuru === 'tumAy'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                  title="Ay sonu maktu 30 gün (240 saat) projeksiyonu"
+                >
+                  <span>Tüm Ay Projeksiyonu (30g / 240s)</span>
+                </button>
+              </div>
+            )}
+
             <button
               onClick={handleCsvExport}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-700 hover:bg-teal-600 text-white text-xs font-bold rounded-lg transition"
@@ -850,8 +941,14 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
         {/* Bordro Esası Bilgilendirme Çubuğu */}
         <div className="px-6 py-2.5 bg-slate-950/90 border-b border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs print:hidden">
           <div className="flex items-center gap-2 text-slate-300">
-            <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
-            <span><strong>Bordro Esası:</strong> Tam ay çalışanlar için 30 gün (240 saat: 8 saat/gün); ay ortasında işe giren veya ayrılanlar için fiili istihdam gün sayısı (Kıst Dönem) baz alınır. Devamsızlık ve ücretsiz izinler düşülür, ücretli izinler korunur.</span>
+            <span className={`w-2 h-2 rounded-full ${isCariAy && cariHesapTuru === 'buguneKadar' ? 'bg-amber-400' : 'bg-cyan-400'}`}></span>
+            {isCariAy && cariHesapTuru === 'buguneKadar' ? (
+              <span><strong>Cari Ay Durumu:</strong> Bugün ayın {bugunGun}'ü ve mesai henüz tamamlanmadığı için, bugüne kadar tamamlanan <strong>{tamamlananGunSayisiCari} gün ({tamamlananGunSayisiCari * 8} saat)</strong> esas alınmıştır. Henüz bitmemiş olan bugün ve gelecek günler dahil edilmemiştir.</span>
+            ) : isGecmisAy ? (
+              <span><strong>Geçmiş Ay Bordro Esası:</strong> Ay tamamlandığı için tam ay çalışanlara 30 gün (240 saat: 8s/gün), kıst dönem personellere fiili istihdam günü baz alınmıştır.</span>
+            ) : (
+              <span><strong>Tüm Ay Projeksiyonu:</strong> Maktu 30 gün (240 saat) üzerinden tüm ay tamamlama tahmini gösterilmektedir.</span>
+            )}
           </div>
           <div className="flex items-center gap-3 font-mono text-xs">
             <span className="text-slate-400">Genel Net Bordro Gün Toplamı: <strong className="text-cyan-300 font-bold">{genelToplam.netGun.toFixed(2)} Gün</strong></span>
@@ -905,7 +1002,7 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
                 icmalListesi.map((item) => {
                   const isAcik = acikPersonelId === item.personelId;
                   const ayAdi = aylar.find(a => a.no === seciliAy)?.ad || '';
-                  const gunlerDetay = isAcik ? getPersonelAyGunleri(item.rawPersonel, seciliYil, seciliAy, puantajlar, rejim) : [];
+                  const gunlerDetay = isAcik ? getPersonelAyGunleri(item.rawPersonel, seciliYil, seciliAy, puantajlar, rejim, bugunIso) : [];
 
                   return (
                     <React.Fragment key={item.personelId}>
