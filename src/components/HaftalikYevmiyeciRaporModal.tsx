@@ -68,7 +68,7 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
         const kesintiSaat = kayit ? Number(kayit.SaatlikKesintiUcretsiz || 0) : 0;
         const durum = kayit ? kayit.DurumKodu : '-';
 
-        if (normalSaat > 0 || durum === 'N' || durum === 'RT' || durum === 'HT') {
+        if (kayit && (normalSaat > 0 || durum === 'N' || durum === 'RT' || (durum === 'HT' && mesaiSaat > 0))) {
           calisilanGunSayisi += 1;
         }
         toplamMesaiSaat += mesaiSaat;
