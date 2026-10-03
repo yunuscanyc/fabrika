@@ -266,7 +266,7 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
       const stdSaat = getStandartNormalSaat(cleanDate, rejim);
       const kesinti = Number(x.SaatlikKesintiUcretsiz || 0);
       if (x.DurumKodu === 'UI' || x.DurumKodu === 'D') {
-        return sum + (kesinti > 0 ? kesinti : (stdSaat > 0 ? stdSaat : 7.5));
+        return sum + (kesinti > 0 ? kesinti : (stdSaat > 0 ? stdSaat : 8.0));
       }
       return sum + kesinti;
     }, 0);
@@ -275,12 +275,13 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
     // Fazla Mesai (%50 artırımlı): Saat x 1.5
     // Tatil Mesaisi (%100 artırımlı): Saat x 2.0
     const artirimliMesaiSaati = (toplamFazlaMesai * 1.5) + (toplamTatilMesai * 2.0);
-    const artirimliMesaiGunu = artirimliMesaiSaati / 7.5;
-    const eksikGun = toplamEksikSaat / 7.5;
+    // Fabrika çalışma esası: 1 gün = 8 saat, 30 gün = 240 saat
+    const artirimliMesaiGunu = artirimliMesaiSaati / 8.0;
+    const eksikGun = toplamEksikSaat / 8.0;
 
     // 30 Günden eksik mesaileri düş (ücretsiz izin ve devamsızlıklar), fazla mesaileri gerekli artırımlarla ekle:
     const netGun = Math.max(0, 30 - eksikGun + artirimliMesaiGunu);
-    const netSaat = Math.max(0, 225 - toplamEksikSaat + artirimliMesaiSaati);
+    const netSaat = Math.max(0, 240 - toplamEksikSaat + artirimliMesaiSaati);
 
     return {
       personelId: p.PersonelId,
@@ -334,8 +335,8 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
     const ayAdi = aylar.find(a => a.no === seciliAy)?.ad || '';
     let csv = `RENDE İNŞAAT MOBİLYA TURİZM A.Ş. - AYLIK PUANTAJ & BORDRO İCMAL CETVELİ\n`;
     csv += `Dönem: ${ayAdi} ${seciliYil} - Rapor Tarihi: ${formatTarihTR(getBugunIso())}\n`;
-    csv += `Hesaplama Esası: Aylık maktu 30 gün (225 saat) baz alınmıştır. Ücretsiz izin ve devamsızlıklar düşülmüş, ücretli izinler korunmuş, fazla mesailer %50 (x1.5) ve tatil mesaileri %100 (x2.0) artırımlı eklenmiştir.\n\n`;
-    csv += `Personel;Departman;Normal Gün;Hafta Tatili;Resmi Tatil;Ücretli İzin (Yİ/R/M);Devamsız & Ü.İzin;Normal Saat;Fazla Mesai (%50);Tatil Mesaisi (%100);Eksik Saat;Net Gün (30 Esas);Net Saat (225 Esas);İmza\n`;
+    csv += `Hesaplama Esası: Aylık maktu 30 gün (240 saat: 30 gün × 8 saat) baz alınmıştır. Ücretsiz izin ve devamsızlıklar düşülmüş, ücretli izinler korunmuş, fazla mesailer %50 (x1.5) ve tatil mesaileri %100 (x2.0) artırımlı eklenmiştir.\n\n`;
+    csv += `Personel;Departman;Normal Gün;Hafta Tatili;Resmi Tatil;Ücretli İzin (Yİ/R/M);Devamsız & Ü.İzin;Normal Saat;Fazla Mesai (%50);Tatil Mesaisi (%100);Eksik Saat;Net Gün (30 Esas);Net Saat (240 Esas);İmza\n`;
 
     icmalListesi.forEach(item => {
       csv += `${item.adSoyad};${item.departman};${item.normalGun};${item.haftaTatiliGun};${item.resmiTatilGun};${item.ucretliIzinGun};${item.devamsizVeUcretsizGun};${item.toplamNormalSaat.toFixed(1)};${item.toplamFazlaMesai.toFixed(1)};${item.toplamTatilMesai.toFixed(1)};${item.toplamEksikSaat.toFixed(1)};${item.netGun.toFixed(2)};${item.netSaat.toFixed(1)};\n`;
@@ -519,7 +520,7 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
         </table>
 
         <div class="rule-note">
-          * Bordro Hesaplama Esasları: Kadrolu personeller için aylık standart 30 gün (225 saat) baz alınmıştır. Devamsızlık ve ücretsiz izinler 30 günden düşülmüş, ücretli izinler (yıllık izin, rapor, mazeret, hafta tatili, resmi tatil) tam ödenmiştir. Fazla mesailer %50 (x1.5), tatil mesaileri %100 (x2.0) artırımlı olarak net gün ve saate yansıtılmıştır.
+          * Bordro Hesaplama Esasları: Kadrolu personeller için aylık standart 30 gün (240 saat: 8 saat/gün esası) baz alınmıştır. Devamsızlık ve ücretsiz izinler 30 günden düşülmüş, ücretli izinler (yıllık izin, rapor, mazeret, hafta tatili, resmi tatil) tam ödenmiştir. Fazla mesailer %50 (x1.5), tatil mesaileri %100 (x2.0) artırımlı olarak net gün ve saate yansıtılmıştır.
         </div>
 
         <div class="signatures">
@@ -811,7 +812,7 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
                 <th className="py-2.5 px-2 text-center font-bold text-emerald-300 print:py-1.5 print:px-1 print:text-black">%100 Mesai</th>
                 <th className="py-2.5 px-2 text-center font-bold text-rose-400 print:py-1.5 print:px-1 print:text-black">Eksik Saat</th>
                 <th className="py-2.5 px-2 text-center font-black text-cyan-300 bg-cyan-950/40 print:py-1.5 print:px-1 print:text-black print:bg-slate-200" title="Aylık 30 Gün Esaslı Net Hakediş Günü">Net Gün (30 Esas)</th>
-                <th className="py-2.5 px-2 text-center font-black text-emerald-300 bg-emerald-950/40 print:py-1.5 print:px-1 print:text-black print:bg-slate-200" title="Aylık 225 Saat Esaslı Net Hakediş Saati">Net Saat</th>
+                <th className="py-2.5 px-2 text-center font-black text-emerald-300 bg-emerald-950/40 print:py-1.5 print:px-1 print:text-black print:bg-slate-200" title="Aylık 240 Saat Esaslı Net Hakediş Saati (30 gün × 8 saat)">Net Saat (240 Esas)</th>
                 <th className="py-2.5 px-4 text-center border-l border-slate-800 print:py-1.5 print:px-3 print:border-l print:border-black">İmza</th>
               </tr>
             </thead>
