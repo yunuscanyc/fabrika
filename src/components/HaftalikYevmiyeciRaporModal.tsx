@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Personel, GunlukPuantaj } from '../types';
 import { FileSpreadsheet, Printer, X, Calendar, ChevronLeft, ChevronRight, Calculator, UserCheck } from 'lucide-react';
 import { formatTarihTR, getBugunIso, tarihKaydir, getGunIndex } from '../utils/dateUtils';
+import { isPersonelCalisiyorMuHaftada, isPersonelCalisiyorMuTarihte } from '../utils/personelUtils';
 
 interface HaftalikYevmiyeciRaporModalProps {
   isOpen: boolean;
@@ -27,6 +28,10 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
     return tarihKaydir(bugun, farkToPzt);
   });
 
+  // Kullanıcı Talebi: "çalışılmamış (işe girişi olmayan) haftalarda görünmesin isimler"
+  // Varsayılan olarak yalnızca bu hafta çalışan / hakedişi olan ustalar gösterilir
+  const [sadeceCalisanlar, setSadeceCalisanlar] = useState<boolean>(true);
+
   // Haftanın 7 gününü hesapla (Pzt -> Pzr)
   const haftaGunleri = useMemo(() => {
     const gunler = [];
@@ -49,26 +54,62 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
     setSeciliPazartesi(prev => tarihKaydir(prev, yon * 7));
   };
 
-  // Yevmiyeci Ustaları Filtrele
+  // Yevmiyeci Ustaları Filtrele (Yalnızca bu haftada istihdamda olan/işe girişi geçerli olanlar)
   const yevmiyeciler = useMemo(() => {
-    return personeller.filter(p => Boolean(p.IsYevmiyeci || p.CalismaTuru === 'Yevmiyeci'));
-  }, [personeller]);
+    const yevList = personeller.filter(p => (p.IsYevmiyeci || p.CalismaTuru === 'Yevmiyeci') && !p.SilindiMi);
+
+    // Çift kayıtları normalize et (Örn: Pasif ve Aktif mükerrer kayıt varsa aktif olanı tercih et)
+    const benzersizMap = new Map<string, Personel>();
+    yevList.forEach(p => {
+      const normKey = (p.AdSoyad || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      if (!benzersizMap.has(normKey)) {
+        benzersizMap.set(normKey, p);
+      } else if (!benzersizMap.get(normKey)!.DurumAktifMi && p.DurumAktifMi) {
+        benzersizMap.set(normKey, p);
+      }
+    });
+
+    return Array.from(benzersizMap.values()).filter(p => {
+      // İşe giriş tarihi bu haftadan sonra olan veya bu haftadan önce ayrılmış olanlar listelenmez!
+      return isPersonelCalisiyorMuHaftada(p, seciliPazartesi, pazarTarih);
+    });
+  }, [personeller, seciliPazartesi, pazarTarih]);
 
   // Her yevmiyecinin haftalık dökümü
-  const icmalListesi = useMemo(() => {
+  const hamIcmalListesi = useMemo(() => {
     return yevmiyeciler.map(y => {
       let calisilanGunSayisi = 0;
       let toplamMesaiSaat = 0;
       let toplamKesintiSaat = 0;
 
       const gunlukDetaylar = haftaGunleri.map(g => {
+        // Kişi bu tarihte fabrikada çalışıyor mu (işe giriş öncesi veya çıkış sonrası günler hakedişe dahil edilmez)
+        const isIstihdamda = isPersonelCalisiyorMuTarihte(y, g.isoTarih);
+        if (!isIstihdamda) {
+          const giris = (y.IseGirisTarihi || '').slice(0, 10);
+          const cikis = (y.IstenCikisTarihi || '').slice(0, 10);
+          const durumEtiket = (giris && g.isoTarih < giris) ? 'İşe Başlamadı' : (cikis && g.isoTarih >= cikis ? 'İşten Ayrıldı' : 'İstihdam Dışı');
+          return {
+            tarih: g.isoTarih,
+            durum: durumEtiket,
+            normalSaat: 0,
+            mesaiSaat: 0,
+            kesintiSaat: 0,
+            istihdamda: false
+          };
+        }
+
         const kayit = puantajlar.find(p => p.PersonelId === y.PersonelId && String(p.Tarih || '').slice(0, 10) === g.isoTarih);
         const normalSaat = kayit ? Number(kayit.NormalCalismaSaati || 0) : 0;
-        const mesaiSaat = kayit ? (Number(kayit.FazlaMesaiSaati || 0) + Number(kayit.HaftaTatiliMesaiSaati || 0)) : 0;
+        const mesaiSaat = kayit ? (Number(kayit.FazlaMesaiSaati || 0) + Number(kayit.HaftaTatiliMesaiSaati || 0) + Number(kayit.ResmiTatilMesaiSaati || 0)) : 0;
         const kesintiSaat = kayit ? Number(kayit.SaatlikKesintiUcretsiz || 0) : 0;
         const durum = kayit ? kayit.DurumKodu : '-';
 
-        if (kayit && (normalSaat > 0 || durum === 'N' || durum === 'RT' || (durum === 'HT' && mesaiSaat > 0))) {
+        // Yevmiyeci için fiilen çalışılan gün:
+        // Yevmiyeci ustalar çalıştıkları gün kadar yevmiye alırlar.
+        // Fiilen çalışma saati (normalSaat > 0) veya tatil günü mesaisi (mesaiSaat > 0) varsa çalışılan gün sayılır.
+        const isCalisilanGun = normalSaat > 0 || (durum === 'HT' && mesaiSaat > 0) || (durum === 'RT' && (normalSaat > 0 || mesaiSaat > 0));
+        if (isCalisilanGun) {
           calisilanGunSayisi += 1;
         }
         toplamMesaiSaat += mesaiSaat;
@@ -79,7 +120,8 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
           durum,
           normalSaat,
           mesaiSaat,
-          kesintiSaat
+          kesintiSaat,
+          istihdamda: true
         };
       });
 
@@ -106,6 +148,17 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
       };
     });
   }, [yevmiyeciler, haftaGunleri, puantajlar]);
+
+  // Kullanıcı Talebi: "çalışılmamış (işe girişi olmayan) haftalarda görünmesin isimler"
+  // Sadece çalışanlar filtresi açıkken veya çalışılmamış haftalarda (0 gün, 0 mesai) usta isimleri gizlenir
+  const icmalListesi = useMemo(() => {
+    if (!sadeceCalisanlar) {
+      // Tüm istihdamdaki ustalar listesinde dahi yalnızca o hafta işe girişi aktif olanlar gösterilir
+      return hamIcmalListesi;
+    }
+    // Sadece bu hafta fiilen çalışmış veya mesaisi/hakedişi olanlar görünür
+    return hamIcmalListesi.filter(item => item.calisilanGunSayisi > 0 || item.toplamMesaiSaat > 0);
+  }, [hamIcmalListesi, sadeceCalisanlar]);
 
   // Genel Toplamlar
   const genelToplamlar = useMemo(() => {
@@ -157,13 +210,15 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
 
     const rowsHtml = icmalListesi.map((item, idx) => {
       const gunCells = item.gunlukDetaylar.map(d => {
-        const isCalisti = d.normalSaat > 0 || d.durum === 'N' || d.durum === 'RT' || d.durum === 'HT';
+        const isCalisti = d.normalSaat > 0 || d.mesaiSaat > 0;
         let content = '<span style="color: #94a3b8;">-</span>';
         if (isCalisti) {
           content = '<span style="color: #15803d; font-weight: bold;">✓</span>';
           if (d.mesaiSaat > 0) {
             content += `<br/><span style="font-size: 7.5pt; font-weight: bold; color: #1d4ed8;">+${d.mesaiSaat}s</span>`;
           }
+        } else if (!d.istihdamda) {
+          content = `<span style="color: #94a3b8; font-size: 7pt;">${d.durum === 'İşe Başlamadı' ? 'Giriş Yok' : (d.durum === 'İşten Ayrıldı' ? 'Ayrıldı' : '-')}</span>`;
         } else if (d.durum === 'D' || d.durum === 'UI') {
           content = '<span style="color: #b91c1c; font-size: 8pt; font-weight: bold;">Eksik</span>';
         }
@@ -533,8 +588,39 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
             </button>
           </div>
 
-          <div className="text-xs text-slate-400">
-            Toplam Yevmiyeci Usta: <strong className="text-white font-mono">{yevmiyeciler.length} Personel</strong>
+          <div className="flex items-center gap-3">
+            {/* Çalışanlar / Tüm Ustalar Filtresi */}
+            <div className="flex items-center bg-slate-900 border border-slate-700/80 rounded-lg p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setSadeceCalisanlar(true)}
+                className={`px-3 py-1.5 rounded-md font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  sadeceCalisanlar
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Yalnızca bu hafta fiilen çalışması veya mesaisi olan ustaları listeler"
+              >
+                <UserCheck className="w-3.5 h-3.5" />
+                <span>Sadece Bu Hafta Çalışanlar ({hamIcmalListesi.filter(x => x.calisilanGunSayisi > 0 || x.toplamMesaiSaat > 0).length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSadeceCalisanlar(false)}
+                className={`px-3 py-1.5 rounded-md font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  !sadeceCalisanlar
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Bu hafta istihdamda olan (işe başlamış) tüm kayıtlı yevmiyecileri listeler"
+              >
+                <span>Tüm İstihdamdaki Ustalar ({yevmiyeciler.length})</span>
+              </button>
+            </div>
+
+            <div className="text-xs text-slate-400 font-mono hidden md:block">
+              Listelenen: <strong className="text-white font-bold">{icmalListesi.length} Usta</strong>
+            </div>
           </div>
         </div>
 
@@ -550,9 +636,15 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
           {icmalListesi.length === 0 ? (
             <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-8 text-center text-slate-400">
               <UserCheck className="w-10 h-10 mx-auto mb-2 text-slate-600" />
-              <p className="text-sm font-semibold text-slate-300">Kayıtlı Yevmiyeci Usta Bulunamadı</p>
-              <p className="text-xs text-slate-500 mt-1">
-                Personel İK modülünden personel kartında "Çalışma Türü: Yevmiyeci Usta" seçilmiş personel bulunmamaktadır.
+              <p className="text-sm font-semibold text-slate-300">
+                {sadeceCalisanlar
+                  ? "Bu Hafta Çalışması / Hakedişi Bulunan Yevmiyeci Usta Yok"
+                  : "Bu Hafta İçin İstihdamda Olan Yevmiyeci Usta Bulunmuyor"}
+              </p>
+              <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                {sadeceCalisanlar
+                  ? "Seçili hafta döneminde fiilen çalışma veya mesai girişi olan usta bulunmuyor. İşe henüz başlamamış veya çalışmamış ustalar gizlenmiştir."
+                  : "Seçili hafta döneminde işe giriş tarihi aktif olan yevmiyeci usta kaydı bulunmamaktadır."}
               </p>
             </div>
           ) : (
@@ -590,7 +682,7 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
                       </td>
 
                       {item.gunlukDetaylar.map((d, idx) => {
-                        const isCalisti = d.normalSaat > 0 || d.durum === 'N' || d.durum === 'RT' || d.durum === 'HT';
+                        const isCalisti = d.normalSaat > 0 || d.mesaiSaat > 0;
                         return (
                           <td key={d.tarih} className={`py-2.5 px-1 text-center font-mono ${idx === 6 ? 'bg-amber-950/10' : ''}`}>
                             {isCalisti ? (
@@ -602,6 +694,12 @@ export const HaftalikYevmiyeciRaporModal: React.FC<HaftalikYevmiyeciRaporModalPr
                                   </span>
                                 )}
                               </div>
+                            ) : !d.istihdamda ? (
+                              <span className="text-slate-600 text-[9px]" title={d.durum}>
+                                {d.durum === 'İşe Başlamadı' ? 'Giriş Yok' : (d.durum === 'İşten Ayrıldı' ? 'Ayrıldı' : '-')}
+                              </span>
+                            ) : d.durum === 'D' || d.durum === 'UI' ? (
+                              <span className="text-rose-400 font-semibold text-[10px]" title="Eksik Gün / İzin">Eksik</span>
                             ) : (
                               <span className="text-slate-600 text-[10px]">-</span>
                             )}

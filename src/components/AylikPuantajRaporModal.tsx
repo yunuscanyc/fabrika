@@ -182,18 +182,27 @@ function getPersonelAyGunleri(
       gunlukNetSaat = 0;
       gunlukNetAciklama = 'İstihdam Dışı';
     } else if (durumKodu === 'HT') {
-      const htSaat = fazlaSaat + tatilMesai;
-      if (htSaat > 0) {
-        // Hafta tatilinde çalışma: 8 saat maktu tatil yevmiyesi + %50 zam farkı (örn. 7 saat mesai için 8 + 3.5 = 11.5s)
-        gunlukNetSaat = 8.0 + (htSaat * 0.5);
-        gunlukNetAciklama = `8.0s Tatil + ${(htSaat * 0.5).toFixed(1)}s Mesai (%50)`;
+      const htSaat = fazlaSaat;
+      const rtSaat = tatilMesai;
+      if (htSaat > 0 || rtSaat > 0) {
+        // Hafta tatilinde çalışma: 8 saat maktu tatil yevmiyesi + %50 zam farkı (htSaat x 0.5) + %100 zam (rtSaat x 1.0)
+        // Örn: 7 saat %50 mesai için günün toplamı: 8.0 + (7 x 0.5) = 8.0 + 3.5 = 11.5 SAAT!
+        // Örn: 8 saat %100 mesai için günün toplamı: 8.0 + (8 x 1.0) = 8.0 + 8.0 = 16.0 SAAT!
+        gunlukNetSaat = 8.0 + (htSaat * 0.5) + (rtSaat * 1.0);
+        const parcalar = ['8.0s Tatil'];
+        if (htSaat > 0) parcalar.push(`${(htSaat * 0.5).toFixed(1)}s (%50)`);
+        if (rtSaat > 0) parcalar.push(`${rtSaat.toFixed(1)}s (%100)`);
+        gunlukNetAciklama = parcalar.join(' + ');
       } else {
         gunlukNetSaat = 8.0;
         gunlukNetAciklama = '8.0s Maktu Hafta Tatili';
       }
     } else if (durumKodu === 'RT') {
-      const rtSaat = tatilMesai + fazlaSaat;
+      const rtSaat = tatilMesai > 0 ? tatilMesai : fazlaSaat;
       if (rtSaat > 0) {
+        // Resmi tatilde çalışma: 8 saat maktu tatil yevmiyesi + %100 ilave tam yevmiye (rtSaat x 1.0)
+        // Örn: 8 saat çalışıldığında: 8.0 + (8 x 1.0) = 16.0 SAAT (Çift Yevmiye)!
+        // Örn: 7 saat çalışıldığında: 8.0 + (7 x 1.0) = 15.0 SAAT!
         gunlukNetSaat = 8.0 + (rtSaat * 1.0);
         gunlukNetAciklama = `8.0s Tatil + ${rtSaat.toFixed(1)}s (%100 Mesai)`;
       } else {
@@ -202,10 +211,14 @@ function getPersonelAyGunleri(
       }
     } else if (durumKodu === 'N') {
       const fz = fazlaSaat * 1.5;
-      gunlukNetSaat = Math.max(0, 8.0 - eksikSaat + fz);
-      gunlukNetAciklama = fazlaSaat > 0 
-        ? `8s Normal + ${fz.toFixed(1)}s (%50 Mesai)`
-        : (eksikSaat > 0 ? `8s Normal - ${eksikSaat.toFixed(1)}s Kesinti` : '8.0s Normal Gün');
+      const tm = tatilMesai * 1.0;
+      gunlukNetSaat = Math.max(0, 8.0 - eksikSaat + fz + tm);
+      const parcalar = [];
+      if (eksikSaat > 0) parcalar.push(`8s - ${eksikSaat.toFixed(1)}s Kesinti`);
+      else parcalar.push('8.0s Normal');
+      if (fazlaSaat > 0) parcalar.push(`+${fz.toFixed(1)}s (%50)`);
+      if (tatilMesai > 0) parcalar.push(`+${tm.toFixed(1)}s (%100)`);
+      gunlukNetAciklama = parcalar.join(' ');
     } else if (['YI', 'R', 'M'].includes(durumKodu)) {
       gunlukNetSaat = 8.0;
       gunlukNetAciklama = '8.0s Ücretli İzin';
@@ -491,15 +504,15 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
       if (isBugunKaydi) {
         // Bugün henüz bitmediği için bazSaat'e (tamamlanan 16 saate) dahil edilmemiştir.
         if (x.DurumKodu === 'HT') {
-          const htSaat = fazlaSaat > 0 ? fazlaSaat : tatilMesai;
-          if (htSaat > 0) {
-            // Hafta tatili: 8 saat maktu tatil yevmiyesi + %50 zam farkı (örn. 7 saat için 8 + 3.5 = 11.5 saat)
-            bugunNetKatkisi += 8.0 + (htSaat * 0.5);
+          // Hafta tatili: 8 saat maktu tatil yevmiyesi + %50 zam farkı (örn. 7 saat mesai için 8 + 3.5 = 11.5 saat)
+          // Varsa %100 tatil mesaisi de (1.0x) ilave edilir
+          if (fazlaSaat > 0 || tatilMesai > 0) {
+            bugunNetKatkisi += 8.0 + (fazlaSaat * 0.5) + (tatilMesai * 1.0);
           }
         } else if (x.DurumKodu === 'RT') {
           const rtSaat = tatilMesai > 0 ? tatilMesai : fazlaSaat;
           if (rtSaat > 0) {
-            // Resmi tatil: 8 saat maktu tatil yevmiyesi + %100 ilave yevmiye (örn. 8 saat için 8 + 8 = 16.0 saat)
+            // Resmi tatil: 8 saat maktu tatil yevmiyesi + %100 ilave tam yevmiye (örn. 8 saat için 8 + 8 = 16.0 saat, 7 saat için 8 + 7 = 15.0 saat)
             bugunNetKatkisi += 8.0 + (rtSaat * 1.0);
           }
         } else if (x.DurumKodu === 'N') {
@@ -512,10 +525,12 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
       } else {
         // Geçmiş günler veya Tam Ay Projeksiyonunda: Bu günün 8 saati zaten bazSaat (240 saat) içinde mevcuttur!
         if (x.DurumKodu === 'HT') {
-          const htSaat = fazlaSaat > 0 ? fazlaSaat : tatilMesai;
-          if (htSaat > 0) {
-            // 8 saat zaten bazda var, %50 mesai artırımı (htSaat x 0.5) eklenir -> Toplam gün 8 + 3.5 = 11.5 saat eder!
-            ekstraMesaiSaati += htSaat * 0.5;
+          // 8 saat zaten bazda var; %50 mesai artırımı (fazlaSaat x 0.5) ve %100 mesai (tatilMesai x 1.0) eklenir -> Toplam gün 8 + 3.5 = 11.5 saat eder!
+          if (fazlaSaat > 0) {
+            ekstraMesaiSaati += fazlaSaat * 0.5;
+          }
+          if (tatilMesai > 0) {
+            ekstraMesaiSaati += tatilMesai * 1.0;
           }
         } else if (x.DurumKodu === 'RT') {
           const rtSaat = tatilMesai > 0 ? tatilMesai : fazlaSaat;
