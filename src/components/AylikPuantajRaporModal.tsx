@@ -3,12 +3,18 @@ import { createPortal } from 'react-dom';
 import { Personel, GunlukPuantaj } from '../types';
 import { FileSpreadsheet, Printer, X, Download, Plus, Minus, Calendar, Clock } from 'lucide-react';
 import { formatTarihTR, getBugunIso, getGunIndex, getResmiTatil, getStandartNormalSaat } from '../utils/dateUtils';
-import { isPersonelCalisiyorMuAyda } from '../utils/personelUtils';
+import { isPersonelCalisiyorMuAyda, isPersonelCalisiyorMuTarihte } from '../utils/personelUtils';
 
 const GUN_ISIMLERI = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
 
 function getDurumBadge(durumKodu: string, durumEtiket?: string, tatilAd?: string) {
   switch (durumKodu) {
+    case 'ISTIHDAM_DISI':
+      return (
+        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-slate-800/60 text-slate-400 border border-slate-700/60">
+          ⏳ {durumEtiket || 'İstihdam Dışı'}
+        </span>
+      );
     case 'N':
       return (
         <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
@@ -67,7 +73,7 @@ function getDurumBadge(durumKodu: string, durumEtiket?: string, tatilAd?: string
 }
 
 function getPersonelAyGunleri(
-  personelId: number,
+  personel: Personel,
   yil: number,
   ay: number,
   puantajlar: GunlukPuantaj[],
@@ -84,10 +90,11 @@ function getPersonelAyGunleri(
     const gunAdi = GUN_ISIMLERI[gunIdx];
     const tatil = getResmiTatil(isoTarih);
     const isHaftaSonu = gunIdx === 0 || gunIdx === 6;
+    const istihdamdaMi = isPersonelCalisiyorMuTarihte(personel, isoTarih);
 
     // Personelin bu tarihteki puantaj kaydını bul
     const kayit = puantajlar.find(x => {
-      if (x.PersonelId !== personelId) return false;
+      if (x.PersonelId !== personel.PersonelId) return false;
       const clean = String(x.Tarih || '').trim();
       const match = clean.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
       if (match) {
@@ -109,7 +116,18 @@ function getPersonelAyGunleri(
     let aciklama = '';
     let kayitVar = false;
 
-    if (kayit) {
+    if (!istihdamdaMi) {
+      durumKodu = 'ISTIHDAM_DISI';
+      const giris = (personel.IseGirisTarihi || '').slice(0, 10);
+      const cikis = (personel.IstenCikisTarihi || '').slice(0, 10);
+      if (giris && isoTarih < giris) {
+        durumEtiket = 'İşe Başlamadı';
+      } else if (cikis && isoTarih >= cikis) {
+        durumEtiket = 'İşten Ayrıldı';
+      } else {
+        durumEtiket = 'İstihdam Dışı';
+      }
+    } else if (kayit) {
       kayitVar = true;
       durumKodu = kayit.DurumKodu || 'N';
       normalSaat = Number(kayit.NormalCalismaSaati || 0);
@@ -151,7 +169,8 @@ function getPersonelAyGunleri(
       fazlaSaat,
       tatilMesai,
       eksikSaat,
-      aciklama
+      aciklama,
+      istihdamdaMi
     });
   }
 
@@ -245,24 +264,75 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
       return !isNaN(d.getTime()) && d.getFullYear() === seciliYil && (d.getMonth() + 1) === seciliAy;
     });
 
-    const normalGun = pPuantaj.filter(x => x.DurumKodu === 'N' || x.NormalCalismaSaati > 0).length;
-    const haftaTatiliGun = pPuantaj.filter(x => x.DurumKodu === 'HT').length;
-    const resmiTatilGun = pPuantaj.filter(x => x.DurumKodu === 'RT').length;
-    // Ücretli İzinler (Yİ: Yıllık İzin, R: Raporlu, M: Mazeret İzni) - 30 GÜNDEN DÜŞÜLMEZ!
-    const ucretliIzinGun = pPuantaj.filter(x => ['YI', 'R', 'M'].includes(x.DurumKodu)).length;
-    // Ücretsiz İzin (UI) ve Devamsız (D) - 30 GÜNDEN DÜŞÜLÜR!
-    const ucretsizIzinGun = pPuantaj.filter(x => x.DurumKodu === 'UI').length;
-    const devamsizGun = pPuantaj.filter(x => x.DurumKodu === 'D').length;
+    // Ay içindeki fiili istihdam günlerini tespit et (Kıst Dönem / Ay Ortası Giriş-Çıkış Kontrolü)
+    const ayTakvimGunSayisi = new Date(seciliYil, seciliAy, 0).getDate();
+    let aktifIstihdamGunSayisi = 0;
+    for (let g = 1; g <= ayTakvimGunSayisi; g++) {
+      const gStr = String(g).padStart(2, '0');
+      const mStr = String(seciliAy).padStart(2, '0');
+      const isoD = `${seciliYil}-${mStr}-${gStr}`;
+      if (isPersonelCalisiyorMuTarihte(p, isoD)) {
+        aktifIstihdamGunSayisi++;
+      }
+    }
+
+    // Kıst dönem tespiti:
+    // Eğer personel ayın tüm günlerinde istihdamda ise (veya giriş-çıkış kaydı girilmemiş tam aktifse):
+    // Standard maktu kuralı uygulanır: Baz Gün = 30 Gün, Baz Saat = 240 Saat (30g × 8s).
+    // Ancak personel ay ortasında işe girmiş veya ayrılmışsa:
+    // SGK ve İş Kanunu esasıyla "Kıst Dönem" uygulanır: Baz Gün = Ay içindeki fiili istihdam gün sayısı, Baz Saat = Baz Gün × 8 Saat.
+    const kistDonemMi = aktifIstihdamGunSayisi > 0 && aktifIstihdamGunSayisi < ayTakvimGunSayisi;
+    const bazGun = kistDonemMi ? aktifIstihdamGunSayisi : (aktifIstihdamGunSayisi === 0 ? 0 : 30);
+    const bazSaat = kistDonemMi ? (aktifIstihdamGunSayisi * 8.0) : (aktifIstihdamGunSayisi === 0 ? 0 : 240.0);
+
+    const normalGun = pPuantaj.filter(x => {
+      const clean = String(x.Tarih || '').slice(0, 10);
+      return (x.DurumKodu === 'N' || x.NormalCalismaSaati > 0) && isPersonelCalisiyorMuTarihte(p, clean);
+    }).length;
+    const haftaTatiliGun = pPuantaj.filter(x => {
+      const clean = String(x.Tarih || '').slice(0, 10);
+      return x.DurumKodu === 'HT' && isPersonelCalisiyorMuTarihte(p, clean);
+    }).length;
+    const resmiTatilGun = pPuantaj.filter(x => {
+      const clean = String(x.Tarih || '').slice(0, 10);
+      return x.DurumKodu === 'RT' && isPersonelCalisiyorMuTarihte(p, clean);
+    }).length;
+    
+    // Ücretli İzinler (Yİ: Yıllık İzin, R: Raporlu, M: Mazeret İzni) - DÜŞÜLMEZ!
+    const ucretliIzinGun = pPuantaj.filter(x => {
+      const clean = String(x.Tarih || '').slice(0, 10);
+      return ['YI', 'R', 'M'].includes(x.DurumKodu) && isPersonelCalisiyorMuTarihte(p, clean);
+    }).length;
+
+    // Ücretsiz İzin (UI) ve Devamsız (D) - Sadece istihdamda olduğu günlerdeki kesintiler bazdan düşülür!
+    const ucretsizIzinGun = pPuantaj.filter(x => {
+      const clean = String(x.Tarih || '').slice(0, 10);
+      return x.DurumKodu === 'UI' && isPersonelCalisiyorMuTarihte(p, clean);
+    }).length;
+    const devamsizGun = pPuantaj.filter(x => {
+      const clean = String(x.Tarih || '').slice(0, 10);
+      return x.DurumKodu === 'D' && isPersonelCalisiyorMuTarihte(p, clean);
+    }).length;
     const devamsizVeUcretsizGun = ucretsizIzinGun + devamsizGun;
 
-    const toplamNormalSaat = pPuantaj.reduce((sum, x) => sum + (x.NormalCalismaSaati || 0), 0);
-    const toplamFazlaMesai = pPuantaj.reduce((sum, x) => sum + (x.FazlaMesaiSaati || 0), 0);
-    const toplamTatilMesai = pPuantaj.reduce((sum, x) => sum + (x.HaftaTatiliMesaiSaati || 0) + (x.ResmiTatilMesaiSaati || 0), 0);
+    const toplamNormalSaat = pPuantaj.reduce((sum, x) => {
+      const clean = String(x.Tarih || '').slice(0, 10);
+      return isPersonelCalisiyorMuTarihte(p, clean) ? sum + (x.NormalCalismaSaati || 0) : sum;
+    }, 0);
+    const toplamFazlaMesai = pPuantaj.reduce((sum, x) => {
+      const clean = String(x.Tarih || '').slice(0, 10);
+      return isPersonelCalisiyorMuTarihte(p, clean) ? sum + (x.FazlaMesaiSaati || 0) : sum;
+    }, 0);
+    const toplamTatilMesai = pPuantaj.reduce((sum, x) => {
+      const clean = String(x.Tarih || '').slice(0, 10);
+      return isPersonelCalisiyorMuTarihte(p, clean) ? sum + (x.HaftaTatiliMesaiSaati || 0) + (x.ResmiTatilMesaiSaati || 0) : sum;
+    }, 0);
     
     // Eksik saat hesabı: Saatlik ücretsiz kesintiler + Tam gün Ücretsiz İzin (UI) ve Devamsızlık (D) günleri
-    // Ücretli izinler (YI, R, M, HT, RT) asla eksik saat olarak eklenmez!
     const toplamEksikSaat = pPuantaj.reduce((sum, x) => {
       const cleanDate = String(x.Tarih || '').slice(0, 10);
+      if (!isPersonelCalisiyorMuTarihte(p, cleanDate)) return sum;
+
       const stdSaat = getStandartNormalSaat(cleanDate, rejim);
       const kesinti = Number(x.SaatlikKesintiUcretsiz || 0);
       if (x.DurumKodu === 'UI' || x.DurumKodu === 'D') {
@@ -275,18 +345,21 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
     // Fazla Mesai (%50 artırımlı): Saat x 1.5
     // Tatil Mesaisi (%100 artırımlı): Saat x 2.0
     const artirimliMesaiSaati = (toplamFazlaMesai * 1.5) + (toplamTatilMesai * 2.0);
-    // Fabrika çalışma esası: 1 gün = 8 saat, 30 gün = 240 saat
     const artirimliMesaiGunu = artirimliMesaiSaati / 8.0;
     const eksikGun = toplamEksikSaat / 8.0;
 
-    // 30 Günden eksik mesaileri düş (ücretsiz izin ve devamsızlıklar), fazla mesaileri gerekli artırımlarla ekle:
-    const netGun = Math.max(0, 30 - eksikGun + artirimliMesaiGunu);
-    const netSaat = Math.max(0, 240 - toplamEksikSaat + artirimliMesaiSaati);
+    // Net Hakediş (Tam ayda 30 gün / 240 saat, Kıst dönemde personelin fiili baz günü / baz saati üzerinden):
+    const netGun = Math.max(0, bazGun - eksikGun + artirimliMesaiGunu);
+    const netSaat = Math.max(0, bazSaat - toplamEksikSaat + artirimliMesaiSaati);
 
     return {
       personelId: p.PersonelId,
       adSoyad: p.AdSoyad,
       departman: p.Departman || '-',
+      kistDonemMi,
+      bazGun,
+      bazSaat,
+      aktifIstihdamGunSayisi,
       normalGun,
       haftaTatiliGun,
       resmiTatilGun,
@@ -298,7 +371,8 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
       toplamEksikSaat,
       artirimliMesaiSaati,
       netGun,
-      netSaat
+      netSaat,
+      rawPersonel: p
     };
   });
 
@@ -335,14 +409,15 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
     const ayAdi = aylar.find(a => a.no === seciliAy)?.ad || '';
     let csv = `RENDE İNŞAAT MOBİLYA TURİZM A.Ş. - AYLIK PUANTAJ & BORDRO İCMAL CETVELİ\n`;
     csv += `Dönem: ${ayAdi} ${seciliYil} - Rapor Tarihi: ${formatTarihTR(getBugunIso())}\n`;
-    csv += `Hesaplama Esası: Aylık maktu 30 gün (240 saat: 30 gün × 8 saat) baz alınmıştır. Ücretsiz izin ve devamsızlıklar düşülmüş, ücretli izinler korunmuş, fazla mesailer %50 (x1.5) ve tatil mesaileri %100 (x2.0) artırımlı eklenmiştir.\n\n`;
-    csv += `Personel;Departman;Normal Gün;Hafta Tatili;Resmi Tatil;Ücretli İzin (Yİ/R/M);Devamsız & Ü.İzin;Normal Saat;Fazla Mesai (%50);Tatil Mesaisi (%100);Eksik Saat;Net Gün (30 Esas);Net Saat (240 Esas);İmza\n`;
+    csv += `Hesaplama Esası: Tam ay çalışanlar için standart 30 gün (240 saat: 8 saat/gün esası); ay ortasında işe giren veya ayrılanlar için ay içindeki fiili istihdam gün sayısı (Kıst Dönem: Fiili Gün × 8 Saat) baz alınmıştır. Ücretsiz izin ve devamsızlıklar bazdan düşülmüş, ücretli izinler korunmuş, fazla mesailer %50 (x1.5) ve tatil mesaileri %100 (x2.0) artırımlı eklenmiştir.\n\n`;
+    csv += `Personel;Departman;İstihdam Türü;Baz Gün;Normal Gün;Hafta Tatili;Resmi Tatil;Ücretli İzin (Yİ/R/M);Devamsız & Ü.İzin;Normal Saat;Fazla Mesai (%50);Tatil Mesaisi (%100);Eksik Saat;Net Gün;Net Saat;İmza\n`;
 
     icmalListesi.forEach(item => {
-      csv += `${item.adSoyad};${item.departman};${item.normalGun};${item.haftaTatiliGun};${item.resmiTatilGun};${item.ucretliIzinGun};${item.devamsizVeUcretsizGun};${item.toplamNormalSaat.toFixed(1)};${item.toplamFazlaMesai.toFixed(1)};${item.toplamTatilMesai.toFixed(1)};${item.toplamEksikSaat.toFixed(1)};${item.netGun.toFixed(2)};${item.netSaat.toFixed(1)};\n`;
+      const istihdamTuru = item.kistDonemMi ? `Kıst Dönem (${item.bazGun} Gün)` : `Tam Ay (30 Gün)`;
+      csv += `${item.adSoyad};${item.departman};${istihdamTuru};${item.bazGun};${item.normalGun};${item.haftaTatiliGun};${item.resmiTatilGun};${item.ucretliIzinGun};${item.devamsizVeUcretsizGun};${item.toplamNormalSaat.toFixed(1)};${item.toplamFazlaMesai.toFixed(1)};${item.toplamTatilMesai.toFixed(1)};${item.toplamEksikSaat.toFixed(1)};${item.netGun.toFixed(2)};${item.netSaat.toFixed(1)};\n`;
     });
 
-    csv += `GENEL TOPLAM (${icmalListesi.length} Personel);-;${genelToplam.normalGun};${genelToplam.haftaTatiliGun};${genelToplam.resmiTatilGun};${genelToplam.ucretliIzinGun};${genelToplam.devamsizVeUcretsizGun};${genelToplam.toplamNormalSaat.toFixed(1)};${genelToplam.toplamFazlaMesai.toFixed(1)};${genelToplam.toplamTatilMesai.toFixed(1)};${genelToplam.toplamEksikSaat.toFixed(1)};${genelToplam.netGun.toFixed(2)};${genelToplam.netSaat.toFixed(1)};\n`;
+    csv += `GENEL TOPLAM (${icmalListesi.length} Personel);-;-;-;${genelToplam.normalGun};${genelToplam.haftaTatiliGun};${genelToplam.resmiTatilGun};${genelToplam.ucretliIzinGun};${genelToplam.devamsizVeUcretsizGun};${genelToplam.toplamNormalSaat.toFixed(1)};${genelToplam.toplamFazlaMesai.toFixed(1)};${genelToplam.toplamTatilMesai.toFixed(1)};${genelToplam.toplamEksikSaat.toFixed(1)};${genelToplam.netGun.toFixed(2)};${genelToplam.netSaat.toFixed(1)};\n`;
 
     const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -360,7 +435,10 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
 
     const rowsHtml = icmalListesi.map((item, idx) => `
       <tr>
-        <td style="padding: 4px 6px; font-weight: bold; border: 1px solid #334155;">${idx + 1}. ${item.adSoyad}</td>
+        <td style="padding: 4px 6px; font-weight: bold; border: 1px solid #334155;">
+          ${idx + 1}. ${item.adSoyad}
+          ${item.kistDonemMi ? `<span style="font-size: 7pt; color: #b45309; font-weight: bold; margin-left: 4px;">(Kıst: ${item.bazGun}g)</span>` : ''}
+        </td>
         <td style="padding: 4px 6px; border: 1px solid #334155;">${item.departman}</td>
         <td style="padding: 4px 6px; text-align: center; border: 1px solid #334155;">${item.normalGun}</td>
         <td style="padding: 4px 6px; text-align: center; border: 1px solid #334155;">${item.haftaTatiliGun}</td>
@@ -506,7 +584,7 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
               <th>%50 Mesai</th>
               <th>%100 Mesai</th>
               <th>Eksik Saat</th>
-              <th style="background-color: #e2e8f0;">Net Gün (30 Esas)</th>
+              <th style="background-color: #e2e8f0;">Net Gün</th>
               <th style="background-color: #e2e8f0;">Net Saat</th>
               <th>İmza</th>
             </tr>
@@ -520,7 +598,7 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
         </table>
 
         <div class="rule-note">
-          * Bordro Hesaplama Esasları: Kadrolu personeller için aylık standart 30 gün (240 saat: 8 saat/gün esası) baz alınmıştır. Devamsızlık ve ücretsiz izinler 30 günden düşülmüş, ücretli izinler (yıllık izin, rapor, mazeret, hafta tatili, resmi tatil) tam ödenmiştir. Fazla mesailer %50 (x1.5), tatil mesaileri %100 (x2.0) artırımlı olarak net gün ve saate yansıtılmıştır.
+          * Bordro Hesaplama Esasları: Tam ay istihdamda olan personeller için standart 30 gün (240 saat: 8 saat/gün esası) uygulanır. Ay içinde işe giren veya işten ayrılan personeller için ay içindeki fiili istihdam gün sayısı (Kıst Dönem: Fiili Gün × 8 Saat) baz alınır. Devamsızlık ve ücretsiz izinler baz hakedişten düşülmüş, ücretli izinler (yıllık izin, rapor, mazeret, hafta tatili, resmi tatil) tam ödenmiştir. Fazla mesailer %50 (x1.5), tatil mesaileri %100 (x2.0) artırımlı olarak net gün ve saate yansıtılmıştır.
         </div>
 
         <div class="signatures">
@@ -773,7 +851,7 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
         <div className="px-6 py-2.5 bg-slate-950/90 border-b border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs print:hidden">
           <div className="flex items-center gap-2 text-slate-300">
             <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
-            <span><strong>Bordro Esası (Maktu 30 Gün):</strong> Devamsızlık ve ücretsiz izinler 30 günden düşülür, ücretli izinler korunur. Fazla mesailer %50 (x1.5), tatil mesaileri %100 (x2.0) artırımlı eklenir.</span>
+            <span><strong>Bordro Esası:</strong> Tam ay çalışanlar için 30 gün (240 saat: 8 saat/gün); ay ortasında işe giren veya ayrılanlar için fiili istihdam gün sayısı (Kıst Dönem) baz alınır. Devamsızlık ve ücretsiz izinler düşülür, ücretli izinler korunur.</span>
           </div>
           <div className="flex items-center gap-3 font-mono text-xs">
             <span className="text-slate-400">Genel Net Bordro Gün Toplamı: <strong className="text-cyan-300 font-bold">{genelToplam.netGun.toFixed(2)} Gün</strong></span>
@@ -811,8 +889,8 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
                 <th className="py-2.5 px-2 text-center font-bold text-blue-400 print:py-1.5 print:px-1 print:text-black">%50 Mesai</th>
                 <th className="py-2.5 px-2 text-center font-bold text-emerald-300 print:py-1.5 print:px-1 print:text-black">%100 Mesai</th>
                 <th className="py-2.5 px-2 text-center font-bold text-rose-400 print:py-1.5 print:px-1 print:text-black">Eksik Saat</th>
-                <th className="py-2.5 px-2 text-center font-black text-cyan-300 bg-cyan-950/40 print:py-1.5 print:px-1 print:text-black print:bg-slate-200" title="Aylık 30 Gün Esaslı Net Hakediş Günü">Net Gün (30 Esas)</th>
-                <th className="py-2.5 px-2 text-center font-black text-emerald-300 bg-emerald-950/40 print:py-1.5 print:px-1 print:text-black print:bg-slate-200" title="Aylık 240 Saat Esaslı Net Hakediş Saati (30 gün × 8 saat)">Net Saat (240 Esas)</th>
+                <th className="py-2.5 px-2 text-center font-black text-cyan-300 bg-cyan-950/40 print:py-1.5 print:px-1 print:text-black print:bg-slate-200" title="Net Hakediş Günü (Tam ayda 30 gün, kıst dönemde fiili istihdam günü baz alınır)">Net Gün</th>
+                <th className="py-2.5 px-2 text-center font-black text-emerald-300 bg-emerald-950/40 print:py-1.5 print:px-1 print:text-black print:bg-slate-200" title="Net Hakediş Saati (Tam ayda 240 saat, kıst dönemde Fiili Gün × 8 saat)">Net Saat</th>
                 <th className="py-2.5 px-4 text-center border-l border-slate-800 print:py-1.5 print:px-3 print:border-l print:border-black">İmza</th>
               </tr>
             </thead>
@@ -827,7 +905,7 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
                 icmalListesi.map((item) => {
                   const isAcik = acikPersonelId === item.personelId;
                   const ayAdi = aylar.find(a => a.no === seciliAy)?.ad || '';
-                  const gunlerDetay = isAcik ? getPersonelAyGunleri(item.personelId, seciliYil, seciliAy, puantajlar, rejim) : [];
+                  const gunlerDetay = isAcik ? getPersonelAyGunleri(item.rawPersonel, seciliYil, seciliAy, puantajlar, rejim) : [];
 
                   return (
                     <React.Fragment key={item.personelId}>
@@ -846,7 +924,14 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
                             >
                               {isAcik ? <Minus className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
                             </button>
-                            <span className="truncate">{item.adSoyad}</span>
+                            <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                              <span className="truncate">{item.adSoyad}</span>
+                              {item.kistDonemMi && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0" title={`Kıst Dönem: Bu ay ${item.bazGun} gün (${item.bazSaat} saat) istihdam baz alınmıştır.`}>
+                                  Kıst ({item.bazGun}g)
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </td>
                         <td className="py-2 px-3 text-slate-400 print:text-black print:py-1 print:px-2">{item.departman}</td>
@@ -859,8 +944,12 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
                         <td className="py-2 px-2 text-center font-mono font-bold text-blue-400 print:text-black print:py-1 print:px-1">{item.toplamFazlaMesai > 0 ? item.toplamFazlaMesai.toFixed(1) : '-'}</td>
                         <td className="py-2 px-2 text-center font-mono font-bold text-emerald-300 print:text-black print:py-1 print:px-1">{item.toplamTatilMesai > 0 ? item.toplamTatilMesai.toFixed(1) : '-'}</td>
                         <td className="py-2 px-2 text-center font-mono font-bold text-rose-400 print:text-black print:py-1 print:px-1">{item.toplamEksikSaat > 0 ? item.toplamEksikSaat.toFixed(1) : '-'}</td>
-                        <td className="py-2 px-2 text-center font-mono font-black text-cyan-300 bg-cyan-950/40 print:text-black print:bg-transparent">{item.netGun.toFixed(2)}</td>
-                        <td className="py-2 px-2 text-center font-mono font-black text-emerald-300 bg-emerald-950/40 print:text-black print:bg-transparent">{item.netSaat.toFixed(1)}</td>
+                        <td className="py-2 px-2 text-center font-mono font-black text-cyan-300 bg-cyan-950/40 print:text-black print:bg-transparent" title={item.kistDonemMi ? `Kıst Dönem: ${item.bazGun} gün fiili istihdam bazından hesaplandı` : `Tam Ay: 30 gün bazından hesaplandı`}>
+                          {item.netGun.toFixed(2)}
+                        </td>
+                        <td className="py-2 px-2 text-center font-mono font-black text-emerald-300 bg-emerald-950/40 print:text-black print:bg-transparent" title={item.kistDonemMi ? `Kıst Dönem: ${item.bazSaat} saat (${item.bazGun}g × 8s) bazından hesaplandı` : `Tam Ay: 240 saat (30g × 8s) bazından hesaplandı`}>
+                          {item.netSaat.toFixed(1)}
+                        </td>
                         <td className="py-2 px-4 text-center border-l border-slate-800 print:border-l print:border-black print:py-1 print:px-3 min-w-[70px]">
                           <div className="w-16 border-b border-slate-700 print:border-black h-4 mx-auto"></div>
                         </td>
@@ -881,8 +970,17 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
                                     <div className="flex flex-wrap items-center gap-2">
                                       <span className="text-sm font-bold text-white">{item.adSoyad}</span>
                                       <span className="text-xs text-slate-400">({item.departman})</span>
+                                      {item.kistDonemMi ? (
+                                        <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                          ⚡ Kıst Dönem: Bu Ay {item.bazGun} Gün İstihdam ({item.bazSaat} Saat Baz)
+                                        </span>
+                                      ) : (
+                                        <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                          Tam Ay İstihdam (30 Gün / 240 Saat Baz)
+                                        </span>
+                                      )}
                                       <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                                        📅 {ayAdi} {seciliYil} Günlük Puantaj Detayı ({gunlerDetay.length} Gün)
+                                        📅 {ayAdi} {seciliYil} Günlük Döküm ({gunlerDetay.length} Gün)
                                       </span>
                                     </div>
                                     <div className="text-[11px] text-slate-400 mt-1 flex flex-wrap items-center gap-3">
@@ -893,6 +991,7 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
                                       {item.toplamEksikSaat > 0 && (
                                         <span>Eksik Saat: <strong className="text-rose-400 font-mono">{item.toplamEksikSaat.toFixed(1)}s</strong></span>
                                       )}
+                                      <span className="border-l border-slate-700 pl-3">Net: <strong className="text-cyan-300 font-mono">{item.netGun.toFixed(2)} Gün / {item.netSaat.toFixed(1)} Saat</strong></span>
                                     </div>
                                   </div>
                                 </div>
