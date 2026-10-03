@@ -41,6 +41,9 @@ export interface Personel {
   DevredenIzinGunu?: number; // Eski masaüstü programından bir kerelik devir izni
   IzinUcretiOdemeleri?: IzinUcretiOdeme[]; // Ücrete çevrilen izinler
   GirisCikisGecmisi?: PersonelGirisCikis[]; // Birden çok giriş-çıkış dönemleri
+  IsYevmiyeci?: boolean; // Yevmiyeci usta mı kadrolu mu?
+  CalismaTuru?: 'Kadrolu' | 'Yevmiyeci';
+  GunlukYevmiye?: number;
 }
 
 export interface IzinKaydi {

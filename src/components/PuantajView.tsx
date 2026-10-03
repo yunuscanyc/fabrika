@@ -22,6 +22,7 @@ import {
   Printer
 } from 'lucide-react';
 import { AylikPuantajRaporModal } from './AylikPuantajRaporModal';
+import { HaftalikYevmiyeciRaporModal } from './HaftalikYevmiyeciRaporModal';
 import { GunlukImzaCizelgesiModal } from './GunlukImzaCizelgesiModal';
 import { 
   getBugunIso, 
@@ -67,6 +68,7 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
   const [kayitMesaji, setKayitMesaji] = useState('');
   const [hataMesaji, setHataMesaji] = useState('');
   const [raporModalAcik, setRaporModalAcik] = useState(false);
+  const [yevmiyeciModalAcik, setYevmiyeciModalAcik] = useState(false);
   const [imzaCizelgesiAcik, setImzaCizelgesiAcik] = useState(false);
   const [eksikBannerGizli, setEksikBannerGizli] = useState(false);
 
@@ -296,6 +298,44 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
     }
     return eksikler;
   }, [tumPuantajlar, calismaRejimi]);
+
+  // Günlük Satırların Toplam İstatistikleri (TFOOT & Toplam Özet Kartları İçin)
+  const toplamNormal = useMemo(() => satirlar.reduce((acc, x) => acc + Number(x.NormalCalismaSaati || 0), 0), [satirlar]);
+  const toplamFazlaMesai = useMemo(() => satirlar.reduce((acc, x) => acc + Number(x.FazlaMesaiSaati || 0), 0), [satirlar]);
+  const toplamTatilMesai = useMemo(() => satirlar.reduce((acc, x) => acc + Number(x.HaftaTatiliMesaiSaati || 0), 0), [satirlar]);
+  const toplamKesinti = useMemo(() => satirlar.reduce((acc, x) => acc + Number(x.SaatlikKesintiUcretsiz || 0), 0), [satirlar]);
+  const toplamGenelSaat = useMemo(() => satirlar.reduce((acc, x) => acc + Math.max(0, Number(x.NormalCalismaSaati || 0) + Number(x.FazlaMesaiSaati || 0) + Number(x.HaftaTatiliMesaiSaati || 0) - Number(x.SaatlikKesintiUcretsiz || 0)), 0), [satirlar]);
+
+  // Ay İçi Birikimli Harita (Her Personelin Bu Ayki Toplam Çalışması)
+  const buAyPuantajHaritasi = useMemo(() => {
+    if (!seciliTarih) return new Map<number, { gunCount: number; mesaiSaat: number }>();
+    const parts = seciliTarih.split('-');
+    if (parts.length < 2) return new Map<number, { gunCount: number; mesaiSaat: number }>();
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+
+    const map = new Map<number, { gunCount: number; mesaiSaat: number }>();
+
+    tumPuantajlar.forEach(p => {
+      if (!p.Tarih) return;
+      const clean = String(p.Tarih).trim();
+      const pMatch = clean.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+      if (pMatch) {
+        const py = parseInt(pMatch[1], 10);
+        const pm = parseInt(pMatch[2], 10);
+        if (py === y && pm === m) {
+          const curr = map.get(p.PersonelId) || { gunCount: 0, mesaiSaat: 0 };
+          if (p.DurumKodu === 'N' || p.DurumKodu === 'HT' || p.DurumKodu === 'RT') {
+            curr.gunCount += 1;
+          }
+          curr.mesaiSaat += Number(p.FazlaMesaiSaati || 0) + Number(p.HaftaTatiliMesaiSaati || 0);
+          map.set(p.PersonelId, curr);
+        }
+      }
+    });
+
+    return map;
+  }, [tumPuantajlar, seciliTarih]);
 
   // Durum Kodu Değiştiğinde Akıllı Saat Ayarı
   const handleDurumChange = (personelId: number, kod: string) => {
@@ -591,10 +631,20 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
 
           <button
             onClick={() => setRaporModalAcik(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition cursor-pointer"
+            title="Kadrolu fabrika personelleri için aylık puantaj icmal cetveli"
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-            Aylık İcmal Raporu
+            <span>Kadrolu Aylık İcmal</span>
+          </button>
+
+          <button
+            onClick={() => setYevmiyeciModalAcik(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-950/70 hover:bg-amber-900/90 text-amber-200 text-xs font-bold rounded-lg border border-amber-800/80 transition shadow-sm cursor-pointer"
+            title="Yevmiyeci ve saha ustaları için haftalık puantaj ve hakediş cetveli"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-amber-400" />
+            <span>🔨 Yevmiyeci Haftalık İcmal</span>
           </button>
 
           <button
@@ -769,6 +819,51 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
         </div>
       </div>
 
+      {/* 3.1 GÜNLÜK İSTATİSTİK VE TOPLAM ÖZET KARTLARI */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div className="bg-slate-900/90 border border-slate-800 p-3 rounded-xl shadow-md">
+          <div className="text-[11px] text-slate-400 font-semibold uppercase">Aktif İşçi Kadrosu</div>
+          <div className="text-lg font-black text-white mt-0.5 flex items-center gap-1.5 font-mono">
+            <span>{satirlar.length} Personel</span>
+          </div>
+          <div className="text-[10px] text-emerald-400 mt-0.5 font-medium">
+            {satirlar.filter(s => s.DurumKodu === 'N').length} Normal | {satirlar.filter(s => s.DurumKodu === 'D').length} Devamsız
+          </div>
+        </div>
+
+        <div className="bg-slate-900/90 border border-slate-800 p-3 rounded-xl shadow-md">
+          <div className="text-[11px] text-slate-400 font-semibold uppercase">Günlük Normal Saat</div>
+          <div className="text-lg font-black text-emerald-400 mt-0.5 font-mono">
+            {toplamNormal} Sa.
+          </div>
+          <div className="text-[10px] text-slate-400 mt-0.5 font-medium">Fabrika Standart Çalışma</div>
+        </div>
+
+        <div className="bg-slate-900/90 border border-slate-800 p-3 rounded-xl shadow-md">
+          <div className="text-[11px] text-slate-400 font-semibold uppercase">Günlük %50 Fazla Mesai</div>
+          <div className="text-lg font-black text-blue-400 mt-0.5 font-mono">
+            {toplamFazlaMesai} Sa.
+          </div>
+          <div className="text-[10px] text-blue-300/80 mt-0.5 font-medium">Toplam Fazla Mesai</div>
+        </div>
+
+        <div className="bg-slate-900/90 border border-slate-800 p-3 rounded-xl shadow-md">
+          <div className="text-[11px] text-slate-400 font-semibold uppercase">%100 Resmi Tatil Mesaisi</div>
+          <div className="text-lg font-black text-purple-300 mt-0.5 font-mono">
+            {toplamTatilMesai} Sa.
+          </div>
+          <div className="text-[10px] text-purple-400/80 mt-0.5 font-medium">Bayram / Tatil Çalışması</div>
+        </div>
+
+        <div className="col-span-2 sm:col-span-1 bg-blue-950/60 border border-blue-800/80 p-3 rounded-xl shadow-lg ring-1 ring-blue-500/20">
+          <div className="text-[11px] text-blue-300 font-bold uppercase tracking-wide">📊 Günlük Toplam Hakediş</div>
+          <div className="text-xl font-black text-blue-200 mt-0.5 font-mono">
+            {toplamGenelSaat} Sa.
+          </div>
+          <div className="text-[10px] text-blue-300/80 mt-0.5 font-medium">Fabrika Günlük Net Çalışma</div>
+        </div>
+      </div>
+
       {/* 4. PUANTAJ TABLOSU */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
         <div className="overflow-x-auto">
@@ -810,19 +905,23 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
                   <div>Eksik / Kesinti (Saat)</div>
                   <div className="text-[10px] text-slate-500 font-normal">Otomatik Düşer</div>
                 </th>
+                <th className="py-3 px-3 text-center bg-blue-950/40 border-x border-slate-800">
+                  <div className="text-blue-300 font-bold">Toplam Çalışma</div>
+                  <div className="text-[10px] text-blue-400/80 font-normal">Günlük Net Sa.</div>
+                </th>
                 <th className="py-3 px-4">Açıklama</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
               {yukleniyor ? (
                 <tr>
-                  <td colSpan={7} className="py-10 text-center text-slate-500">
+                  <td colSpan={8} className="py-10 text-center text-slate-500">
                     Puantaj verileri yükleniyor...
                   </td>
                 </tr>
               ) : satirlar.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-10 text-center text-slate-500">
+                  <td colSpan={8} className="py-10 text-center text-slate-500">
                     Aktif çalışan personel bulunamadı.
                   </td>
                 </tr>
@@ -838,6 +937,9 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
                     seciliTarih <= iz.BitisTarihi
                   );
 
+                  const ayOzet = buAyPuantajHaritasi.get(s.PersonelId);
+                  const toplamGunlukSaat = Math.max(0, (s.NormalCalismaSaati || 0) + (s.FazlaMesaiSaati || 0) + (s.HaftaTatiliMesaiSaati || 0) - (s.SaatlikKesintiUcretsiz || 0));
+
                   return (
                     <tr key={s.PersonelId} className="hover:bg-slate-800/30 transition">
                       <td className="py-2.5 px-4 font-semibold text-white whitespace-nowrap">
@@ -850,7 +952,14 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
                             </span>
                           )}
                         </div>
-                        <div className="text-[11px] text-slate-400 font-normal">{p?.Departman || 'Genel'} - {p?.Gorev || ''}</div>
+                        <div className="flex items-center gap-2 text-[11px] text-slate-400 font-normal mt-0.5">
+                          <span>{p?.Departman || 'Genel'} - {p?.Gorev || ''}</span>
+                          {ayOzet && (
+                            <span className="px-1.5 py-0.2 bg-slate-800 text-emerald-400 rounded text-[10px] font-bold border border-slate-700/80">
+                              Bu Ay: {ayOzet.gunCount} Gün | {ayOzet.mesaiSaat}s Mesai
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       <td className="py-2.5 px-3">
@@ -973,6 +1082,12 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
                         />
                       </td>
 
+                      <td className="py-2.5 px-3 text-center bg-blue-950/20 border-x border-slate-800/80">
+                        <span className="inline-block px-2.5 py-1 bg-blue-900/60 border border-blue-500/40 rounded text-xs font-black text-blue-200 font-mono shadow-sm">
+                          {toplamGunlukSaat} s
+                        </span>
+                      </td>
+
                       <td className="py-2.5 px-4">
                         <input
                           type="text"
@@ -990,14 +1105,55 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
                 })
               )}
             </tbody>
+
+            {/* TOPLAM SÜTÜNÜ VE GENEL TABLO İCMALİ (TFOOT) */}
+            <tfoot className="bg-slate-950 font-bold border-t-2 border-slate-700 text-xs text-slate-200">
+              <tr>
+                <td className="py-3.5 px-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-emerald-400 font-black text-sm">📊 GENEL TOPLAM</span>
+                    <span className="text-[10px] text-slate-400 font-medium">({satirlar.length} Personel)</span>
+                  </div>
+                </td>
+                <td className="py-3.5 px-3 text-slate-300 text-xs">
+                  {satirlar.filter(x => x.DurumKodu === 'N').length} Normal / {satirlar.filter(x => x.DurumKodu === 'D').length} Devamsız
+                </td>
+                <td className="py-3.5 px-3 text-center text-emerald-400 text-sm font-black font-mono">
+                  {toplamNormal} s
+                </td>
+                <td className="py-3.5 px-3 text-center text-blue-400 text-sm font-black font-mono">
+                  {toplamFazlaMesai} s
+                </td>
+                <td className="py-3.5 px-3 text-center text-purple-300 text-sm font-black font-mono">
+                  {toplamTatilMesai} s
+                </td>
+                <td className="py-3.5 px-3 text-center text-rose-400 text-sm font-black font-mono">
+                  {toplamKesinti} s
+                </td>
+                <td className="py-3.5 px-3 text-center bg-blue-900/60 text-blue-200 text-sm font-black font-mono border-x border-blue-500/40 shadow-inner">
+                  {toplamGenelSaat} s
+                </td>
+                <td className="py-3.5 px-4 text-slate-400 text-[11px] font-normal">
+                  Fabrikadaki tüm personelin günlük net hakediş toplamı
+                </td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>
 
-      {/* 5. AYLIK İCMAL MODALI */}
+      {/* 5. AYLIK İCMAL MODALI (KADROLU PERSONEL) */}
       <AylikPuantajRaporModal
         isOpen={raporModalAcik}
         onClose={() => setRaporModalAcik(false)}
+        personeller={personeller}
+        puantajlar={tumPuantajlar}
+      />
+
+      {/* 6. HAFTALIK İCMAL MODALI (YEVMİYECİ USTALAR) */}
+      <HaftalikYevmiyeciRaporModal
+        isOpen={yevmiyeciModalAcik}
+        onClose={() => setYevmiyeciModalAcik(false)}
         personeller={personeller}
         puantajlar={tumPuantajlar}
       />

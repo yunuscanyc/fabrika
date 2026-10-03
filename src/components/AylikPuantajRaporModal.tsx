@@ -197,8 +197,6 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  if (!isOpen) return null;
-
   const aylar = [
     { no: 1, ad: 'Ocak' }, { no: 2, ad: 'Şubat' }, { no: 3, ad: 'Mart' },
     { no: 4, ad: 'Nisan' }, { no: 5, ad: 'Mayıs' }, { no: 6, ad: 'Haziran' },
@@ -217,6 +215,9 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
       }
       return false;
     });
+    // Yevmiyeciler Aylık İcmal Raporunda Yer Almaz (Haftalık Yevmiyeci İcmalinde Raporlanır)
+    if (p.IsYevmiyeci || p.CalismaTuru === 'Yevmiyeci') return false;
+
     return hasPuantajInMonth || isPersonelCalisiyorMuAyda(p, seciliYil, seciliAy);
   });
 
@@ -247,24 +248,39 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
     const normalGun = pPuantaj.filter(x => x.DurumKodu === 'N' || x.NormalCalismaSaati > 0).length;
     const haftaTatiliGun = pPuantaj.filter(x => x.DurumKodu === 'HT').length;
     const resmiTatilGun = pPuantaj.filter(x => x.DurumKodu === 'RT').length;
-    // Ücretli İzinler (Yİ: Yıllık İzin, R: Raporlu, M: Mazeret İzni) - Ücretsiz izin Eksik Mesai olarak değerlendirilir
-    const izinliGun = pPuantaj.filter(x => ['YI', 'R', 'M'].includes(x.DurumKodu)).length;
+    // Ücretli İzinler (Yİ: Yıllık İzin, R: Raporlu, M: Mazeret İzni) - 30 GÜNDEN DÜŞÜLMEZ!
+    const ucretliIzinGun = pPuantaj.filter(x => ['YI', 'R', 'M'].includes(x.DurumKodu)).length;
+    // Ücretsiz İzin (UI) ve Devamsız (D) - 30 GÜNDEN DÜŞÜLÜR!
+    const ucretsizIzinGun = pPuantaj.filter(x => x.DurumKodu === 'UI').length;
     const devamsizGun = pPuantaj.filter(x => x.DurumKodu === 'D').length;
+    const devamsizVeUcretsizGun = ucretsizIzinGun + devamsizGun;
 
     const toplamNormalSaat = pPuantaj.reduce((sum, x) => sum + (x.NormalCalismaSaati || 0), 0);
     const toplamFazlaMesai = pPuantaj.reduce((sum, x) => sum + (x.FazlaMesaiSaati || 0), 0);
     const toplamTatilMesai = pPuantaj.reduce((sum, x) => sum + (x.HaftaTatiliMesaiSaati || 0) + (x.ResmiTatilMesaiSaati || 0), 0);
     
-    // Eksik saat hesabı: Saatlik kesintiler + Tam gün Ücretsiz İzin (UI) günleri (Rejime ve güne göre: 5 günlükte 9s, 6 günlükte hafta içi 8s, Cumartesi 5s)
+    // Eksik saat hesabı: Saatlik ücretsiz kesintiler + Tam gün Ücretsiz İzin (UI) ve Devamsızlık (D) günleri
+    // Ücretli izinler (YI, R, M, HT, RT) asla eksik saat olarak eklenmez!
     const toplamEksikSaat = pPuantaj.reduce((sum, x) => {
       const cleanDate = String(x.Tarih || '').slice(0, 10);
       const stdSaat = getStandartNormalSaat(cleanDate, rejim);
       const kesinti = Number(x.SaatlikKesintiUcretsiz || 0);
-      if (x.DurumKodu === 'UI') {
-        return sum + (kesinti > 0 ? kesinti : stdSaat);
+      if (x.DurumKodu === 'UI' || x.DurumKodu === 'D') {
+        return sum + (kesinti > 0 ? kesinti : (stdSaat > 0 ? stdSaat : 7.5));
       }
       return sum + kesinti;
     }, 0);
+
+    // Fazla mesai artırımları:
+    // Fazla Mesai (%50 artırımlı): Saat x 1.5
+    // Tatil Mesaisi (%100 artırımlı): Saat x 2.0
+    const artirimliMesaiSaati = (toplamFazlaMesai * 1.5) + (toplamTatilMesai * 2.0);
+    const artirimliMesaiGunu = artirimliMesaiSaati / 7.5;
+    const eksikGun = toplamEksikSaat / 7.5;
+
+    // 30 Günden eksik mesaileri düş (ücretsiz izin ve devamsızlıklar), fazla mesaileri gerekli artırımlarla ekle:
+    const netGun = Math.max(0, 30 - eksikGun + artirimliMesaiGunu);
+    const netSaat = Math.max(0, 225 - toplamEksikSaat + artirimliMesaiSaati);
 
     return {
       personelId: p.PersonelId,
@@ -273,24 +289,59 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
       normalGun,
       haftaTatiliGun,
       resmiTatilGun,
-      izinliGun,
-      devamsizGun,
+      ucretliIzinGun,
+      devamsizVeUcretsizGun,
       toplamNormalSaat,
       toplamFazlaMesai,
       toplamTatilMesai,
-      toplamEksikSaat
+      toplamEksikSaat,
+      artirimliMesaiSaati,
+      netGun,
+      netSaat
     };
   });
 
+  // Tablo En Altı Genel Toplam Satırı (Grand Total)
+  const genelToplam = React.useMemo(() => {
+    return icmalListesi.reduce((acc, item) => ({
+      normalGun: acc.normalGun + item.normalGun,
+      haftaTatiliGun: acc.haftaTatiliGun + item.haftaTatiliGun,
+      resmiTatilGun: acc.resmiTatilGun + item.resmiTatilGun,
+      ucretliIzinGun: acc.ucretliIzinGun + item.ucretliIzinGun,
+      devamsizVeUcretsizGun: acc.devamsizVeUcretsizGun + item.devamsizVeUcretsizGun,
+      toplamNormalSaat: acc.toplamNormalSaat + item.toplamNormalSaat,
+      toplamFazlaMesai: acc.toplamFazlaMesai + item.toplamFazlaMesai,
+      toplamTatilMesai: acc.toplamTatilMesai + item.toplamTatilMesai,
+      toplamEksikSaat: acc.toplamEksikSaat + item.toplamEksikSaat,
+      netGun: acc.netGun + item.netGun,
+      netSaat: acc.netSaat + item.netSaat
+    }), {
+      normalGun: 0,
+      haftaTatiliGun: 0,
+      resmiTatilGun: 0,
+      ucretliIzinGun: 0,
+      devamsizVeUcretsizGun: 0,
+      toplamNormalSaat: 0,
+      toplamFazlaMesai: 0,
+      toplamTatilMesai: 0,
+      toplamEksikSaat: 0,
+      netGun: 0,
+      netSaat: 0
+    });
+  }, [icmalListesi]);
+
   const handleCsvExport = () => {
-    const ayAdi = aylar.find(a => a.no === seciliAy)?.ad;
-    let csv = `RENDE İNŞAAT MOBİLYA TURİZM A.Ş. - AYLIK PUANTAJ İCMAL CETVELİ\n`;
-    csv += `Dönem: ${ayAdi} ${seciliYil} - Rapor Tarihi: ${formatTarihTR(getBugunIso())}\n\n`;
-    csv += `Personel;Departman;Normal Gün;Hafta Tatili;Resmi Tatil;İzin/Rapor;Devamsız;Normal Saat;Fazla Mesai (%50);Tatil Mesaisi (%100);Eksik Saat;İmza\n`;
+    const ayAdi = aylar.find(a => a.no === seciliAy)?.ad || '';
+    let csv = `RENDE İNŞAAT MOBİLYA TURİZM A.Ş. - AYLIK PUANTAJ & BORDRO İCMAL CETVELİ\n`;
+    csv += `Dönem: ${ayAdi} ${seciliYil} - Rapor Tarihi: ${formatTarihTR(getBugunIso())}\n`;
+    csv += `Hesaplama Esası: Aylık maktu 30 gün (225 saat) baz alınmıştır. Ücretsiz izin ve devamsızlıklar düşülmüş, ücretli izinler korunmuş, fazla mesailer %50 (x1.5) ve tatil mesaileri %100 (x2.0) artırımlı eklenmiştir.\n\n`;
+    csv += `Personel;Departman;Normal Gün;Hafta Tatili;Resmi Tatil;Ücretli İzin (Yİ/R/M);Devamsız & Ü.İzin;Normal Saat;Fazla Mesai (%50);Tatil Mesaisi (%100);Eksik Saat;Net Gün (30 Esas);Net Saat (225 Esas);İmza\n`;
 
     icmalListesi.forEach(item => {
-      csv += `${item.adSoyad};${item.departman};${item.normalGun};${item.haftaTatiliGun};${item.resmiTatilGun};${item.izinliGun};${item.devamsizGun};${item.toplamNormalSaat.toFixed(1)};${item.toplamFazlaMesai.toFixed(1)};${item.toplamTatilMesai.toFixed(1)};${item.toplamEksikSaat.toFixed(1)};\n`;
+      csv += `${item.adSoyad};${item.departman};${item.normalGun};${item.haftaTatiliGun};${item.resmiTatilGun};${item.ucretliIzinGun};${item.devamsizVeUcretsizGun};${item.toplamNormalSaat.toFixed(1)};${item.toplamFazlaMesai.toFixed(1)};${item.toplamTatilMesai.toFixed(1)};${item.toplamEksikSaat.toFixed(1)};${item.netGun.toFixed(2)};${item.netSaat.toFixed(1)};\n`;
     });
+
+    csv += `GENEL TOPLAM (${icmalListesi.length} Personel);-;${genelToplam.normalGun};${genelToplam.haftaTatiliGun};${genelToplam.resmiTatilGun};${genelToplam.ucretliIzinGun};${genelToplam.devamsizVeUcretsizGun};${genelToplam.toplamNormalSaat.toFixed(1)};${genelToplam.toplamFazlaMesai.toFixed(1)};${genelToplam.toplamTatilMesai.toFixed(1)};${genelToplam.toplamEksikSaat.toFixed(1)};${genelToplam.netGun.toFixed(2)};${genelToplam.netSaat.toFixed(1)};\n`;
 
     const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -300,6 +351,246 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  // Güvenli ve Kesin Yazdırma HTML Üreticisi (Iframe / Direct Print)
+  const generatePrintableHtml = () => {
+    const ayAdi = aylar.find(a => a.no === seciliAy)?.ad || '';
+    const bugunTarih = formatTarihTR(getBugunIso());
+
+    const rowsHtml = icmalListesi.map((item, idx) => `
+      <tr>
+        <td style="padding: 4px 6px; font-weight: bold; border: 1px solid #334155;">${idx + 1}. ${item.adSoyad}</td>
+        <td style="padding: 4px 6px; border: 1px solid #334155;">${item.departman}</td>
+        <td style="padding: 4px 6px; text-align: center; border: 1px solid #334155;">${item.normalGun}</td>
+        <td style="padding: 4px 6px; text-align: center; border: 1px solid #334155;">${item.haftaTatiliGun}</td>
+        <td style="padding: 4px 6px; text-align: center; border: 1px solid #334155;">${item.resmiTatilGun}</td>
+        <td style="padding: 4px 6px; text-align: center; border: 1px solid #334155;">${item.ucretliIzinGun}</td>
+        <td style="padding: 4px 6px; text-align: center; border: 1px solid #334155; font-weight: bold; color: ${item.devamsizVeUcretsizGun > 0 ? '#b91c1c' : '#000'};">${item.devamsizVeUcretsizGun > 0 ? item.devamsizVeUcretsizGun : '-'}</td>
+        <td style="padding: 4px 6px; text-align: center; border: 1px solid #334155; font-family: monospace;">${item.toplamNormalSaat.toFixed(1)}</td>
+        <td style="padding: 4px 6px; text-align: center; border: 1px solid #334155; font-family: monospace;">${item.toplamFazlaMesai > 0 ? item.toplamFazlaMesai.toFixed(1) : '-'}</td>
+        <td style="padding: 4px 6px; text-align: center; border: 1px solid #334155; font-family: monospace;">${item.toplamTatilMesai > 0 ? item.toplamTatilMesai.toFixed(1) : '-'}</td>
+        <td style="padding: 4px 6px; text-align: center; border: 1px solid #334155; font-family: monospace; color: ${item.toplamEksikSaat > 0 ? '#b91c1c' : '#000'};">${item.toplamEksikSaat > 0 ? item.toplamEksikSaat.toFixed(1) : '-'}</td>
+        <td style="padding: 4px 6px; text-align: center; border: 1.5px solid #000; font-family: monospace; font-weight: bold; background-color: #f1f5f9;">${item.netGun.toFixed(2)}</td>
+        <td style="padding: 4px 6px; text-align: center; border: 1.5px solid #000; font-family: monospace; font-weight: bold; background-color: #f1f5f9;">${item.netSaat.toFixed(1)}</td>
+        <td style="padding: 4px 10px; text-align: center; border: 1px solid #334155; min-width: 60px;">
+          <div style="border-bottom: 1px solid #94a3b8; height: 16px; width: 50px; margin: 0 auto;"></div>
+        </td>
+      </tr>
+    `).join('');
+
+    const totalRowHtml = `
+      <tr style="background-color: #e2e8f0; font-weight: bold;">
+        <td colspan="2" style="padding: 6px; border: 2px solid #000; font-weight: 900;">GENEL TOPLAM (${icmalListesi.length} Personel)</td>
+        <td style="padding: 6px; text-align: center; border: 2px solid #000;">${genelToplam.normalGun}</td>
+        <td style="padding: 6px; text-align: center; border: 2px solid #000;">${genelToplam.haftaTatiliGun}</td>
+        <td style="padding: 6px; text-align: center; border: 2px solid #000;">${genelToplam.resmiTatilGun}</td>
+        <td style="padding: 6px; text-align: center; border: 2px solid #000;">${genelToplam.ucretliIzinGun}</td>
+        <td style="padding: 6px; text-align: center; border: 2px solid #000; color: #b91c1c;">${genelToplam.devamsizVeUcretsizGun}</td>
+        <td style="padding: 6px; text-align: center; border: 2px solid #000; font-family: monospace;">${genelToplam.toplamNormalSaat.toFixed(1)}</td>
+        <td style="padding: 6px; text-align: center; border: 2px solid #000; font-family: monospace;">${genelToplam.toplamFazlaMesai > 0 ? genelToplam.toplamFazlaMesai.toFixed(1) : '-'}</td>
+        <td style="padding: 6px; text-align: center; border: 2px solid #000; font-family: monospace;">${genelToplam.toplamTatilMesai > 0 ? genelToplam.toplamTatilMesai.toFixed(1) : '-'}</td>
+        <td style="padding: 6px; text-align: center; border: 2px solid #000; font-family: monospace; color: #b91c1c;">${genelToplam.toplamEksikSaat > 0 ? genelToplam.toplamEksikSaat.toFixed(1) : '-'}</td>
+        <td style="padding: 6px; text-align: center; border: 2px solid #000; font-family: monospace; font-weight: 900; background-color: #cbd5e1;">${genelToplam.netGun.toFixed(2)}</td>
+        <td style="padding: 6px; text-align: center; border: 2px solid #000; font-family: monospace; font-weight: 900; background-color: #cbd5e1;">${genelToplam.netSaat.toFixed(1)}</td>
+        <td style="padding: 6px; text-align: center; border: 2px solid #000; font-size: 8pt;">Genel İcmal</td>
+      </tr>
+    `;
+
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Aylık Puantaj İcmali - ${ayAdi} ${seciliYil}</title>
+        <style>
+          @page {
+            size: A4 landscape;
+            margin: 6mm 8mm;
+          }
+          body {
+            font-family: Arial, Helvetica, sans-serif;
+            margin: 0;
+            padding: 0;
+            color: #000;
+            background: #fff;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .header {
+            text-align: center;
+            border-bottom: 2px solid #000;
+            padding-bottom: 4px;
+            margin-bottom: 8px;
+          }
+          .company-title {
+            font-size: 11pt;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+          }
+          .report-title {
+            font-size: 13pt;
+            font-weight: 900;
+            margin: 2px 0;
+            letter-spacing: 0.5px;
+          }
+          .sub-bar {
+            display: flex;
+            justify-content: space-between;
+            font-size: 9pt;
+            font-weight: 600;
+            margin-top: 4px;
+            color: #1e293b;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 8.5pt;
+          }
+          th {
+            background-color: #f1f5f9;
+            color: #000;
+            border: 1px solid #334155;
+            padding: 5px 4px;
+            text-align: center;
+            font-weight: bold;
+          }
+          .rule-note {
+            font-size: 7.5pt;
+            color: #475569;
+            margin-top: 6px;
+            margin-bottom: 12px;
+            font-style: italic;
+          }
+          .signatures {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 14px;
+            page-break-inside: avoid;
+          }
+          .sig-box {
+            width: 28%;
+            border-top: 1px solid #000;
+            text-align: center;
+            padding-top: 4px;
+            font-size: 8.5pt;
+          }
+          .sig-title {
+            font-weight: bold;
+            margin-bottom: 20px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="company-title">RENDE İNŞAAT MOBİLYA TURİZM SAN. VE TİC. A.Ş.</div>
+          <div class="report-title">AYLIK PERSONEL PUANTAJ & BORDRO İCMAL CETVELİ</div>
+          <div class="sub-bar">
+            <span><strong>Dönem:</strong> ${ayAdi} ${seciliYil}</span>
+            <span><strong>Rapor Tarihi:</strong> ${bugunTarih}</span>
+            <span><strong>Toplam Personel:</strong> ${icmalListesi.length} Kişi</span>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="text-align: left;">Personel Adı Soyadı</th>
+              <th>Departman</th>
+              <th>Normal Gün</th>
+              <th>Hafta T.</th>
+              <th>Resmi T.</th>
+              <th>Ücretli İzin</th>
+              <th>Devamsız / Ü.İzin</th>
+              <th>Normal (Saat)</th>
+              <th>%50 Mesai</th>
+              <th>%100 Mesai</th>
+              <th>Eksik Saat</th>
+              <th style="background-color: #e2e8f0;">Net Gün (30 Esas)</th>
+              <th style="background-color: #e2e8f0;">Net Saat</th>
+              <th>İmza</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+          <tfoot>
+            ${totalRowHtml}
+          </tfoot>
+        </table>
+
+        <div class="rule-note">
+          * Bordro Hesaplama Esasları: Kadrolu personeller için aylık standart 30 gün (225 saat) baz alınmıştır. Devamsızlık ve ücretsiz izinler 30 günden düşülmüş, ücretli izinler (yıllık izin, rapor, mazeret, hafta tatili, resmi tatil) tam ödenmiştir. Fazla mesailer %50 (x1.5), tatil mesaileri %100 (x2.0) artırımlı olarak net gün ve saate yansıtılmıştır.
+        </div>
+
+        <div class="signatures">
+          <div class="sig-box">
+            <div class="sig-title">Hazırlayan</div>
+            <div>İnsan Kaynakları / Personel</div>
+          </div>
+          <div class="sig-box">
+            <div class="sig-title">Kontrol Eden</div>
+            <div>Fabrika Müdürü</div>
+          </div>
+          <div class="sig-box">
+            <div class="sig-title">Onaylayan</div>
+            <div>Genel Müdür</div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  };
+
+  // Yazdır Butonu Tetikleyicisi
+  const handlePrint = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    try {
+      const existingFrame = document.getElementById('rende-print-frame');
+      if (existingFrame) existingFrame.remove();
+
+      const iframe = document.createElement('iframe');
+      iframe.id = 'rende-print-frame';
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      iframe.style.visibility = 'hidden';
+      document.body.appendChild(iframe);
+
+      const doc = iframe.contentWindow?.document || iframe.contentDocument;
+      if (doc) {
+        doc.open();
+        doc.write(generatePrintableHtml());
+        doc.close();
+
+        setTimeout(() => {
+          try {
+            iframe.contentWindow?.focus();
+            iframe.contentWindow?.print();
+          } catch (printErr) {
+            console.warn('Iframe print call failed, triggering window.print:', printErr);
+            window.focus();
+            window.print();
+          }
+        }, 250);
+        return;
+      }
+    } catch (err) {
+      console.warn('Print iframe initialization error:', err);
+    }
+
+    // Direct fallback
+    window.focus();
+    window.print();
+  };
+
+  if (!isOpen) return null;
 
   const modalContent = (
     <div 
@@ -458,8 +749,8 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
             </button>
 
             <button
-              onClick={() => window.print()}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition shadow"
+              onClick={handlePrint}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition shadow cursor-pointer"
               title="Yazdır / PDF Olarak Kaydet"
             >
               <Printer className="w-3.5 h-3.5" />
@@ -468,12 +759,25 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
 
             <button
               onClick={onClose}
-              className="flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-bold rounded-lg transition border border-slate-700"
+              className="flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-bold rounded-lg transition border border-slate-700 cursor-pointer"
               title="Kapat"
             >
               <X className="w-3.5 h-3.5" />
               <span>Kapat (Esc)</span>
             </button>
+          </div>
+        </div>
+
+        {/* Bordro Esası Bilgilendirme Çubuğu */}
+        <div className="px-6 py-2.5 bg-slate-950/90 border-b border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs print:hidden">
+          <div className="flex items-center gap-2 text-slate-300">
+            <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
+            <span><strong>Bordro Esası (Maktu 30 Gün):</strong> Devamsızlık ve ücretsiz izinler 30 günden düşülür, ücretli izinler korunur. Fazla mesailer %50 (x1.5), tatil mesaileri %100 (x2.0) artırımlı eklenir.</span>
+          </div>
+          <div className="flex items-center gap-3 font-mono text-xs">
+            <span className="text-slate-400">Genel Net Bordro Gün Toplamı: <strong className="text-cyan-300 font-bold">{genelToplam.netGun.toFixed(2)} Gün</strong></span>
+            <span className="text-slate-600">|</span>
+            <span className="text-slate-400">Net Saat: <strong className="text-emerald-300 font-bold">{genelToplam.netSaat.toFixed(1)} s</strong></span>
           </div>
         </div>
 
@@ -500,19 +804,21 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
                 <th className="py-2.5 px-2 text-center print:py-1.5 print:px-1">Çalışma (Gün)</th>
                 <th className="py-2.5 px-2 text-center print:py-1.5 print:px-1">Hafta T.</th>
                 <th className="py-2.5 px-2 text-center print:py-1.5 print:px-1">Resmi T.</th>
-                <th className="py-2.5 px-2 text-center print:py-1.5 print:px-1">İzin/Rap.</th>
-                <th className="py-2.5 px-2 text-center print:py-1.5 print:px-1">Devamsız</th>
+                <th className="py-2.5 px-2 text-center print:py-1.5 print:px-1" title="Ücretli İzinler (Yıllık İzin, Rapor, Mazeret) - Düşülmez">Ücretli İzin</th>
+                <th className="py-2.5 px-2 text-center print:py-1.5 print:px-1" title="Ücretsiz İzin ve Devamsızlıklar - Düşülür">Devamsız / Ü.İzin</th>
                 <th className="py-2.5 px-2 text-center font-bold text-emerald-400 print:py-1.5 print:px-1 print:text-black">Normal (Saat)</th>
                 <th className="py-2.5 px-2 text-center font-bold text-blue-400 print:py-1.5 print:px-1 print:text-black">%50 Mesai</th>
                 <th className="py-2.5 px-2 text-center font-bold text-emerald-300 print:py-1.5 print:px-1 print:text-black">%100 Mesai</th>
                 <th className="py-2.5 px-2 text-center font-bold text-rose-400 print:py-1.5 print:px-1 print:text-black">Eksik Saat</th>
+                <th className="py-2.5 px-2 text-center font-black text-cyan-300 bg-cyan-950/40 print:py-1.5 print:px-1 print:text-black print:bg-slate-200" title="Aylık 30 Gün Esaslı Net Hakediş Günü">Net Gün (30 Esas)</th>
+                <th className="py-2.5 px-2 text-center font-black text-emerald-300 bg-emerald-950/40 print:py-1.5 print:px-1 print:text-black print:bg-slate-200" title="Aylık 225 Saat Esaslı Net Hakediş Saati">Net Saat</th>
                 <th className="py-2.5 px-4 text-center border-l border-slate-800 print:py-1.5 print:px-3 print:border-l print:border-black">İmza</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 print:divide-y-0">
               {icmalListesi.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="py-4 text-center text-slate-500 italic">
+                  <td colSpan={14} className="py-4 text-center text-slate-500 italic">
                     Kayıtlı aktif personel bulunamadı.
                   </td>
                 </tr>
@@ -546,12 +852,14 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
                         <td className="py-2 px-2 text-center font-bold text-slate-200 print:text-black print:py-1 print:px-1">{item.normalGun}</td>
                         <td className="py-2 px-2 text-center text-slate-400 print:text-black print:py-1 print:px-1">{item.haftaTatiliGun}</td>
                         <td className="py-2 px-2 text-center text-slate-400 print:text-black print:py-1 print:px-1">{item.resmiTatilGun}</td>
-                        <td className="py-2 px-2 text-center text-amber-400 font-semibold print:text-black print:py-1 print:px-1">{item.izinliGun}</td>
-                        <td className="py-2 px-2 text-center text-rose-400 font-bold print:text-black print:py-1 print:px-1">{item.devamsizGun || '-'}</td>
+                        <td className="py-2 px-2 text-center text-amber-400 font-semibold print:text-black print:py-1 print:px-1">{item.ucretliIzinGun}</td>
+                        <td className="py-2 px-2 text-center text-rose-400 font-bold print:text-black print:py-1 print:px-1">{item.devamsizVeUcretsizGun || '-'}</td>
                         <td className="py-2 px-2 text-center font-mono font-bold text-emerald-400 print:text-black print:py-1 print:px-1">{item.toplamNormalSaat.toFixed(1)}</td>
                         <td className="py-2 px-2 text-center font-mono font-bold text-blue-400 print:text-black print:py-1 print:px-1">{item.toplamFazlaMesai > 0 ? item.toplamFazlaMesai.toFixed(1) : '-'}</td>
                         <td className="py-2 px-2 text-center font-mono font-bold text-emerald-300 print:text-black print:py-1 print:px-1">{item.toplamTatilMesai > 0 ? item.toplamTatilMesai.toFixed(1) : '-'}</td>
                         <td className="py-2 px-2 text-center font-mono font-bold text-rose-400 print:text-black print:py-1 print:px-1">{item.toplamEksikSaat > 0 ? item.toplamEksikSaat.toFixed(1) : '-'}</td>
+                        <td className="py-2 px-2 text-center font-mono font-black text-cyan-300 bg-cyan-950/40 print:text-black print:bg-transparent">{item.netGun.toFixed(2)}</td>
+                        <td className="py-2 px-2 text-center font-mono font-black text-emerald-300 bg-emerald-950/40 print:text-black print:bg-transparent">{item.netSaat.toFixed(1)}</td>
                         <td className="py-2 px-4 text-center border-l border-slate-800 print:border-l print:border-black print:py-1 print:px-3 min-w-[70px]">
                           <div className="w-16 border-b border-slate-700 print:border-black h-4 mx-auto"></div>
                         </td>
@@ -560,7 +868,7 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
                       {/* Tıklanınca Altalta Açılan Günlük Puantaj Detay Satırı */}
                       {isAcik && (
                         <tr className="bg-slate-950/90 border-y-2 border-blue-500/40 print:hidden animate-in fade-in duration-150">
-                          <td colSpan={12} className="p-3 sm:p-4">
+                          <td colSpan={14} className="p-3 sm:p-4">
                             <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-2xl space-y-3">
                               {/* Başlık ve Ay Özeti */}
                               <div className="px-4 py-3 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
@@ -690,6 +998,31 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
                 })
               )}
             </tbody>
+            <tfoot className="bg-slate-950 text-white font-bold border-t-2 border-slate-700 print:bg-slate-200 print:border-black sticky bottom-0 z-10 shadow-lg">
+              <tr className="border-b border-slate-800 print:border-black">
+                <td colSpan={2} className="py-3 px-3 font-black text-white print:text-black text-xs uppercase tracking-wide">
+                  GENEL TOPLAM ({icmalListesi.length} Personel)
+                </td>
+                <td className="py-3 px-2 text-center font-black text-slate-100 print:text-black">{genelToplam.normalGun}</td>
+                <td className="py-3 px-2 text-center font-bold text-slate-300 print:text-black">{genelToplam.haftaTatiliGun}</td>
+                <td className="py-3 px-2 text-center font-bold text-slate-300 print:text-black">{genelToplam.resmiTatilGun}</td>
+                <td className="py-3 px-2 text-center font-bold text-amber-300 print:text-black">{genelToplam.ucretliIzinGun}</td>
+                <td className="py-3 px-2 text-center font-bold text-rose-400 print:text-black">{genelToplam.devamsizVeUcretsizGun}</td>
+                <td className="py-3 px-2 text-center font-mono font-bold text-emerald-400 print:text-black">{genelToplam.toplamNormalSaat.toFixed(1)}</td>
+                <td className="py-3 px-2 text-center font-mono font-bold text-blue-400 print:text-black">{genelToplam.toplamFazlaMesai > 0 ? genelToplam.toplamFazlaMesai.toFixed(1) : '-'}</td>
+                <td className="py-3 px-2 text-center font-mono font-bold text-emerald-300 print:text-black">{genelToplam.toplamTatilMesai > 0 ? genelToplam.toplamTatilMesai.toFixed(1) : '-'}</td>
+                <td className="py-3 px-2 text-center font-mono font-bold text-rose-400 print:text-black">{genelToplam.toplamEksikSaat > 0 ? genelToplam.toplamEksikSaat.toFixed(1) : '-'}</td>
+                <td className="py-3 px-2 text-center font-mono font-black text-cyan-300 bg-cyan-950/80 border-x border-cyan-500/40 print:text-black print:bg-slate-200">
+                  {genelToplam.netGun.toFixed(2)}
+                </td>
+                <td className="py-3 px-2 text-center font-mono font-black text-emerald-300 bg-emerald-950/80 border-r border-emerald-500/40 print:text-black print:bg-slate-200">
+                  {genelToplam.netSaat.toFixed(1)}
+                </td>
+                <td className="py-3 px-4 text-center border-l border-slate-800 print:border-l print:border-black text-[10px] text-slate-400 print:text-black font-normal">
+                  Genel İcmal
+                </td>
+              </tr>
+            </tfoot>
           </table>
         </div>
 

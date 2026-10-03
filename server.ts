@@ -569,7 +569,10 @@ function normalizePersonel(row: any) {
     SilindiMi: silindi,
     DevredenIzinGunu: Number(getProp(row, 'DevredenIzinGunu', 'devredenizingunu') || 0),
     IzinUcretiOdemeleri: ucretOdemeleri,
-    GirisCikisGecmisi: girisCikisGecmisi
+    GirisCikisGecmisi: girisCikisGecmisi,
+    IsYevmiyeci: Boolean(getProp(row, 'IsYevmiyeci', 'isyevmiyeci', 'yevmiyeci') || String(getProp(row, 'CalismaTuru', 'calismaturu') || '').toLowerCase() === 'yevmiyeci'),
+    CalismaTuru: String(getProp(row, 'CalismaTuru', 'calismaturu') || (Boolean(getProp(row, 'IsYevmiyeci', 'isyevmiyeci')) ? 'Yevmiyeci' : 'Kadrolu')),
+    GunlukYevmiye: Number(getProp(row, 'GunlukYevmiye', 'gunlukyevmiye', 'Yevmiye', 'yevmiye') || 0)
   };
 }
 
@@ -2407,6 +2410,15 @@ async function checkDbConnection() {
         if (!hasCol('GirisCikisGecmisi') && !hasCol('giriscikisgecmisi')) {
           await pool.query(`ALTER TABLE ${detectedTables.personeller} ADD COLUMN IF NOT EXISTS "GirisCikisGecmisi" TEXT DEFAULT '[]'`);
         }
+        if (!hasCol('IsYevmiyeci') && !hasCol('isyevmiyeci') && !hasCol('yevmiyeci')) {
+          await pool.query(`ALTER TABLE ${detectedTables.personeller} ADD COLUMN IF NOT EXISTS "IsYevmiyeci" BOOLEAN DEFAULT false`);
+        }
+        if (!hasCol('CalismaTuru') && !hasCol('calismaturu')) {
+          await pool.query(`ALTER TABLE ${detectedTables.personeller} ADD COLUMN IF NOT EXISTS "CalismaTuru" VARCHAR(50) DEFAULT 'Kadrolu'`);
+        }
+        if (!hasCol('GunlukYevmiye') && !hasCol('gunlukyevmiye') && !hasCol('yevmiye')) {
+          await pool.query(`ALTER TABLE ${detectedTables.personeller} ADD COLUMN IF NOT EXISTS "GunlukYevmiye" NUMERIC DEFAULT 0`);
+        }
       } catch (alterErr: any) {
         console.error('[DB PERSONEL ALTER COLUMNS ERROR]', alterErr.message);
       }
@@ -2428,7 +2440,10 @@ async function checkDbConnection() {
             "IstenCikisTarihi" VARCHAR(50),
             "DogumTarihi" VARCHAR(50) DEFAULT '1990-01-01',
             "DevredenIzinGunu" INT DEFAULT 0,
-            "DurumAktifMi" BOOLEAN DEFAULT true
+            "DurumAktifMi" BOOLEAN DEFAULT true,
+            "IsYevmiyeci" BOOLEAN DEFAULT false,
+            "CalismaTuru" VARCHAR(50) DEFAULT 'Kadrolu',
+            "GunlukYevmiye" NUMERIC DEFAULT 0
           )
         `);
         console.log('[DB] "Personeller" tablosu oluşturuldu.');
@@ -7262,6 +7277,9 @@ app.post('/api/personeller', async (req, res) => {
       DogumTarihi: formatDate(req.body.DogumTarihi) || '1990-01-01',
       DurumAktifMi: req.body.DurumAktifMi ?? true,
       DevredenIzinGunu: Number(req.body.DevredenIzinGunu || 0),
+      IsYevmiyeci: Boolean(req.body.IsYevmiyeci || req.body.CalismaTuru === 'Yevmiyeci'),
+      CalismaTuru: req.body.CalismaTuru || (req.body.IsYevmiyeci ? 'Yevmiyeci' : 'Kadrolu'),
+      GunlukYevmiye: req.body.GunlukYevmiye !== undefined && req.body.GunlukYevmiye !== null && req.body.GunlukYevmiye !== '' ? Number(req.body.GunlukYevmiye) : 0,
       IzinUcretiOdemeleri: [],
       GirisCikisGecmisi: req.body.GirisCikisGecmisi || []
     };
@@ -7295,6 +7313,9 @@ app.post('/api/personeller', async (req, res) => {
           { candidates: ['DogumTarihi', 'dogumtarihi', 'BirthDate'], val: yeni.DogumTarihi },
           { candidates: ['DevredenIzinGunu', 'devredenizingunu', 'DevredenIzin'], val: yeni.DevredenIzinGunu },
           { candidates: ['DurumAktifMi', 'durumaktifmi', 'AktifMi', 'aktifmi', 'DurumAktif'], val: yeni.DurumAktifMi },
+          { candidates: ['IsYevmiyeci', 'isyevmiyeci', 'yevmiyeci'], val: yeni.IsYevmiyeci },
+          { candidates: ['CalismaTuru', 'calismaturu'], val: yeni.CalismaTuru },
+          { candidates: ['GunlukYevmiye', 'gunlukyevmiye', 'yevmiye'], val: yeni.GunlukYevmiye },
           { candidates: ['GirisCikisGecmisi', 'giriscikisgecmisi', 'Donemler', 'donemler'], val: girisGecmisiStr }
         ];
 
@@ -7381,6 +7402,9 @@ app.put('/api/personeller/:id', async (req, res) => {
     DogumTarihi: req.body.DogumTarihi ? formatDate(req.body.DogumTarihi) : undefined,
     DevredenIzinGunu: req.body.DevredenIzinGunu !== undefined ? Number(req.body.DevredenIzinGunu || 0) : undefined,
     DurumAktifMi: req.body.DurumAktifMi !== undefined ? req.body.DurumAktifMi : undefined,
+    IsYevmiyeci: req.body.IsYevmiyeci !== undefined ? Boolean(req.body.IsYevmiyeci) : (req.body.CalismaTuru !== undefined ? req.body.CalismaTuru === 'Yevmiyeci' : undefined),
+    CalismaTuru: req.body.CalismaTuru !== undefined ? String(req.body.CalismaTuru) : (req.body.IsYevmiyeci !== undefined ? (req.body.IsYevmiyeci ? 'Yevmiyeci' : 'Kadrolu') : undefined),
+    GunlukYevmiye: req.body.GunlukYevmiye !== undefined ? (req.body.GunlukYevmiye !== null && req.body.GunlukYevmiye !== '' ? Number(req.body.GunlukYevmiye) : 0) : undefined,
     GirisCikisGecmisi: req.body.GirisCikisGecmisi !== undefined
       ? (typeof req.body.GirisCikisGecmisi === 'string' ? req.body.GirisCikisGecmisi : JSON.stringify(req.body.GirisCikisGecmisi))
       : undefined
@@ -7411,6 +7435,9 @@ app.put('/api/personeller/:id', async (req, res) => {
         { candidates: ['DogumTarihi', 'dogumtarihi', 'BirthDate'], val: updateData.DogumTarihi },
         { candidates: ['DevredenIzinGunu', 'devredenizingunu', 'DevredenIzin'], val: updateData.DevredenIzinGunu },
         { candidates: ['DurumAktifMi', 'durumaktifmi', 'AktifMi', 'aktifmi', 'DurumAktif'], val: updateData.DurumAktifMi },
+        { candidates: ['IsYevmiyeci', 'isyevmiyeci', 'yevmiyeci'], val: updateData.IsYevmiyeci },
+        { candidates: ['CalismaTuru', 'calismaturu'], val: updateData.CalismaTuru },
+        { candidates: ['GunlukYevmiye', 'gunlukyevmiye', 'yevmiye'], val: updateData.GunlukYevmiye },
         { candidates: ['GirisCikisGecmisi', 'giriscikisgecmisi', 'Donemler', 'donemler'], val: updateData.GirisCikisGecmisi }
       ];
 
@@ -7451,14 +7478,23 @@ app.put('/api/personeller/:id', async (req, res) => {
 
 app.delete('/api/personeller/:id', async (req, res) => {
   const id = parseInt(req.params.id);
+  const tamamen = req.query.tamamen === 'true' || req.query.hard === 'true';
+
   if (isDbConnected && detectedTables.personeller) {
     try {
       const cols = await getTableColumns(detectedTables.personeller);
       const idCol = cols.find(c => ['personelid', 'id', 'PersonelId'].includes(c.toLowerCase())) || 'PersonelId';
-      await pool.query(`UPDATE ${detectedTables.personeller} SET "DurumAktifMi" = false WHERE "${idCol}" = $1`, [id]);
-      return res.json({ success: true, message: 'Personel pasife alındı' });
+      if (tamamen) {
+        await pool.query(`DELETE FROM ${detectedTables.personeller} WHERE "${idCol}" = $1`, [id]);
+        memPersoneller = memPersoneller.filter(p => p.PersonelId !== id);
+        return res.json({ success: true, message: 'Personel kaydı tamamen silindi' });
+      } else {
+        await pool.query(`UPDATE ${detectedTables.personeller} SET "DurumAktifMi" = false WHERE "${idCol}" = $1`, [id]);
+        return res.json({ success: true, message: 'Personel pasife alındı' });
+      }
     } catch (err: any) {
       console.error('[DB DELETE PERSONEL ERROR]', err.message);
+      return res.status(500).json({ error: err.message });
     }
   }
   memPersoneller = memPersoneller.filter(p => p.PersonelId !== id);

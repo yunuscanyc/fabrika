@@ -69,6 +69,8 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
   const [formAcilKisi, setFormAcilKisi] = useState('');
   const [formAcilTel, setFormAcilTel] = useState('');
   const [formAktif, setFormAktif] = useState(true);
+  const [formIsYevmiyeci, setFormIsYevmiyeci] = useState<boolean>(false);
+  const [formGunlukYevmiye, setFormGunlukYevmiye] = useState<number | ''>('');
 
   // İSG & Sağlık Raporu Form Alanları
   const [formSaglikEkle, setFormSaglikEkle] = useState(false);
@@ -126,6 +128,8 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
     setFormAcilKisi('');
     setFormAcilTel('');
     setFormAktif(true);
+    setFormIsYevmiyeci(false);
+    setFormGunlukYevmiye('');
 
     // Sağlık ve İSG İsteğe Bağlı
     setFormSaglikEkle(true);
@@ -161,6 +165,8 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
     setFormAcilKisi(p.AcilDurumKisisi || '');
     setFormAcilTel(p.AcilDurumTelefonu || '');
     setFormAktif(p.DurumAktifMi);
+    setFormIsYevmiyeci(Boolean(p.IsYevmiyeci || p.CalismaTuru === 'Yevmiyeci'));
+    setFormGunlukYevmiye(p.GunlukYevmiye || '');
 
     setFormSaglikEkle(false);
     setFormEgitimEkle(false);
@@ -247,7 +253,10 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
         AcilDurumKisisi: formAcilKisi.trim(),
         AcilDurumTelefonu: formAcilTel.trim(),
         DurumAktifMi: isAktif,
-        GirisCikisGecmisi: siraliDonemler
+        GirisCikisGecmisi: siraliDonemler,
+        IsYevmiyeci: formIsYevmiyeci,
+        CalismaTuru: formIsYevmiyeci ? 'Yevmiyeci' : 'Kadrolu',
+        GunlukYevmiye: Number(formGunlukYevmiye || 0)
       };
 
       let targetPersonelId = seciliPersonel?.PersonelId;
@@ -319,6 +328,31 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
       onRefresh();
     } catch (err: any) {
       alert('Hata: ' + err.message);
+    }
+  };
+
+  const handleTamamenSil = async (p: Personel) => {
+    const onay = confirm(
+      `"DİKKAT: ${p.AdSoyad}" isimli personeli sistemden TAMAMEN SİLMEK istediğinize emin misiniz?\n\nBu işlem geri alınamaz!`
+    );
+    if (!onay) return;
+
+    setIslemSuruyor(true);
+    try {
+      const res = await fetch(`/api/personeller/${p.PersonelId}?tamamen=true`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        setModalAcik(false);
+        onRefresh();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert('Silme işleminde hata: ' + (errData.error || 'Bilinmeyen hata'));
+      }
+    } catch (err: any) {
+      alert('Bağlantı hatası: ' + err.message);
+    } finally {
+      setIslemSuruyor(false);
     }
   };
 
@@ -443,11 +477,20 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
                     onClick={() => handleDuzenle(p)}
                   >
                     <td className="py-3 px-4">
-                      <div className="font-semibold text-white group-hover:text-blue-400 transition flex items-center gap-2">
+                      <div className="font-semibold text-white group-hover:text-blue-400 transition flex flex-wrap items-center gap-1.5">
                         <span>{p.AdSoyad}</span>
                         {p.TCKimlikNo && (
                           <span className="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded font-mono">
                             {p.TCKimlikNo}
+                          </span>
+                        )}
+                        {(p.IsYevmiyeci || p.CalismaTuru === 'Yevmiyeci') ? (
+                          <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded font-bold flex items-center gap-1">
+                            🔨 Yevmiyeci {p.GunlukYevmiye ? `(${p.GunlukYevmiye} ₺)` : ''}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] bg-blue-500/15 text-blue-300 border border-blue-500/20 px-1.5 py-0.2 rounded font-semibold">
+                            🏢 Kadrolu
                           </span>
                         )}
                       </div>
@@ -561,6 +604,67 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
             </div>
 
             <form onSubmit={handleKaydet} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto text-sm">
+              {/* Çalışma Türü / Yevmiyeci Mi Seçimi */}
+              <div className="bg-slate-950/80 border border-slate-800 p-3.5 rounded-xl space-y-2.5">
+                <label className="block text-xs font-bold text-slate-200">
+                  Çalışma Türü / İstihdam Tipi <span className="text-amber-400">*</span>
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setFormIsYevmiyeci(false)}
+                    className={`flex items-center gap-3 p-3 rounded-xl border text-left transition cursor-pointer ${
+                      !formIsYevmiyeci
+                        ? 'bg-blue-600/20 border-blue-500 text-white shadow-md ring-1 ring-blue-500/30'
+                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${!formIsYevmiyeci ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                      🏢
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold">Kadrolu Fabrika Personeli</div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">Aylık sabit maaşlı, Aylık İcmal Raporuna giren kadro</div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFormIsYevmiyeci(true)}
+                    className={`flex items-center gap-3 p-3 rounded-xl border text-left transition cursor-pointer ${
+                      formIsYevmiyeci
+                        ? 'bg-amber-600/20 border-amber-500 text-white shadow-md ring-1 ring-amber-500/30'
+                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${formIsYevmiyeci ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                      🔨
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold">Yevmiyeci Usta / Saha Personeli</div>
+                      <div className="text-[10px] text-amber-300/80 mt-0.5">Günlük yevmiyeli, Haftalık Yevmiyeci İcmaline giren usta</div>
+                    </div>
+                  </button>
+                </div>
+
+                {formIsYevmiyeci && (
+                  <div className="pt-1.5 flex flex-col sm:flex-row sm:items-center gap-2 bg-amber-950/20 border border-amber-500/30 p-2.5 rounded-lg">
+                    <label className="text-xs font-bold text-amber-300 shrink-0">
+                      Günlük Yevmiye Ücreti (TL) <span className="text-slate-400 font-normal">(İsteğe Bağlı):</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="100"
+                      value={formGunlukYevmiye}
+                      onChange={(e) => setFormGunlukYevmiye(e.target.value === '' ? '' : (parseFloat(e.target.value) || 0))}
+                      placeholder="Örn: 2500 (Boş bırakabilirsiniz)"
+                      className="w-full sm:w-48 px-3 py-1.5 bg-slate-950 border border-amber-500/50 rounded-lg text-amber-200 font-bold font-mono text-xs focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-400 mb-1">Adı Soyadı *</label>
@@ -929,21 +1033,36 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-slate-800 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setModalAcik(false)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium rounded-lg transition"
-                >
-                  İptal
-                </button>
-                <button
-                  type="submit"
-                  disabled={islemSuruyor}
-                  className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg shadow transition disabled:opacity-50"
-                >
-                  {islemSuruyor ? 'Kaydediliyor...' : 'Kaydet'}
-                </button>
+              <div className="pt-4 border-t border-slate-800 flex items-center justify-between gap-3">
+                {seciliPersonel ? (
+                  <button
+                    type="button"
+                    onClick={() => handleTamamenSil(seciliPersonel)}
+                    disabled={islemSuruyor}
+                    className="px-3.5 py-2 bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800 hover:border-rose-600 font-semibold rounded-xl text-xs transition flex items-center gap-2 cursor-pointer disabled:opacity-50 shadow-sm"
+                    title="Personeli veritabanından kalıcı olarak siler"
+                  >
+                    <Trash2 className="w-4 h-4 text-rose-400" />
+                    Personeli Tamamen Sil
+                  </button>
+                ) : <div />}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setModalAcik(false)}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium rounded-xl text-xs transition cursor-pointer"
+                  >
+                    İptal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={islemSuruyor}
+                    className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl text-xs shadow transition cursor-pointer disabled:opacity-50"
+                  >
+                    {islemSuruyor ? 'Kaydediliyor...' : 'Kaydet'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
