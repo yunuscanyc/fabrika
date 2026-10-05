@@ -137,7 +137,7 @@ function getPersonelAyGunleri(
       const cikis = (personel.IstenCikisTarihi || '').slice(0, 10);
       if (giris && isoTarih < giris) {
         durumEtiket = 'İşe Başlamadı';
-      } else if (cikis && isoTarih >= cikis) {
+      } else if (cikis && isoTarih > cikis) {
         durumEtiket = 'İşten Ayrıldı';
       } else {
         durumEtiket = 'İstihdam Dışı';

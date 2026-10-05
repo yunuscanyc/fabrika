@@ -31,8 +31,9 @@ export function getPersonelGirisCikisDonemleri(personel: Personel): PersonelGiri
 
 /**
  * Belirli bir tarihte (YYYY-MM-DD) personelin fabrikada aktif çalışıp çalışmadığını belirler.
- * Kullanıcı Talebi: "puantaj girişinde işe giriş tarihinden önceki günlerde de çıkıyor adamın adı.
- * bir kişi birden çok giriş çıkış yapmış olabilir. ayrı ayrı tutulmalı."
+ * Kanuni Esas: İşten çıkış tarihi personelin işyerinde çalıştığı SON GÜNDÜR.
+ * Dolayısıyla çıkış tarihi günü de aktif çalışma günüdür (tarih === cikisTarihi çalışıyor kabul edilir).
+ * Yalnızca çıkış tarihinden sonraki günlerde (tarih > cikisTarihi) çalışmıyor kabul edilir.
  * 
  * - Kişi henüz işe başlamamışsa (tarih < GirisTarihi): ÇALIŞMIYOR (false)
  * - Kişi işten ayrılmışsa ve tekrar başlamamışsa (CikisTarihi varsa ve tarih > CikisTarihi): ÇALIŞMIYOR (false)
@@ -44,8 +45,9 @@ export function isPersonelCalisiyorMuTarihte(personel: Personel, tarih: string):
   const cleanTarih = String(tarih).slice(0, 10);
 
   // 1. Genel pasiflik veya işten çıkış tarihi kontrolü
+  // İşten çıkış tarihi personelin son çalıştığı gündür; çıkış tarihinden sonraki günlerde çalışmıyor
   const cikisTarihi = (personel.IstenCikisTarihi || '').slice(0, 10);
-  if (cikisTarihi && cleanTarih >= cikisTarihi) {
+  if (cikisTarihi && cleanTarih > cikisTarihi) {
     return false;
   }
 
@@ -56,7 +58,7 @@ export function isPersonelCalisiyorMuTarihte(personel: Personel, tarih: string):
       const giris = (d.GirisTarihi || '').slice(0, 10);
       const cikis = (d.CikisTarihi || '').slice(0, 10);
       if (!giris || cleanTarih < giris) return false;
-      if (cikis && cleanTarih >= cikis) return false;
+      if (cikis && cleanTarih > cikis) return false;
       if (!cikis && personel.DurumAktifMi === false) return false;
       return true;
     });
@@ -77,7 +79,7 @@ export function isPersonelCalisiyorMuTarihte(personel: Personel, tarih: string):
       return false;
     }
 
-    if (cikis && cleanTarih >= cikis) {
+    if (cikis && cleanTarih > cikis) {
       return false;
     }
 
