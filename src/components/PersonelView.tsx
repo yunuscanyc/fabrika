@@ -192,6 +192,26 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
     setFormAktif(true);
   };
 
+  // Personel Aktif/Pasif Durumunu Değiştir
+  // Kullanıcı Talebi: "Düzenlerken personel aktif çalışıyor tıklanmışsa işten çıkış tarihi boşaltılsın."
+  const handleAktifDegistir = (yeniAktif: boolean) => {
+    setFormAktif(yeniAktif);
+    if (yeniAktif) {
+      setFormIstenCikis('');
+      setFormGirisCikisGecmisi(prev => {
+        if (!prev || prev.length === 0) return prev;
+        const yeni = [...prev];
+        const sonIdx = yeni.length - 1;
+        yeni[sonIdx] = {
+          ...yeni[sonIdx],
+          CikisTarihi: null,
+          CikisNedeni: ''
+        };
+        return yeni;
+      });
+    }
+  };
+
   // Dönem Bilgisi Güncelle
   const handleDonemGuncelle = (index: number, alan: keyof PersonelGirisCikis, deger: any) => {
     setFormGirisCikisGecmisi(prev => {
@@ -202,8 +222,9 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
       if (index === yeni.length - 1) {
         if (alan === 'GirisTarihi') setFormIseGiris(deger);
         if (alan === 'CikisTarihi') {
-          setFormIstenCikis(deger || '');
-          setFormAktif(!deger);
+          const cikisVal = deger ? String(deger).trim() : null;
+          setFormIstenCikis(cikisVal || '');
+          setFormAktif(!cikisVal);
         }
       }
       return yeni;
@@ -229,14 +250,50 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
     setIslemSuruyor(true);
     try {
       // Dönemleri sırala (Giriş tarihine göre artan)
-      const siraliDonemler = [...formGirisCikisGecmisi].sort((a, b) => 
+      let siraliDonemler = [...formGirisCikisGecmisi].sort((a, b) => 
         (a.GirisTarihi || '').localeCompare(b.GirisTarihi || '')
       );
-      const sonDonem = siraliDonemler[siraliDonemler.length - 1];
+      if (siraliDonemler.length === 0) {
+        const bugun = new Date().toISOString().split('T')[0];
+        siraliDonemler = [{
+          Id: Date.now(),
+          GirisTarihi: formIseGiris || bugun,
+          CikisTarihi: null,
+          CikisNedeni: '',
+          Notlar: 'İşe Başlama'
+        }];
+      }
 
+      let sonCikis: string | null = null;
+      let isAktif = Boolean(formAktif);
+
+      if (formAktif) {
+        // Kullanıcı Talebi: Personel aktif çalışıyor seçildiyse çıkış tarihi tamamen sıfırlanır
+        sonCikis = null;
+        const sonIdx = siraliDonemler.length - 1;
+        siraliDonemler[sonIdx] = {
+          ...siraliDonemler[sonIdx],
+          CikisTarihi: null,
+          CikisNedeni: ''
+        };
+        isAktif = true;
+      } else {
+        const sonDonem = siraliDonemler[siraliDonemler.length - 1];
+        sonCikis = sonDonem?.CikisTarihi || (formIstenCikis ? formIstenCikis : null);
+        if (!sonCikis) {
+          sonCikis = new Date().toISOString().split('T')[0];
+          const sonIdx = siraliDonemler.length - 1;
+          siraliDonemler[sonIdx] = {
+            ...siraliDonemler[sonIdx],
+            CikisTarihi: sonCikis,
+            CikisNedeni: siraliDonemler[sonIdx].CikisNedeni || 'İşten Ayrılış'
+          };
+        }
+        isAktif = false;
+      }
+
+      const sonDonem = siraliDonemler[siraliDonemler.length - 1];
       const sonGiris = sonDonem?.GirisTarihi || formIseGiris || new Date().toISOString().split('T')[0];
-      const sonCikis = sonDonem?.CikisTarihi || (formIstenCikis ? formIstenCikis : null);
-      const isAktif = !sonCikis;
 
       const payload = {
         TCKimlikNo: formTC.trim(),
@@ -370,8 +427,8 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700 text-xs">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
+          <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-800/80 px-2.5 py-1.5 rounded-lg border border-slate-700 text-xs">
             <span className="text-slate-400">Toplam:</span>
             <span className="font-bold text-white">{personeller.length}</span>
             <span className="text-slate-500">|</span>
@@ -379,23 +436,23 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
           </div>
           <button
             onClick={handleYeniEkle}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-lg shadow-md transition"
+            className="flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-semibold rounded-lg shadow-md transition cursor-pointer"
           >
             <UserPlus className="w-4 h-4" />
-            Yeni Personel
+            <span>Yeni Personel</span>
           </button>
           <button
             onClick={() => setSettingsModalOpen(true)}
-            className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold rounded-lg shadow-md transition border border-slate-700"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs sm:text-sm font-semibold rounded-lg shadow-md transition border border-slate-700 cursor-pointer"
             title="Departman ve Görev Ayarları"
           >
             <Settings className="w-4 h-4" />
-            <span className="hidden sm:inline">Departman &amp; Görev Ayarları</span>
+            <span className="hidden md:inline">Departman &amp; Görev Ayarları</span>
           </button>
           {onNavigateTab && (
             <button
               onClick={() => onNavigateTab('ceride')}
-              className="flex items-center gap-2 px-3 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-semibold rounded-lg shadow-md transition cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs sm:text-sm font-semibold rounded-lg shadow-md transition cursor-pointer whitespace-nowrap"
               title="Şantiye & İşletme Ceridesi (Günlük Olay Defteri)"
             >
               <BookOpen className="w-4 h-4" />
@@ -810,15 +867,51 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
                               />
                             </div>
                             <div>
-                              <label className="block text-[11px] font-medium text-slate-400 mb-1">
-                                İşten Çıkış Tarihi <span className="text-slate-500">(Devam ediyorsa boş)</span>
-                              </label>
-                              <input
-                                type="date"
-                                value={donem.CikisTarihi || ''}
-                                onChange={(e) => handleDonemGuncelle(idx, 'CikisTarihi', e.target.value || null)}
-                                className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
-                              />
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="block text-[11px] font-medium text-slate-400">
+                                  İşten Çıkış Tarihi <span className="text-slate-500">(Aktifse boş)</span>
+                                </label>
+                                {donem.CikisTarihi && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      handleDonemGuncelle(idx, 'CikisTarihi', null);
+                                      handleDonemGuncelle(idx, 'CikisNedeni', '');
+                                      if (idx === formGirisCikisGecmisi.length - 1) {
+                                        handleAktifDegistir(true);
+                                      }
+                                    }}
+                                    className="text-[10px] text-amber-400 hover:text-amber-300 font-semibold cursor-pointer underline"
+                                    title="Çıkış tarihini sil ve personeli aktif yap"
+                                  >
+                                    Çıkışı Temizle (Aktif Yap)
+                                  </button>
+                                )}
+                              </div>
+                              <div className="relative flex items-center">
+                                <input
+                                  type="date"
+                                  value={donem.CikisTarihi || ''}
+                                  onChange={(e) => handleDonemGuncelle(idx, 'CikisTarihi', e.target.value || null)}
+                                  className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
+                                />
+                                {donem.CikisTarihi && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      handleDonemGuncelle(idx, 'CikisTarihi', null);
+                                      handleDonemGuncelle(idx, 'CikisNedeni', '');
+                                      if (idx === formGirisCikisGecmisi.length - 1) {
+                                        handleAktifDegistir(true);
+                                      }
+                                    }}
+                                    className="absolute right-1.5 px-1.5 py-0.5 bg-rose-950/90 hover:bg-rose-900 text-rose-300 border border-rose-800 rounded text-[10px] font-bold cursor-pointer transition shadow-xs"
+                                    title="Çıkış tarihini sil ve personeli aktif yap"
+                                  >
+                                    ✕ Sil
+                                  </button>
+                                )}
+                              </div>
                             </div>
                             <div>
                               <label className="block text-[11px] font-medium text-slate-400 mb-1">
@@ -1019,16 +1112,25 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
                   )}
                 </div>
 
-                <div className="flex items-center gap-2 pt-6">
+                <div className="flex items-center gap-3 pt-6 bg-slate-950/40 p-3 rounded-xl border border-slate-800">
                   <input
                     type="checkbox"
                     id="chkDurumAktif"
                     checked={formAktif}
-                    onChange={(e) => setFormAktif(e.target.checked)}
-                    className="w-4 h-4 rounded text-blue-600 bg-slate-950 border-slate-800 focus:ring-0"
+                    onChange={(e) => handleAktifDegistir(e.target.checked)}
+                    className="w-5 h-5 rounded text-emerald-600 bg-slate-950 border-slate-700 focus:ring-0 cursor-pointer"
                   />
-                  <label htmlFor="chkDurumAktif" className="text-sm font-medium text-slate-300 cursor-pointer">
-                    Personel Aktif Çalışıyor
+                  <label htmlFor="chkDurumAktif" className="text-sm font-semibold text-slate-200 cursor-pointer flex flex-wrap items-center gap-2">
+                    <span>Personel Aktif Çalışıyor</span>
+                    {formAktif ? (
+                      <span className="text-[11px] px-2 py-0.5 rounded font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                        ✓ Aktif Çalışan (Çıkış Tarihi Boş)
+                      </span>
+                    ) : (
+                      <span className="text-[11px] px-2 py-0.5 rounded font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                        İşten Ayrıldı / Pasif
+                      </span>
+                    )}
                   </label>
                 </div>
               </div>
