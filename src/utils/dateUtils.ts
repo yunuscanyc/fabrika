@@ -250,7 +250,7 @@ export function isYuzdeYuzMesaiGecerli(isoDate: string, _rejim?: '5gun' | '6gun'
   return false;
 }
 
-// Seçili gün ve rejime göre standart çalışma saati (İş Kanunu 45 saat esası)
+// Seçili gün ve rejime göre standart çalışma saati (5 gün rejiminde 9 saat; 6 gün rejiminde 8 saat + Cumartesi 5 saat)
 export function getStandartNormalSaat(isoDate: string, rejim: '5gun' | '6gun' = '5gun'): number {
   const tatil = getResmiTatil(isoDate);
   if (tatil.isTatil && !tatil.yarimGunMu) return 0;
@@ -258,9 +258,9 @@ export function getStandartNormalSaat(isoDate: string, rejim: '5gun' | '6gun' = 
   const day = getGunIndex(isoDate);
   if (rejim === '5gun') {
     if (day === 0 || day === 6) return 0; // Cumartesi ve Pazar hafta tatili
-    return 9.0; // Hafta içi 9.0 saat
+    return 9.0; // Hafta içi 9.0 saat (5 gün x 9s = 45 saat)
   } else {
-    // 6 günlük rejim (Hafta içi 8.0 saat, Cumartesi 5.0 saat)
+    // 6 günlük rejim (Hafta içi 8.0 saat, Cumartesi 5.0 saat = 45 saat)
     if (day === 0) return 0; // Pazar hafta tatili
     if (day === 6) return 5.0; // Cumartesi (5.0 saat)
     return 8.0; // Hafta içi (Pazartesi - Cuma: 8.0 saat)
@@ -269,8 +269,8 @@ export function getStandartNormalSaat(isoDate: string, rejim: '5gun' | '6gun' = 
 
 /**
  * Seçili tarihte ve rejimde Normal Çalışma Saati girilebilir mi?
- * - 5 günlük rejimde Cumartesi ve Pazar günleri normal mesai girişi kesinlikle engellenir (false).
- * - 6 günlük rejimde Pazar günü normal mesai girişi kesinlikle engellenir (false).
+ * - 5 günlük rejimde Cumartesi ve Pazar günleri normal mesai girişi engellenir (false).
+ * - 6 günlük rejimde Pazar günü normal mesai girişi engellenir (false).
  * - Tam gün resmi tatillerde normal mesai girişi engellenir (false).
  */
 export function isNormalCalismaGirilebilir(isoDate: string, rejim: '5gun' | '6gun'): boolean {

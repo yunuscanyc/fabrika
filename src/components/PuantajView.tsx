@@ -102,7 +102,7 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
         body: JSON.stringify({
           CalismaRejimi: yeniRejim,
           HaftalikCalismaGunu: yeniRejim === '5gun' ? 5 : 6,
-          GunlukStandartSaat: yeniRejim === '5gun' ? 9.0 : 7.5,
+          GunlukStandartSaat: yeniRejim === '5gun' ? 9.0 : 8.0,
           CumartesiStandartSaat: 5.0
         })
       });
@@ -611,7 +611,7 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
             )}
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            İş Kanununa tam uyumlu 5 gün (9 saat) veya 6 gün (Cumartesi öğlene kadar) çalışma rejimi, %50 ve %100 mesai denetimi.
+            İş Kanununa tam uyumlu 5 gün (9 saat) veya 6 gün (Hafta içi 8s, Cumartesi 5s) çalışma rejimi, %50 ve %100 mesai denetimi.
           </p>
         </div>
 
@@ -761,7 +761,7 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
                   ? 'bg-blue-600 text-white shadow'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
               }`}
-              title="Pzt-Cum günde 7.5 saat, Cumartesi öğlene kadar 5 saat (42.5 ~ 45 saat). Pazar hafta tatilidir."
+              title="Pzt-Cum günde 8 saat, Cumartesi öğlene kadar 5 saat (45 saat). Pazar hafta tatilidir."
             >
               <Clock className="w-3.5 h-3.5" />
               <span>6 Günlük (Cmt Öğlene Kadar)</span>
@@ -783,7 +783,7 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
         <div className="flex items-center gap-2 text-slate-300">
           <Info className="w-4 h-4 text-blue-400 shrink-0" />
           <span>
-            <strong>Rejim Bilgisi:</strong> {calismaRejimi === '5gun' ? '5 Günlük Çalışma (Haftalık 45s: Pzt-Cum 9 saat, Cmt-Pzr Hafta Tatili)' : '6 Günlük Çalışma (Haftalık 45s: Pzt-Cum 7.5 saat, Cmt Öğlene Kadar 5 saat, Pzr Hafta Tatili)'}
+            <strong>Rejim Bilgisi:</strong> {calismaRejimi === '5gun' ? '5 Günlük Çalışma (Haftalık 45s: Pzt-Cum 9 saat, Cmt-Pzr Hafta Tatili — Yargıtay maktu 225s esası)' : '6 Günlük Çalışma (Haftalık 45s: Pzt-Cum 8 saat, Cmt Öğlene Kadar 5 saat, Pzr Hafta Tatili — Yargıtay maktu 225s esası)'}
           </span>
         </div>
 

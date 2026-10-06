@@ -80,13 +80,13 @@ export interface GunlukPuantaj {
 
 export interface MesaiAyari {
   Id: number;
-  CalismaRejimi?: '5gun' | '6gun'; // 5 gün (Pzt-Cum 9s) | 6 gün (Pzt-Cum 7.5s/8s + Cmt öğlene kadar)
+  CalismaRejimi?: '5gun' | '6gun'; // 5 gün (Pzt-Cum 9s) | 6 gün (Pzt-Cum 8s + Cmt 5s) - Yargıtay aylık 225s esası
   MesaiBaslangic: string; // '08:00'
   MesaiBitis: string; // '18:30'
   AraDinlenmeDakika: number; // 90
   HaftalikCalismaGunu: number; // 5 veya 6
-  GunlukStandartSaat: number; // 9.0 (5 gün için)
-  CumartesiStandartSaat?: number; // 5.0 (6 gün için Cumartesi öğlene kadar)
+  GunlukStandartSaat: number; // 9.0 (5 gün için) veya 8.0 (6 gün için)
+  CumartesiStandartSaat?: number; // 5.0 (6 gün için)
   FazlaMesaiKatsayisi: number; // 1.5
   TatilMesaiKatsayisi: number; // 2.0
 }

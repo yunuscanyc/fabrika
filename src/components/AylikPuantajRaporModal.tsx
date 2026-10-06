@@ -185,43 +185,42 @@ function getPersonelAyGunleri(
       const htSaat = fazlaSaat;
       const rtSaat = tatilMesai;
       if (htSaat > 0 || rtSaat > 0) {
-        // Hafta tatilinde çalışma: 8 saat maktu tatil yevmiyesi + %50 zam farkı (htSaat x 0.5) + %100 zam (rtSaat x 1.0)
-        // Örn: 7 saat %50 mesai için günün toplamı: 8.0 + (7 x 0.5) = 8.0 + 3.5 = 11.5 SAAT!
-        // Örn: 8 saat %100 mesai için günün toplamı: 8.0 + (8 x 1.0) = 8.0 + 8.0 = 16.0 SAAT!
-        gunlukNetSaat = 8.0 + (htSaat * 0.5) + (rtSaat * 1.0);
-        const parcalar = ['8.0s Tatil'];
+        // Hafta tatilinde çalışma: 7.5 saat maktu tatil yevmiyesi + %50 zam farkı (htSaat x 0.5) + %100 zam (rtSaat x 1.0)
+        // Örn: 7.5 saat %50 mesai için günün toplamı: 7.5 + (7.5 x 0.5) = 7.5 + 3.75 = 11.25 SAAT!
+        // Örn: 7.5 saat %100 mesai için günün toplamı: 7.5 + (7.5 x 1.0) = 7.5 + 7.5 = 15.0 SAAT!
+        gunlukNetSaat = 7.5 + (htSaat * 0.5) + (rtSaat * 1.0);
+        const parcalar = ['7.5s Tatil'];
         if (htSaat > 0) parcalar.push(`${(htSaat * 0.5).toFixed(1)}s (%50)`);
         if (rtSaat > 0) parcalar.push(`${rtSaat.toFixed(1)}s (%100)`);
         gunlukNetAciklama = parcalar.join(' + ');
       } else {
-        gunlukNetSaat = 8.0;
-        gunlukNetAciklama = '8.0s Maktu Hafta Tatili';
+        gunlukNetSaat = 7.5;
+        gunlukNetAciklama = '7.5s Maktu Hafta Tatili';
       }
     } else if (durumKodu === 'RT') {
       const rtSaat = tatilMesai > 0 ? tatilMesai : fazlaSaat;
       if (rtSaat > 0) {
-        // Resmi tatilde çalışma: 8 saat maktu tatil yevmiyesi + %100 ilave tam yevmiye (rtSaat x 1.0)
-        // Örn: 8 saat çalışıldığında: 8.0 + (8 x 1.0) = 16.0 SAAT (Çift Yevmiye)!
-        // Örn: 7 saat çalışıldığında: 8.0 + (7 x 1.0) = 15.0 SAAT!
-        gunlukNetSaat = 8.0 + (rtSaat * 1.0);
-        gunlukNetAciklama = `8.0s Tatil + ${rtSaat.toFixed(1)}s (%100 Mesai)`;
+        // Resmi tatilde çalışma: 7.5 saat maktu tatil yevmiyesi + %100 ilave tam yevmiye (rtSaat x 1.0)
+        // Örn: 7.5 saat çalışıldığında: 7.5 + (7.5 x 1.0) = 15.0 SAAT (Çift Yevmiye)!
+        gunlukNetSaat = 7.5 + (rtSaat * 1.0);
+        gunlukNetAciklama = `7.5s Tatil + ${rtSaat.toFixed(1)}s (%100 Mesai)`;
       } else {
-        gunlukNetSaat = 8.0;
-        gunlukNetAciklama = '8.0s Maktu Resmi Tatil';
+        gunlukNetSaat = 7.5;
+        gunlukNetAciklama = '7.5s Maktu Resmi Tatil';
       }
     } else if (durumKodu === 'N') {
       const fz = fazlaSaat * 1.5;
       const tm = tatilMesai * 1.0;
-      gunlukNetSaat = Math.max(0, 8.0 - eksikSaat + fz + tm);
+      gunlukNetSaat = Math.max(0, 7.5 - eksikSaat + fz + tm);
       const parcalar = [];
-      if (eksikSaat > 0) parcalar.push(`8s - ${eksikSaat.toFixed(1)}s Kesinti`);
-      else parcalar.push('8.0s Normal');
+      if (eksikSaat > 0) parcalar.push(`7.5s - ${eksikSaat.toFixed(1)}s Kesinti`);
+      else parcalar.push('7.5s Normal');
       if (fazlaSaat > 0) parcalar.push(`+${fz.toFixed(1)}s (%50)`);
       if (tatilMesai > 0) parcalar.push(`+${tm.toFixed(1)}s (%100)`);
       gunlukNetAciklama = parcalar.join(' ');
     } else if (['YI', 'R', 'M'].includes(durumKodu)) {
-      gunlukNetSaat = 8.0;
-      gunlukNetAciklama = '8.0s Ücretli İzin';
+      gunlukNetSaat = 7.5;
+      gunlukNetAciklama = '7.5s Ücretli İzin';
     } else if (durumKodu === 'UI' || durumKodu === 'D') {
       gunlukNetSaat = 0;
       gunlukNetAciklama = '0.0s (Ücretsiz İzin / Devamsız)';
@@ -397,23 +396,23 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
       bazSaat = 0;
       durumEtiketKisa = 'Gelecek Ay';
     } else if (isCariAy && cariHesapTuru === 'buguneKadar') {
-      // Cari ayda bugüne kadar tamamlanan günler baz alınır (Bugün henüz bitmediği için 2 gün = 16 saat)
+      // Cari ayda bugüne kadar tamamlanan günler baz alınır (Bugün henüz bitmediği için Tamamlanan Gün x 7.5 saat)
       bazGun = tamamlananIstihdamGunu;
-      bazSaat = tamamlananIstihdamGunu * 8.0;
+      bazSaat = tamamlananIstihdamGunu * 7.5;
       kistDonemMi = true;
-      durumEtiketKisa = `Cari (${tamamlananIstihdamGunu}g / ${bazSaat}s)`;
+      durumEtiketKisa = `Cari (${tamamlananIstihdamGunu}g / ${bazSaat.toFixed(1)}s)`;
     } else {
-      // Geçmiş ay veya Tam Ay Projeksiyonu
+      // Geçmiş ay veya Tam Ay Projeksiyonu (4857 Sayılı İş Kanunu ve Yargıtay İçtihadı Esası: 30 Gün / 225 Saat)
       if (aktifIstihdamGunSayisi >= ayTakvimGunSayisi) {
         bazGun = 30;
-        bazSaat = 240.0;
+        bazSaat = 225.0;
         kistDonemMi = false;
-        durumEtiketKisa = 'Tam Ay (30g / 240s)';
+        durumEtiketKisa = 'Tam Ay (30g / 225s)';
       } else {
         bazGun = aktifIstihdamGunSayisi;
-        bazSaat = aktifIstihdamGunSayisi * 8.0;
+        bazSaat = aktifIstihdamGunSayisi * 7.5;
         kistDonemMi = true;
-        durumEtiketKisa = `Kıst (${aktifIstihdamGunSayisi}g / ${bazSaat}s)`;
+        durumEtiketKisa = `Kıst (${aktifIstihdamGunSayisi}g / ${bazSaat.toFixed(1)}s)`;
       }
     }
 
@@ -461,8 +460,8 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
     const devamsizGun = gecerliPuantaj.filter(x => x.DurumKodu === 'D').length;
     const devamsizVeUcretsizGun = ucretsizIzinGun + devamsizGun;
 
-    // Normal çalışma saati (Günde 8 saat esasıyla)
-    const toplamNormalSaat = normalGun * 8.0;
+    // Normal çalışma saati (Günde 7.5 saat yasal esasıyla)
+    const toplamNormalSaat = normalGun * 7.5;
     const toplamFazlaMesai = gecerliPuantaj.reduce((sum, x) => sum + (x.FazlaMesaiSaati || 0), 0);
     const toplamTatilMesai = gecerliPuantaj.reduce((sum, x) => sum + (x.HaftaTatiliMesaiSaati || 0) + (x.ResmiTatilMesaiSaati || 0), 0);
     
@@ -475,22 +474,21 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
       const stdSaat = getStandartNormalSaat(cleanDate, rejim);
       const kesinti = Number(x.SaatlikKesintiUcretsiz || 0);
       if (x.DurumKodu === 'UI' || x.DurumKodu === 'D') {
-        return sum + (kesinti > 0 ? kesinti : (stdSaat > 0 ? stdSaat : 8.0));
+        // İşçinin o günkü vardiya çalışma süresi (5 gün rejiminde 9 saat; 6 gün rejiminde 8 veya 5 saat) düşülür
+        return sum + (kesinti > 0 ? kesinti : (stdSaat > 0 ? stdSaat : 7.5));
       }
       return sum + kesinti;
     }, 0);
 
-    // Fazla mesai ve tatil mesaileri:
+    // Fazla mesai ve tatil mesaileri (4857 Sayılı İş Kanunu ve Yargıtay İçtihatları Esasları):
     // 1) Hafta tatilinde çalışma (HT):
-    //    Hafta tatili için maktu yevmiye (8 saat) bordro esasına/baz saate dahildir.
+    //    Hafta tatili için maktu yevmiye (7.5 saat) bordro esasına/baz saate dahildir.
     //    Hafta tatilinde çalışılan saatler %50 zamlı olduğundan, bazın üzerine eklenen saat: (Saat x 0.5)'tir.
-    //    Böylece günün toplamı: 8.0 (tatil maktu ücreti) + (Saat x 0.5) olur.
-    //    Örn: 7 saat mesai yapıldıysa günün toplamı: 8.0 + (7 x 0.5) = 8.0 + 3.5 = 11.5 SAAT olur!
-    //    (Cari ayda 'buguneKadar' modunda bugün bazda henüz yer almadığı için: 8.0 + 3.5 = 11.5 saat doğrudan eklenir!)
+    //    Böylece günün toplamı: 7.5 (tatil maktu ücreti) + (Saat x 0.5) olur.
     // 2) Resmi tatilde çalışma (RT):
-    //    Resmi tatil için maktu gün (8 saat) bazda yer alır. Çalışıldığında %100 zam (1 yevmiye) ilave edilir: (Saat x 1.0)
+    //    Resmi tatil için maktu gün (7.5 saat) bazda yer alır. Çalışıldığında %100 zam (1 ilave yevmiye) eklenir: (Saat x 1.0)
     // 3) Normal iş gününde fazla mesai (N):
-    //    Normal 8 saatin üzerindeki fiili çalışma saati %50 zamlı eklenir: (Saat x 1.5)
+    //    Normal 7.5 saatin üzerindeki fiili çalışma saati %50 zamlı eklenir: (Saat x 1.5)
 
     let ekstraMesaiSaati = 0;
     let bugunNetKatkisi = 0;
@@ -502,30 +500,29 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
       const tatilMesai = Number(x.HaftaTatiliMesaiSaati || 0) + Number(x.ResmiTatilMesaiSaati || 0);
 
       if (isBugunKaydi) {
-        // Bugün henüz bitmediği için bazSaat'e (tamamlanan 16 saate) dahil edilmemiştir.
+        // Bugün henüz bitmediği için bazSaat'e dahil edilmemiştir.
         if (x.DurumKodu === 'HT') {
-          // Hafta tatili: 8 saat maktu tatil yevmiyesi + %50 zam farkı (örn. 7 saat mesai için 8 + 3.5 = 11.5 saat)
-          // Varsa %100 tatil mesaisi de (1.0x) ilave edilir
+          // Hafta tatili: 7.5 saat maktu tatil yevmiyesi + %50 zam farkı
           if (fazlaSaat > 0 || tatilMesai > 0) {
-            bugunNetKatkisi += 8.0 + (fazlaSaat * 0.5) + (tatilMesai * 1.0);
+            bugunNetKatkisi += 7.5 + (fazlaSaat * 0.5) + (tatilMesai * 1.0);
           }
         } else if (x.DurumKodu === 'RT') {
           const rtSaat = tatilMesai > 0 ? tatilMesai : fazlaSaat;
           if (rtSaat > 0) {
-            // Resmi tatil: 8 saat maktu tatil yevmiyesi + %100 ilave tam yevmiye (örn. 8 saat için 8 + 8 = 16.0 saat, 7 saat için 8 + 7 = 15.0 saat)
-            bugunNetKatkisi += 8.0 + (rtSaat * 1.0);
+            // Resmi tatil: 7.5 saat maktu tatil yevmiyesi + %100 ilave tam yevmiye (çift yevmiye)
+            bugunNetKatkisi += 7.5 + (rtSaat * 1.0);
           }
         } else if (x.DurumKodu === 'N') {
-          const norm = Math.min(8.0, Number(x.NormalCalismaSaati || 0));
+          const norm = Math.min(7.5, Number(x.NormalCalismaSaati || 0));
           const fz = fazlaSaat * 1.5;
           const tm = tatilMesai * 1.0;
           const kes = Number(x.SaatlikKesintiUcretsiz || 0);
           bugunNetKatkisi += Math.max(0, norm + fz + tm - kes);
         }
       } else {
-        // Geçmiş günler veya Tam Ay Projeksiyonunda: Bu günün 8 saati zaten bazSaat (240 saat) içinde mevcuttur!
+        // Geçmiş günler veya Tam Ay Projeksiyonunda: Bu günün 7.5 saati zaten bazSaat (225 saat) içinde mevcuttur!
         if (x.DurumKodu === 'HT') {
-          // 8 saat zaten bazda var; %50 mesai artırımı (fazlaSaat x 0.5) ve %100 mesai (tatilMesai x 1.0) eklenir -> Toplam gün 8 + 3.5 = 11.5 saat eder!
+          // 7.5 saat zaten bazda var; %50 mesai artırımı (fazlaSaat x 0.5) ve %100 mesai (tatilMesai x 1.0) eklenir
           if (fazlaSaat > 0) {
             ekstraMesaiSaati += fazlaSaat * 0.5;
           }
@@ -535,11 +532,11 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
         } else if (x.DurumKodu === 'RT') {
           const rtSaat = tatilMesai > 0 ? tatilMesai : fazlaSaat;
           if (rtSaat > 0) {
-            // 8 saat zaten bazda var, %100 mesai (rtSaat x 1.0) eklenir -> Toplam gün 8 + 8 = 16 saat (çift yevmiye) eder!
+            // 7.5 saat zaten bazda var, %100 mesai (rtSaat x 1.0) eklenir -> Toplam gün çift yevmiye eder!
             ekstraMesaiSaati += rtSaat * 1.0;
           }
         } else {
-          // Normal gün (N): Normal 8 saat bazda vardır; aşan fazla mesai %50 zamlı (1.5x), varsa tatil mesaisi %100 zamlı (1.0x) eklenir!
+          // Normal gün (N): Normal 7.5 saat bazda vardır; aşan fazla mesai %50 zamlı (1.5x), varsa tatil mesaisi %100 zamlı (1.0x) eklenir!
           if (fazlaSaat > 0) {
             ekstraMesaiSaati += fazlaSaat * 1.5;
           }
@@ -551,8 +548,8 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
     });
 
     const netSaat = Math.max(0, bazSaat - toplamEksikSaat + ekstraMesaiSaati + bugunNetKatkisi);
-    const netGun = netSaat / 8.0;
-    const artirimliMesaiSaati = ekstraMesaiSaati + (bugunNetKatkisi > 0 ? (bugunNetKatkisi >= 8 ? bugunNetKatkisi - 8 : bugunNetKatkisi) : 0);
+    const netGun = netSaat / 7.5;
+    const artirimliMesaiSaati = ekstraMesaiSaati + (bugunNetKatkisi > 0 ? (bugunNetKatkisi >= 7.5 ? bugunNetKatkisi - 7.5 : bugunNetKatkisi) : 0);
 
     return {
       personelId: p.PersonelId,
@@ -612,8 +609,8 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
   const handleCsvExport = () => {
     const ayAdi = aylar.find(a => a.no === seciliAy)?.ad || '';
     let csv = `RENDE İNŞAAT MOBİLYA TURİZM A.Ş. - AYLIK PUANTAJ & BORDRO İCMAL CETVELİ\n`;
-    csv += `Dönem: ${ayAdi} ${seciliYil} ${isCariAy && cariHesapTuru === 'buguneKadar' ? `(Cari Ay - ${bugunGun} ${ayAdi} İtibarıyla Tamamlanan ${tamamlananGunSayisiCari} Gün / ${tamamlananGunSayisiCari * 8} Saat)` : ''} - Rapor Tarihi: ${formatTarihTR(getBugunIso())}\n`;
-    csv += `Hesaplama Esası: ${isCariAy && cariHesapTuru === 'buguneKadar' ? `Cari ay içerisinde bulunulduğu ve bugün (${bugunGun} ${ayAdi}) henüz bitmediği için tamamlanan ${tamamlananGunSayisiCari} gün (${tamamlananGunSayisiCari * 8} saat) baz alınmıştır.` : 'Tam ay çalışanlar için standart 30 gün (240 saat: 8 saat/gün esası); kıst dönem çalışanlar için fiili istihdam gün sayısı baz alınmıştır.'} Hafta tatili mesailerinde 8 saat maktu tatil + %50 zam farkı (örn. 7 saat için 8 + 3.5 = 11.5 saat); Resmi tatil mesailerinde ise 8 saat maktu tatil + %100 ilave yevmiye (örn. 8 saat için 8 + 8 = 16 saat çift yevmiye) net saate yansıtılmıştır.\n\n`;
+    csv += `Dönem: ${ayAdi} ${seciliYil} ${isCariAy && cariHesapTuru === 'buguneKadar' ? `(Cari Ay - ${bugunGun} ${ayAdi} İtibarıyla Tamamlanan ${tamamlananGunSayisiCari} Gün / ${(tamamlananGunSayisiCari * 7.5).toFixed(1)} Saat)` : ''} - Rapor Tarihi: ${formatTarihTR(getBugunIso())}\n`;
+    csv += `Hesaplama Esası: ${isCariAy && cariHesapTuru === 'buguneKadar' ? `Cari ay içerisinde bulunulduğu ve bugün (${bugunGun} ${ayAdi}) henüz bitmediği için tamamlanan ${tamamlananGunSayisiCari} gün (${(tamamlananGunSayisiCari * 7.5).toFixed(1)} saat) baz alınmıştır.` : 'Tam ay çalışanlar için yasal 4857 sayılı İş Kanunu ve Yargıtay içtihatları standardı 30 gün (225 saat: 7.5 saat/gün esası); kıst dönem çalışanlar için fiili istihdam gün sayısı (Gün × 7.5 saat) baz alınmıştır.'} Hafta tatili mesailerinde 7.5 saat maktu tatil + %50 zam farkı (örn. 7.5 saat için 7.5 + 3.75 = 11.25 saat); Resmi tatil mesailerinde ise 7.5 saat maktu tatil + %100 ilave tam yevmiye (örn. 7.5 saat için 7.5 + 7.5 = 15 saat çift yevmiye) net saate yansıtılmıştır.\n\n`;
     csv += `Personel;Departman;İstihdam Türü;Baz Gün;Normal Gün;Hafta Tatili;Resmi Tatil;Ücretli İzin (Yİ/R/M);Devamsız & Ü.İzin;Normal Saat;Fazla Mesai (%50);Tatil Mesaisi (%100);Eksik Saat;Net Gün;Net Saat;İmza\n`;
 
     icmalListesi.forEach(item => {
@@ -801,7 +798,7 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
         </table>
 
         <div class="rule-note">
-          * Bordro Hesaplama Esasları: ${isCariAy && cariHesapTuru === 'buguneKadar' ? `Cari ay devam ettiğinden ve bugün (${bugunGun} ${ayAdi}) henüz bitmediğinden, bugüne kadar tamamlanan ${tamamlananGunSayisiCari} gün (${tamamlananGunSayisiCari * 8} saat) baz alınmıştır.` : 'Tam ay çalışan personeller için standart 30 gün (240 saat: 8 saat/gün esası), kıst dönem personeller için fiili istihdam günü baz alınmıştır.'} Devamsızlık ve ücretsiz izinler baz hakedişten düşülmüş, ücretli izinler korunmuştur. Hafta tatili mesailerinde 8 saat maktu tatil yevmiyesi + %50 zam farkı (örn. 7 saat için 8 + 3.5 = 11.5 saat); Resmi tatil mesailerinde ise 8 saat maktu tatil yevmiyesi + %100 ilave yevmiye (örn. 8 saat için 8 + 8 = 16 saat çift yevmiye) net gün ve saate yansıtılmıştır.
+          * Bordro Hesaplama Esasları: ${isCariAy && cariHesapTuru === 'buguneKadar' ? `Cari ay devam ettiğinden ve bugün (${bugunGun} ${ayAdi}) henüz bitmediğinden, bugüne kadar tamamlanan ${tamamlananGunSayisiCari} gün (${(tamamlananGunSayisiCari * 7.5).toFixed(1)} saat) baz alınmıştır.` : 'Tam ay çalışan personeller için 4857 sayılı İş Kanunu ve Yargıtay içtihatları gereğince standart 30 gün (225 saat: 7.5 saat/gün yasal esası), kıst dönem personeller için fiili istihdam günü (Gün × 7.5 saat) baz alınmıştır.'} Devamsızlık ve ücretsiz izinler baz hakedişten düşülmüş, ücretli izinler korunmuştur. Hafta tatili mesailerinde 7.5 saat maktu tatil yevmiyesi + %50 zam farkı; Resmi tatil mesailerinde ise 7.5 saat maktu tatil yevmiyesi + %100 ilave tam yevmiye (çift yevmiye) net gün ve saate yansıtılmıştır.
         </div>
 
         <div class="signatures">
@@ -1031,9 +1028,9 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
                       ? 'bg-blue-600 text-white shadow-xs'
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
-                  title={`Bugün ayın ${bugunGun}'ü ve mesai bitmediği için tamamlanan ${tamamlananGunSayisiCari} gün (${tamamlananGunSayisiCari * 8} saat) baz alınır`}
+                  title={`Bugün ayın ${bugunGun}'ü ve mesai bitmediği için tamamlanan ${tamamlananGunSayisiCari} gün (${(tamamlananGunSayisiCari * 7.5).toFixed(1)} saat) baz alınır`}
                 >
-                  <span>📅 Bugüne Kadar ({tamamlananGunSayisiCari} Gün / {tamamlananGunSayisiCari * 8}s)</span>
+                  <span>📅 Bugüne Kadar ({tamamlananGunSayisiCari} Gün / {(tamamlananGunSayisiCari * 7.5).toFixed(1)}s)</span>
                 </button>
                 <button
                   type="button"
@@ -1043,9 +1040,9 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
                       ? 'bg-blue-600 text-white shadow-xs'
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
-                  title="Ay sonu maktu 30 gün (240 saat) projeksiyonu"
+                  title="Ay sonu maktu 30 gün (225 saat: yasal 7.5 saat/gün esası) projeksiyonu"
                 >
-                  <span>Tüm Ay Projeksiyonu (30g / 240s)</span>
+                  <span>Tüm Ay Projeksiyonu (30g / 225s)</span>
                 </button>
               </div>
             )}
@@ -1084,11 +1081,11 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
           <div className="flex items-center gap-2 text-slate-300">
             <span className={`w-2 h-2 rounded-full ${isCariAy && cariHesapTuru === 'buguneKadar' ? 'bg-amber-400' : 'bg-cyan-400'}`}></span>
             {isCariAy && cariHesapTuru === 'buguneKadar' ? (
-              <span><strong>Cari Ay Durumu:</strong> Bugün ayın {bugunGun}'ü ve mesai henüz tamamlanmadığı için, bugüne kadar tamamlanan <strong>{tamamlananGunSayisiCari} gün ({tamamlananGunSayisiCari * 8} saat)</strong> esas alınmıştır. Henüz bitmemiş olan bugün ve gelecek günler dahil edilmemiştir.</span>
+              <span><strong>Cari Ay Durumu:</strong> Bugün ayın {bugunGun}'ü ve mesai henüz tamamlanmadığı için, bugüne kadar tamamlanan <strong>{tamamlananGunSayisiCari} gün ({(tamamlananGunSayisiCari * 7.5).toFixed(1)} saat)</strong> esas alınmıştır. Henüz bitmemiş olan bugün ve gelecek günler dahil edilmemiştir.</span>
             ) : isGecmisAy ? (
-              <span><strong>Geçmiş Ay Bordro Esası:</strong> Ay tamamlandığı için tam ay çalışanlara 30 gün (240 saat: 8s/gün), kıst dönem personellere fiili istihdam günü baz alınmıştır.</span>
+              <span><strong>Geçmiş Ay Bordro Esası:</strong> Ay tamamlandığı için tam ay çalışanlara yasal 30 gün (225 saat: 7.5s/gün İş Kanunu ve Yargıtay standardı), kıst dönem personellere fiili istihdam günü (Gün × 7.5s) baz alınmıştır.</span>
             ) : (
-              <span><strong>Tüm Ay Projeksiyonu:</strong> Maktu 30 gün (240 saat) üzerinden tüm ay tamamlama tahmini gösterilmektedir.</span>
+              <span><strong>Tüm Ay Projeksiyonu:</strong> Yasal maktu 30 gün (225 saat: 7.5s/gün) üzerinden tüm ay tamamlama tahmini gösterilmektedir.</span>
             )}
           </div>
           <div className="flex items-center gap-3 font-mono text-xs">
@@ -1128,7 +1125,7 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
                 <th className="py-2.5 px-2 text-center font-bold text-emerald-300 print:py-1.5 print:px-1 print:text-black">%100 Mesai</th>
                 <th className="py-2.5 px-2 text-center font-bold text-rose-400 print:py-1.5 print:px-1 print:text-black">Eksik Saat</th>
                 <th className="py-2.5 px-2 text-center font-black text-cyan-300 bg-cyan-950/40 print:py-1.5 print:px-1 print:text-black print:bg-slate-200" title="Net Hakediş Günü (Tam ayda 30 gün, kıst dönemde fiili istihdam günü baz alınır)">Net Gün</th>
-                <th className="py-2.5 px-2 text-center font-black text-emerald-300 bg-emerald-950/40 print:py-1.5 print:px-1 print:text-black print:bg-slate-200" title="Net Hakediş Saati (Tam ayda 240 saat, kıst dönemde Fiili Gün × 8 saat)">Net Saat</th>
+                <th className="py-2.5 px-2 text-center font-black text-emerald-300 bg-emerald-950/40 print:py-1.5 print:px-1 print:text-black print:bg-slate-200" title="Net Hakediş Saati (4857 Sayılı Kanun & Yargıtay standardı: Tam ayda 225 saat, kıst dönemde Fiili Gün × 7.5 saat)">Net Saat</th>
                 <th className="py-2.5 px-4 text-center border-l border-slate-800 print:py-1.5 print:px-3 print:border-l print:border-black">İmza</th>
               </tr>
             </thead>
@@ -1185,7 +1182,7 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
                         <td className="py-2 px-2 text-center font-mono font-black text-cyan-300 bg-cyan-950/40 print:text-black print:bg-transparent" title={item.kistDonemMi ? `Kıst Dönem: ${item.bazGun} gün fiili istihdam bazından hesaplandı` : `Tam Ay: 30 gün bazından hesaplandı`}>
                           {item.netGun.toFixed(2)}
                         </td>
-                        <td className="py-2 px-2 text-center font-mono font-black text-emerald-300 bg-emerald-950/40 print:text-black print:bg-transparent" title={item.kistDonemMi ? `Kıst Dönem: ${item.bazSaat} saat (${item.bazGun}g × 8s) bazından hesaplandı` : `Tam Ay: 240 saat (30g × 8s) bazından hesaplandı`}>
+                        <td className="py-2 px-2 text-center font-mono font-black text-emerald-300 bg-emerald-950/40 print:text-black print:bg-transparent" title={item.kistDonemMi ? `Kıst Dönem: ${item.bazSaat} saat (${item.bazGun}g × 7.5s) bazından hesaplandı` : `Tam Ay: 225 saat (30g × 7.5s yasal İş Kanunu esası)`}>
                           {item.netSaat.toFixed(1)}
                         </td>
                         <td className="py-2 px-4 text-center border-l border-slate-800 print:border-l print:border-black print:py-1 print:px-3 min-w-[70px]">
@@ -1214,7 +1211,7 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
                                         </span>
                                       ) : (
                                         <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                                          Tam Ay İstihdam (30 Gün / 240 Saat Baz)
+                                          Tam Ay İstihdam (30 Gün / 225 Saat Yasal Esas)
                                         </span>
                                       )}
                                       <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30">
