@@ -44,6 +44,9 @@ export interface Personel {
   IsYevmiyeci?: boolean; // Yevmiyeci usta mı kadrolu mu?
   CalismaTuru?: 'Kadrolu' | 'Yevmiyeci';
   GunlukYevmiye?: number;
+  Adres?: string;
+  IkametAdresi?: string;
+  IkametSehir?: string;
 }
 
 export interface IzinKaydi {

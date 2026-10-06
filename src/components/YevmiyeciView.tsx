@@ -4,9 +4,11 @@ import {
   MapPin, CreditCard, Calendar, CheckCircle2, Clock, AlertCircle, 
   Trash2, Edit, X, User, ExternalLink, ShieldCheck, ChevronDown, 
   ChevronUp, Camera, Upload, Building2, Check, UserCheck, UserX,
-  UserMinus
+  UserMinus, FileText
 } from 'lucide-react';
 import { Yevmiyeci, YevmiyeCalismaKaydi, Proje, Departman, Gorev } from '../types';
+import { KismiSureliSozlesmeModal } from './KismiSureliSozlesmeModal';
+import { KvkkAydinlatmaModal } from './KvkkAydinlatmaModal';
 
 interface YevmiyeciViewProps {
   projeler?: Proje[];
@@ -53,6 +55,14 @@ export const YevmiyeciView: React.FC<YevmiyeciViewProps> = ({ projeler = [], dep
   // Detay & Geçmiş Modalı
   const [gecmisModalAcik, setGecmisModalAcik] = useState(false);
   const [detayYevmiyeci, setDetayYevmiyeci] = useState<Yevmiyeci | null>(null);
+
+  // Kısmi Süreli İş Sözleşmesi Modal State
+  const [sozlesmeModalAcik, setSozlesmeModalAcik] = useState(false);
+  const [sozlesmeSeciliYevmiyeci, setSozlesmeSeciliYevmiyeci] = useState<Yevmiyeci | null>(null);
+
+  // KVKK Aydınlatma Metni & Beyan Formu Modal State
+  const [kvkkModalAcik, setKvkkModalAcik] = useState(false);
+  const [kvkkSeciliYevmiyeci, setKvkkSeciliYevmiyeci] = useState<Yevmiyeci | null>(null);
 
   // Form States (Ekleme / Düzenleme)
   const [adSoyad, setAdSoyad] = useState('');
@@ -896,9 +906,37 @@ export const YevmiyeciView: React.FC<YevmiyeciViewProps> = ({ projeler = [], dep
                         setDetayYevmiyeci(y);
                         setGecmisModalAcik(true);
                       }}
-                      className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+                      className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition cursor-pointer"
                     >
                       Geçmiş ({y.CalismaGecmisi?.length || 0})
+                    </button>
+
+                    {/* Kısmi Süreli Sözleşme / Evrak Çıkar Butonu */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSozlesmeSeciliYevmiyeci(y);
+                        setSozlesmeModalAcik(true);
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-950/70 hover:bg-indigo-900 text-indigo-300 hover:text-indigo-100 border border-indigo-700/60 text-xs font-semibold transition cursor-pointer shadow-xs"
+                      title="Bu usta için Kısmi Süreli (Part-Time) İş Sözleşmesi hazırla ve yazdır"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Sözleşme</span>
+                    </button>
+
+                    {/* KVKK Aydınlatma & Beyan Formu Butonu */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setKvkkSeciliYevmiyeci(y);
+                        setKvkkModalAcik(true);
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-950/70 hover:bg-emerald-900 text-emerald-300 hover:text-emerald-100 border border-emerald-700/60 text-xs font-semibold transition cursor-pointer shadow-xs"
+                      title="Bu usta için KVKK Aydınlatma Metni & Beyan Formu hazırla ve yazdır"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>KVKK</span>
                     </button>
                   </div>
 
@@ -1537,6 +1575,26 @@ export const YevmiyeciView: React.FC<YevmiyeciViewProps> = ({ projeler = [], dep
           </div>
         </div>
       )}
+
+      {/* Kısmi Süreli (Part-Time) İş Sözleşmesi Evrak / Yazdırma Modalı */}
+      <KismiSureliSozlesmeModal
+        isOpen={sozlesmeModalAcik}
+        onClose={() => {
+          setSozlesmeModalAcik(false);
+          setSozlesmeSeciliYevmiyeci(null);
+        }}
+        personel={sozlesmeSeciliYevmiyeci}
+      />
+
+      {/* KVKK Aydınlatma Metni & Beyan Formu Modalı */}
+      <KvkkAydinlatmaModal
+        isOpen={kvkkModalAcik}
+        onClose={() => {
+          setKvkkModalAcik(false);
+          setKvkkSeciliYevmiyeci(null);
+        }}
+        personel={kvkkSeciliYevmiyeci}
+      />
     </div>
   );
 };

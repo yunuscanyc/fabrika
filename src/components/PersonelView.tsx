@@ -22,10 +22,14 @@ import {
   GraduationCap,
   ShieldCheck,
   BookOpen,
-  History
+  History,
+  FileText,
+  Shield
 } from 'lucide-react';
 import { formatTarihTR } from '../utils/dateUtils';
 import { getPersonelGirisCikisDonemleri } from '../utils/personelUtils';
+import { KismiSureliSozlesmeModal } from './KismiSureliSozlesmeModal';
+import { KvkkAydinlatmaModal } from './KvkkAydinlatmaModal';
 
 interface PersonelViewProps {
   personeller: Personel[];
@@ -52,6 +56,14 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [newDepAd, setNewDepAd] = useState('');
   const [newGorevAd, setNewGorevAd] = useState('');
+
+  // Kısmi Süreli (Part-Time) İş Sözleşmesi Modal State
+  const [sozlesmeModalAcik, setSozlesmeModalAcik] = useState(false);
+  const [sozlesmeSeciliPersonel, setSozlesmeSeciliPersonel] = useState<Personel | null>(null);
+
+  // KVKK Aydınlatma Metni & Beyan Formu Modal State
+  const [kvkkModalAcik, setKvkkModalAcik] = useState(false);
+  const [kvkkSeciliPersonel, setKvkkSeciliPersonel] = useState<Personel | null>(null);
 
   // Form State
   const [formTC, setFormTC] = useState('');
@@ -550,6 +562,32 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
                             🏢 Kadrolu
                           </span>
                         )}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSozlesmeSeciliPersonel(p);
+                            setSozlesmeModalAcik(true);
+                          }}
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-950/70 hover:bg-indigo-900 text-indigo-300 hover:text-indigo-100 border border-indigo-700/60 text-[10.5px] font-semibold transition shadow-xs cursor-pointer ml-1"
+                          title="Kısmi Süreli (Part-Time) İş Sözleşmesi Evrakı Çıkar"
+                        >
+                          <FileText className="w-3 h-3 text-indigo-400" />
+                          <span>Sözleşme</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setKvkkSeciliPersonel(p);
+                            setKvkkModalAcik(true);
+                          }}
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-950/70 hover:bg-emerald-900 text-emerald-300 hover:text-emerald-100 border border-emerald-700/60 text-[10.5px] font-semibold transition shadow-xs cursor-pointer"
+                          title="KVKK Çalışan Aydınlatma Metni & Beyan Formu Çıkar"
+                        >
+                          <Shield className="w-3 h-3 text-emerald-400" />
+                          <span>KVKK</span>
+                        </button>
                       </div>
                       {p.KanGrubu && (
                         <div className={`text-xs mt-0.5 ${p.KanGrubu === 'Bilinmiyor' ? 'text-slate-400' : 'text-rose-400/80'}`}>
@@ -616,7 +654,29 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
                     </td>
 
                     <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSozlesmeSeciliPersonel(p);
+                            setSozlesmeModalAcik(true);
+                          }}
+                          className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-indigo-300 rounded transition cursor-pointer"
+                          title="Kısmi Süreli (Part-Time) İş Sözleşmesi Çıkar / Yazdır"
+                        >
+                          <FileText className="w-4 h-4 text-indigo-400" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setKvkkSeciliPersonel(p);
+                            setKvkkModalAcik(true);
+                          }}
+                          className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-emerald-300 rounded transition cursor-pointer"
+                          title="KVKK Aydınlatma Metni & Beyan Formu Çıkar / Yazdır"
+                        >
+                          <Shield className="w-4 h-4 text-emerald-400" />
+                        </button>
                         <button
                           onClick={() => handleDuzenle(p)}
                           className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-blue-400 rounded transition"
@@ -1135,19 +1195,49 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-slate-800 flex items-center justify-between gap-3">
-                {seciliPersonel ? (
-                  <button
-                    type="button"
-                    onClick={() => handleTamamenSil(seciliPersonel)}
-                    disabled={islemSuruyor}
-                    className="px-3.5 py-2 bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800 hover:border-rose-600 font-semibold rounded-xl text-xs transition flex items-center gap-2 cursor-pointer disabled:opacity-50 shadow-sm"
-                    title="Personeli veritabanından kalıcı olarak siler"
-                  >
-                    <Trash2 className="w-4 h-4 text-rose-400" />
-                    Personeli Tamamen Sil
-                  </button>
-                ) : <div />}
+              <div className="pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  {seciliPersonel && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleTamamenSil(seciliPersonel)}
+                        disabled={islemSuruyor}
+                        className="px-3.5 py-2 bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800 hover:border-rose-600 font-semibold rounded-xl text-xs transition flex items-center gap-2 cursor-pointer disabled:opacity-50 shadow-sm"
+                        title="Personeli veritabanından kalıcı olarak siler"
+                      >
+                        <Trash2 className="w-4 h-4 text-rose-400" />
+                        Sil
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSozlesmeSeciliPersonel(seciliPersonel);
+                          setSozlesmeModalAcik(true);
+                        }}
+                        className="px-3 py-2 bg-indigo-950/90 hover:bg-indigo-900 text-indigo-300 hover:text-indigo-200 border border-indigo-700/60 font-semibold rounded-xl text-xs transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                        title="Bu personel için Kısmi Süreli (Part-Time) İş Sözleşmesi hazırla ve çıktı al"
+                      >
+                        <FileText className="w-4 h-4 text-indigo-400" />
+                        <span>📄 Kısmi Süreli Sözleşme</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setKvkkSeciliPersonel(seciliPersonel);
+                          setKvkkModalAcik(true);
+                        }}
+                        className="px-3 py-2 bg-emerald-950/90 hover:bg-emerald-900 text-emerald-300 hover:text-emerald-200 border border-emerald-700/60 font-semibold rounded-xl text-xs transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                        title="Bu personel için KVKK Aydınlatma Metni & Beyan Formu hazırla ve çıktı al"
+                      >
+                        <Shield className="w-4 h-4 text-emerald-400" />
+                        <span>🛡️ KVKK Formu Çıkar</span>
+                      </button>
+                    </>
+                  )}
+                </div>
 
                 <div className="flex items-center gap-2">
                   <button
@@ -1358,6 +1448,26 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Kısmi Süreli (Part-Time) İş Sözleşmesi Evrak / Baskı Modalı */}
+      <KismiSureliSozlesmeModal
+        isOpen={sozlesmeModalAcik}
+        onClose={() => {
+          setSozlesmeModalAcik(false);
+          setSozlesmeSeciliPersonel(null);
+        }}
+        personel={sozlesmeSeciliPersonel}
+      />
+
+      {/* KVKK Çalışan Aydınlatma Metni & Beyan Formu Modalı */}
+      <KvkkAydinlatmaModal
+        isOpen={kvkkModalAcik}
+        onClose={() => {
+          setKvkkModalAcik(false);
+          setKvkkSeciliPersonel(null);
+        }}
+        personel={kvkkSeciliPersonel}
+      />
     </div>
   );
 };

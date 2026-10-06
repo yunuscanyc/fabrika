@@ -32,7 +32,8 @@ import {
   FileArchive,
   FileCode,
   File as FileIcon,
-  Maximize2
+  Maximize2,
+  Move
 } from 'lucide-react';
 
 interface HatirlaticilarViewProps {
@@ -255,6 +256,9 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
   const [lightboxDosya, setLightboxDosya] = useState<any | null>(null);
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [rotation, setRotation] = useState<number>(0);
+  const [panPosition, setPanPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // ESC Tuşu ile Kapatma ve Body Scroll Kilidi
   useEffect(() => {
@@ -267,6 +271,8 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
       window.addEventListener('keydown', handleKeyDown);
       setZoomLevel(1);
       setRotation(0);
+      setPanPosition({ x: 0, y: 0 });
+      setIsDragging(false);
       document.body.style.overflow = 'hidden';
     }
     return () => {
@@ -276,20 +282,167 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
   }, [lightboxDosya]);
 
   const handleZoomIn = () => {
-    setZoomLevel(prev => Math.min(prev + 0.25, 4.0));
+    setZoomLevel(prev => Math.min(Number((prev + 0.25).toFixed(2)), 4.0));
   };
 
   const handleZoomOut = () => {
-    setZoomLevel(prev => Math.max(prev - 0.25, 0.25));
+    setZoomLevel(prev => Math.max(Number((prev - 0.25).toFixed(2)), 0.5));
   };
 
   const handleZoomReset = () => {
     setZoomLevel(1);
     setRotation(0);
+    setPanPosition({ x: 0, y: 0 });
   };
 
   const handleRotate = () => {
     setRotation(prev => (prev + 90) % 360);
+  };
+
+  // Mouse ile Sürükleme (Pan) Olayları
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return; // Sadece sol tık
+    e.preventDefault();
+    setIsDragging(true);
+    dragStartRef.current = {
+      x: e.clientX - panPosition.x,
+      y: e.clientY - panPosition.y
+    };
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    e.preventDefault();
+    setPanPosition({
+      x: e.clientX - dragStartRef.current.x,
+      y: e.clientY - dragStartRef.current.y
+    });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  // Dokunmatik Ekran (Mobil/Tablet) Sürükleme (Pan) Olayları
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    setIsDragging(true);
+    dragStartRef.current = {
+      x: e.touches[0].clientX - panPosition.x,
+      y: e.touches[0].clientY - panPosition.y
+    };
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging || e.touches.length !== 1) return;
+    setPanPosition({
+      x: e.touches[0].clientX - dragStartRef.current.x,
+      y: e.touches[0].clientY - dragStartRef.current.y
+    });
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+  };
+
+  // Mouse Tekerleği ile Yakınlaştırma / Uzaklaştırma
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    if (e.deltaY < 0) {
+      setZoomLevel(prev => Math.min(Number((prev + 0.15).toFixed(2)), 4.0));
+    } else {
+      setZoomLevel(prev => Math.max(Number((prev - 0.15).toFixed(2)), 0.5));
+    }
+  };
+
+  // Çift Tıklama ile 1x <-> 2x Toggle
+  const handleImageDoubleClick = () => {
+    if (zoomLevel > 1.1) {
+      setZoomLevel(1);
+      setPanPosition({ x: 0, y: 0 });
+    } else {
+      setZoomLevel(2);
+    }
+  };
+
+  // Yeni Sekmede Güvenli ve Kesin Açma Fonksiyonu (Blob URL ile %100 Çalışır)
+  const handleOpenInNewTab = (file: any) => {
+    if (!file) return;
+    const content = getBelgeDosyaIcerigi(file);
+    if (!content) return;
+
+    try {
+      if (content.startsWith('http://') || content.startsWith('https://')) {
+        window.open(content, '_blank', 'noopener,noreferrer');
+        return;
+      }
+
+      if (content.startsWith('data:')) {
+        const parts = content.split(',');
+        const mimeMatch = parts[0].match(/:(.*?);/);
+        const ext = (file.DosyaAdi || '').split('.').pop()?.toLowerCase() || '';
+        let mimeType = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+        
+        if (!mimeMatch || mimeType === 'application/octet-stream') {
+          if (['jpg', 'jpeg'].includes(ext)) mimeType = 'image/jpeg';
+          else if (ext === 'png') mimeType = 'image/png';
+          else if (ext === 'webp') mimeType = 'image/webp';
+          else if (ext === 'gif') mimeType = 'image/gif';
+          else if (ext === 'svg') mimeType = 'image/svg+xml';
+          else if (ext === 'pdf') mimeType = 'application/pdf';
+        }
+
+        const byteCharacters = atob(parts[1]);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: mimeType });
+        const blobUrl = URL.createObjectURL(blob);
+
+        const newWin = window.open(blobUrl, '_blank');
+        if (!newWin) {
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        }
+        return;
+      }
+    } catch (err) {
+      console.warn('Blob URL generation error:', err);
+    }
+
+    // Ultimate fallback for HTML viewer
+    try {
+      const win = window.open('', '_blank');
+      if (win) {
+        win.document.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>${file.DosyaAdi || 'Görsel Önizleme'}</title>
+              <style>
+                body { margin: 0; padding: 0; background-color: #0f172a; display: flex; align-items: center; justify-content: center; min-height: 100vh; overflow: auto; }
+                img { max-width: 100%; height: auto; object-fit: contain; box-shadow: 0 10px 30px rgba(0,0,0,0.6); }
+              </style>
+            </head>
+            <body>
+              <img src="${content}" alt="${file.DosyaAdi || 'Görsel'}" />
+            </body>
+          </html>
+        `);
+        win.document.close();
+      }
+    } catch (fallbackErr) {
+      console.error('New tab open fallback error:', fallbackErr);
+    }
   };
 
   const bugunStr = new Date().toISOString().split('T')[0];
@@ -539,7 +692,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
           {aramaMetni && (
             <button
               onClick={() => setAramaMetni('')}
-              className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+              className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -549,7 +702,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
         <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100">
           <button
             onClick={() => setFiltre('tamamlanmayan')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               filtre === 'tamamlanmayan'
                 ? 'bg-blue-600 text-white shadow-sm'
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
@@ -559,7 +712,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
           </button>
           <button
             onClick={() => setFiltre('hepsi')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
               filtre === 'hepsi'
                 ? 'bg-slate-800 text-white shadow-sm'
                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
@@ -569,7 +722,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
           </button>
           <button
             onClick={() => setFiltre('bugun')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               filtre === 'bugun'
                 ? 'bg-sky-600 text-white shadow-sm'
                 : 'bg-sky-50 text-sky-800 border border-sky-300 hover:bg-sky-100'
@@ -579,7 +732,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
           </button>
           <button
             onClick={() => setFiltre('tamamlanan')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
               filtre === 'tamamlanan'
                 ? 'bg-emerald-600 text-white shadow-sm'
                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
@@ -659,7 +812,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                       type="button"
                       onClick={(e) => handleCircleClick(e, h)}
                       onDoubleClick={(e) => handleCircleDoubleClick(e, h)}
-                      className="mt-0.5 text-slate-400 hover:text-blue-600 transition-all shrink-0 p-1 rounded-full hover:scale-110 active:scale-95"
+                      className="mt-0.5 text-slate-400 hover:text-blue-600 transition-all shrink-0 p-1 rounded-full hover:scale-110 active:scale-95 cursor-pointer"
                       title="Tamamlamak veya açmak için ÇİFT TIKLAYIN"
                     >
                       {h.TamamlandiMi ? (
@@ -737,7 +890,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                               title={fInfo.name}
                             >
                               {fInfo.isImage && fInfo.content ? (
-                                <div className="w-12 h-12">
+                                <div className="w-12 h-12 bg-slate-900">
                                   <img
                                     src={fInfo.content}
                                     alt={fInfo.name}
@@ -781,7 +934,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                       e.stopPropagation();
                       setSilinecekHatirlatici(h);
                     }}
-                    className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50/80 transition-colors"
+                    className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50/80 transition-colors cursor-pointer"
                     title="Hatırlatıcıyı Sil (Onay İster)"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -1442,7 +1595,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
         </div>
       )}
 
-      {/* LIGHTBOX (FOTOĞRAF VE BELGE ÖNİZLEME / ZOOM / SCROLL / ESC İLE KAPATMA) */}
+      {/* LIGHTBOX (FOTOĞRAF VE BELGE ÖNİZLEME / İNTERAKTİF PAN & ZOOM / ESC İLE KAPATMA) */}
       {lightboxDosya && (() => {
         const fileInfo = getFileInfo(lightboxDosya);
         const dataUrl = fileInfo.content;
@@ -1462,7 +1615,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
             >
               {/* Üst Bar: Başlık, Bilgi, Zoom & Döndürme Araçları, İndirme ve Kapatma Butonu */}
               <div className="flex flex-wrap items-center justify-between gap-3 p-3 sm:p-4 bg-slate-950/90 border-b border-slate-800 text-white shrink-0">
-                <div className="flex items-center gap-2.5 min-w-0 max-w-[50%] sm:max-w-[45%]">
+                <div className="flex items-center gap-2.5 min-w-0 max-w-[45%] sm:max-w-[40%]">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
                     fileInfo.isPdf ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
                     fileInfo.isExcel ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
@@ -1489,7 +1642,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                 {/* Kontroller: Zoom / Döndür / İndir / Yeni Sekme / Kapat */}
                 <div className="flex items-center gap-1.5 sm:gap-2">
                   {fileInfo.isImage && (
-                    <div className="flex items-center bg-slate-800/90 rounded-xl p-1 border border-slate-700 text-slate-200">
+                    <div className="flex items-center bg-slate-800/90 rounded-xl p-1 border border-slate-700 text-slate-200 shadow-sm">
                       <button
                         type="button"
                         onClick={handleZoomOut}
@@ -1502,7 +1655,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                         type="button"
                         onClick={handleZoomReset}
                         className="px-2 py-1 hover:bg-slate-700 hover:text-white rounded-lg text-[11px] font-mono font-bold transition-colors cursor-pointer"
-                        title="Varsayılan Boyut (%100)"
+                        title="Varsayılan Boyut &amp; Konuma Sıfırla (%100)"
                       >
                         %{Math.round(zoomLevel * 100)}
                       </button>
@@ -1530,7 +1683,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                     <a
                       href={dataUrl}
                       download={fileName}
-                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all flex items-center gap-1.5 text-xs font-bold shadow-sm"
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all flex items-center gap-1.5 text-xs font-bold shadow-sm cursor-pointer"
                       title="Dosyayı İndir"
                     >
                       <Download className="w-3.5 h-3.5" />
@@ -1539,45 +1692,64 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                   )}
 
                   {dataUrl && (
-                    <a
-                      href={dataUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl border border-slate-700 transition-all text-xs font-semibold"
-                      title="Yeni Sekmede Aç / Tam Ekran"
+                    <button
+                      type="button"
+                      onClick={() => handleOpenInNewTab(lightboxDosya)}
+                      className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl border border-slate-700 transition-all text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-sm"
+                      title="Yeni Sekmede Tam Boyut Aç"
                     >
-                      <ExternalLink className="w-4 h-4" />
-                    </a>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span className="hidden md:inline">Yeni Sekmede Aç</span>
+                    </button>
                   )}
 
                   <button
                     type="button"
                     onClick={() => setLightboxDosya(null)}
-                    className="p-2 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white rounded-xl border border-rose-500/30 hover:border-rose-600 transition-all cursor-pointer flex items-center gap-1 text-xs font-bold"
+                    className="p-2 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white rounded-xl border border-rose-500/30 hover:border-rose-600 transition-all cursor-pointer flex items-center gap-1 text-xs font-bold shadow-sm"
                     title="Kapat (ESC tuşuna da basabilirsiniz)"
                   >
                     <X className="w-4 h-4" />
-                    <span className="hidden md:inline">Kapat</span>
+                    <span className="hidden md:inline">Kapat (ESC)</span>
                   </button>
                 </div>
               </div>
 
-              {/* İçerik Sahnesi (Tam Scroll & Zoom Desteği) */}
-              <div className="flex-1 bg-slate-950 p-2 sm:p-4 overflow-auto flex items-center justify-center relative select-none">
+              {/* İçerik Sahnesi (İnteraktif Sürükleme / Pan & Zoom Desteği) */}
+              <div 
+                className="flex-1 bg-slate-950 p-2 sm:p-4 overflow-hidden flex items-center justify-center relative select-none cursor-grab active:cursor-grabbing"
+                onMouseDown={fileInfo.isImage ? handleMouseDown : undefined}
+                onMouseMove={fileInfo.isImage ? handleMouseMove : undefined}
+                onMouseUp={fileInfo.isImage ? handleMouseUp : undefined}
+                onMouseLeave={fileInfo.isImage ? handleMouseUp : undefined}
+                onTouchStart={fileInfo.isImage ? handleTouchStart : undefined}
+                onTouchMove={fileInfo.isImage ? handleTouchMove : undefined}
+                onTouchEnd={fileInfo.isImage ? handleTouchEnd : undefined}
+                onWheel={fileInfo.isImage ? handleWheel : undefined}
+              >
                 {fileInfo.isImage && dataUrl ? (
-                  <div className="min-w-full min-h-full flex items-center justify-center overflow-auto p-4">
+                  <div 
+                    className="flex items-center justify-center"
+                    style={{
+                      transform: `translate3d(${panPosition.x}px, ${panPosition.y}px, 0)`,
+                      transition: isDragging ? 'none' : 'transform 0.08s ease-out'
+                    }}
+                  >
                     <img
                       src={dataUrl}
                       alt={fileName}
+                      draggable={false}
+                      onDoubleClick={handleImageDoubleClick}
                       referrerPolicy="no-referrer"
                       style={{
                         transform: `scale(${zoomLevel}) rotate(${rotation}deg)`,
                         transformOrigin: 'center center',
-                        transition: 'transform 0.15s ease-out',
-                        maxWidth: zoomLevel <= 1 ? '100%' : 'none',
-                        maxHeight: zoomLevel <= 1 ? '75vh' : 'none'
+                        transition: isDragging ? 'none' : 'transform 0.15s ease-out',
+                        maxHeight: '75vh',
+                        maxWidth: '90vw',
+                        objectFit: 'contain'
                       }}
-                      className="object-contain rounded-lg shadow-2xl cursor-grab active:cursor-grabbing"
+                      className="rounded-lg shadow-2xl pointer-events-auto select-none"
                     />
                   </div>
                 ) : fileInfo.isPdf && dataUrl ? (
@@ -1613,15 +1785,14 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                         </a>
                       )}
                       {dataUrl && (
-                        <a
-                          href={dataUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="w-full sm:w-auto px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-2 border border-slate-700 cursor-pointer"
+                        <button
+                          type="button"
+                          onClick={() => handleOpenInNewTab(lightboxDosya)}
+                          className="w-full sm:w-auto px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-2 border border-slate-700 cursor-pointer shadow-sm"
                         >
                           <ExternalLink className="w-4 h-4" />
-                          <span>Tarayıcıda Aç</span>
-                        </a>
+                          <span>Yeni Sekmede Aç</span>
+                        </button>
                       )}
                     </div>
                   </div>
@@ -1632,12 +1803,23 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
               <div className="px-4 py-2 bg-slate-950 border-t border-slate-800/80 text-[11px] text-slate-400 flex flex-wrap items-center justify-between gap-2 shrink-0">
                 <span className="flex items-center gap-1.5">
                   <span className="font-semibold text-slate-300">İpucu:</span>
-                  <span>Kapatmak için <kbd className="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-[10px] text-slate-200 font-mono">ESC</kbd> tuşuna basabilir veya dışarıya tıklayabilirsiniz.</span>
+                  <span>Görseli mouse ile sürükleyerek (Pan) kaydırabilir, tekerlekle yakınlaştırabilir, <kbd className="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-[10px] text-slate-200 font-mono">ESC</kbd> veya dışarı tıklayarak kapatabilirsiniz.</span>
                 </span>
                 {fileInfo.isImage && (
-                  <span className="text-slate-500 hidden sm:inline">
-                    Yakınlaştırma: %{Math.round(zoomLevel * 100)} {rotation > 0 ? `• Döndürme: ${rotation}°` : ''}
-                  </span>
+                  <div className="flex items-center gap-2 text-slate-400">
+                    <span>
+                      Boyut: %{Math.round(zoomLevel * 100)} {rotation > 0 ? `• Döndürme: ${rotation}°` : ''}
+                    </span>
+                    {(zoomLevel !== 1 || panPosition.x !== 0 || panPosition.y !== 0) && (
+                      <button
+                        type="button"
+                        onClick={handleZoomReset}
+                        className="text-amber-400 hover:text-amber-300 underline font-semibold text-[10px] cursor-pointer"
+                      >
+                        Sıfırla
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
