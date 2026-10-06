@@ -942,9 +942,14 @@ export default function App() {
       setAraclar(prev =>
         prev.map(a => {
           if (Number(a.AracId) === Number(aracId) && a.BakimGecmisi) {
+            const yeniGecmis = a.BakimGecmisi.map(b => (b.BakimId === bakimId ? (guncel || { ...b, ...bakim }) : b));
+            const sirali = [...yeniGecmis].sort((x: any, y: any) => new Date(y.BakimTarihi || 0).getTime() - new Date(x.BakimTarihi || 0).getTime());
+            const sonK = sirali[0];
             return {
               ...a,
-              BakimGecmisi: a.BakimGecmisi.map(b => (b.BakimId === bakimId ? (guncel || { ...b, ...bakim }) : b)),
+              SonBakimTarihi: sonK ? sonK.BakimTarihi : a.SonBakimTarihi,
+              SonBakimKmVeyaSaat: sonK ? (Number(sonK.YapilanKmVeyaSaat) || a.SonBakimKmVeyaSaat) : a.SonBakimKmVeyaSaat,
+              BakimGecmisi: yeniGecmis,
             };
           }
           return a;
@@ -972,9 +977,14 @@ export default function App() {
       setAraclar(prev =>
         prev.map(a => {
           if (Number(a.AracId) === Number(aracId) && a.BakimGecmisi) {
+            const yeniGecmis = a.BakimGecmisi.filter(b => b.BakimId !== bakimId);
+            const sirali = [...yeniGecmis].sort((x: any, y: any) => new Date(y.BakimTarihi || 0).getTime() - new Date(x.BakimTarihi || 0).getTime());
+            const sonK = sirali[0];
             return {
               ...a,
-              BakimGecmisi: a.BakimGecmisi.filter(b => b.BakimId !== bakimId),
+              SonBakimTarihi: sonK ? sonK.BakimTarihi : a.SonBakimTarihi,
+              SonBakimKmVeyaSaat: sonK ? (Number(sonK.YapilanKmVeyaSaat) || 0) : a.SonBakimKmVeyaSaat,
+              BakimGecmisi: yeniGecmis,
             };
           }
           return a;

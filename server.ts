@@ -4146,6 +4146,19 @@ async function getAraclarList(aktifSadece = false): Promise<any[]> {
       let araclar = aRes.rows.map(row => {
         const arac = normalizeArac(row);
         arac.BakimGecmisi = bakimlarMap.get(arac.AracId) || [];
+        if (arac.BakimGecmisi.length > 0) {
+          const sirali = [...arac.BakimGecmisi].sort((x: any, y: any) => new Date(y.BakimTarihi || 0).getTime() - new Date(x.BakimTarihi || 0).getTime());
+          const sonK = sirali[0];
+          if (sonK) {
+            const sayac = Number(sonK.YapilanKmVeyaSaat);
+            if (!isNaN(sayac) && sayac > 0) {
+              arac.SonBakimKmVeyaSaat = sayac;
+            }
+            if (sonK.BakimTarihi) {
+              arac.SonBakimTarihi = sonK.BakimTarihi;
+            }
+          }
+        }
         return arac;
       });
 

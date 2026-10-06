@@ -69,6 +69,16 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
   };
 
   useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    if (isOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  useEffect(() => {
     if (isOpen) {
       setCapturedImage(null);
       startCamera(facingMode);
@@ -183,13 +193,34 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
             <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-xl text-center space-y-3 max-w-md">
               <AlertCircle className="w-8 h-8 text-rose-400 mx-auto" />
               <p className="text-xs text-rose-200 leading-relaxed">{errorMsg}</p>
-              <button
-                type="button"
-                onClick={() => startCamera(facingMode)}
-                className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-lg transition"
-              >
-                Tekrar Dene
-              </button>
+              <div className="flex items-center justify-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => startCamera(facingMode)}
+                  className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-lg transition cursor-pointer"
+                >
+                  Tekrar Dene
+                </button>
+                <label className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs rounded-lg transition cursor-pointer">
+                  Dosyadan Seç
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          onCapture(reader.result as string, file.name);
+                          onClose();
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    className="hidden"
+                  />
+                </label>
+              </div>
             </div>
           ) : capturedImage ? (
             /* Çekilen Fotoğraf Önizleme */

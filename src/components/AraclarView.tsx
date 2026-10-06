@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { PersonelCombobox } from './PersonelCombobox';
 import { formatTarihTR } from '../utils/dateUtils';
+import { CameraCaptureModal } from './CameraCaptureModal';
 
 interface AraclarViewProps {
   araclar: Arac[];
@@ -70,6 +71,7 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
   const [bakimHataMesaji, setBakimHataMesaji] = useState<string | null>(null);
   const [bakimBelgeler, setBakimBelgeler] = useState<any[]>([]);
   const [lightboxDosya, setLightboxDosya] = useState<any | null>(null);
+  const [showBakimCameraModal, setShowBakimCameraModal] = useState(false);
 
   const bugunStr = new Date().toISOString().split('T')[0];
 
@@ -202,6 +204,17 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
 
   const bakimDosyaSil = (index: number) => {
     setBakimBelgeler(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleBakimCameraCapture = (base64Image: string, fileName: string) => {
+    const yeniBelge = {
+      DosyaAdi: fileName,
+      DosyaBoyutu: 'Fotoğraf',
+      YuklemeTarihi: new Date().toISOString().split('T')[0],
+      DosyaIcerigi: base64Image
+    };
+    setBakimBelgeler(prev => [...prev, yeniBelge]);
+    setShowBakimCameraModal(false);
   };
 
   // Araç Ekleme / Düzenleme Modalı ve State'leri
@@ -696,29 +709,51 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                 </div>
 
                 {/* 3. Sayaç & KM Bakım İlerlemesi */}
-                <div className="mt-3 p-2.5 rounded-xl border bg-slate-50/50 border-slate-200/70">
-                  <div className="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1">
-                    <span>
-                      Sayaç: <strong className="text-slate-900">{arac.GuncelKmVeyaSaat.toLocaleString()} {birim}</strong>
-                    </span>
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${bakim.renk}`}>
-                      {bakim.metin}
-                    </span>
-                  </div>
+                {(() => {
+                  const sonBakimVal = Number(arac.SonBakimKmVeyaSaat) || 0;
+                  const periyotVal = Number(arac.BakimAraligiKmVeyaSaat) || 10000;
+                  const sonrakiHedefVal = sonBakimVal + periyotVal;
 
-                  <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all ${
-                        bakim.durum === 'Gecikmis'
-                          ? 'bg-rose-600'
-                          : bakim.durum === 'Yaklasiyor'
-                          ? 'bg-amber-500'
-                          : 'bg-emerald-500'
-                      }`}
-                      style={{ width: `${Math.min(100, bakim.yuzde)}%` }}
-                    ></div>
-                  </div>
-                </div>
+                  return (
+                    <div className="mt-3 p-2.5 rounded-xl border bg-slate-50/70 border-slate-200/80 space-y-2">
+                      <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
+                        <span className="flex items-center gap-1.5">
+                          <Wrench className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Güncel Sayaç:</span>
+                          <strong className="text-slate-900 font-mono text-sm">{arac.GuncelKmVeyaSaat.toLocaleString()} {birim}</strong>
+                        </span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shadow-xs ${bakim.renk}`}>
+                          {bakim.metin}
+                        </span>
+                      </div>
+
+                      {/* İlerleme Çubuğu */}
+                      <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            bakim.durum === 'Gecikmis'
+                              ? 'bg-rose-600'
+                              : bakim.durum === 'Yaklasiyor'
+                              ? 'bg-amber-500'
+                              : 'bg-emerald-500'
+                          }`}
+                          style={{ width: `${Math.min(100, bakim.yuzde)}%` }}
+                        ></div>
+                      </div>
+
+                      {/* Detaylı Bakım Hesap Dağılımı: Son Bakım, Hedef ve Kalan */}
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200/60">
+                        <span title={arac.SonBakimTarihi ? `Son Bakım Tarihi: ${formatTarihTR(arac.SonBakimTarihi)}` : 'Son Bakım Kaydı'}>
+                          Son Bakım: <strong className="text-slate-800 font-mono">{sonBakimVal > 0 ? `${sonBakimVal.toLocaleString()} ${birim}` : 'Girilmedi'}</strong>
+                          {arac.SonBakimTarihi ? <span className="text-[10px] text-slate-400"> ({formatTarihTR(arac.SonBakimTarihi)})</span> : ''}
+                        </span>
+                        <span title={`Bakım Periyodu: ${periyotVal.toLocaleString()} ${birim}`}>
+                          Hedef: <strong className="text-slate-900 font-mono font-bold">{sonrakiHedefVal.toLocaleString()} {birim}</strong>
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Not Varsa Göster */}
                 {arac.Notlar && (
@@ -826,9 +861,9 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                   ZimmetliKisi: form.zimmet.value,
                   GuncelKmVeyaSaat: Number(form.guncelSayac.value) || 0,
                   BakimAraligiKmVeyaSaat: Number(form.aralikSayac.value) || (saatTakibi ? 250 : 10000),
-                  BakimAraligiAy: Number(form.aralikAy.value) || 12,
-                  SonBakimTarihi: form.sonBakimTarihi.value || new Date().toISOString().split('T')[0],
-                  SonBakimKmVeyaSaat: Number(form.guncelSayac.value) || 0,
+                  BakimAraligiAy: Number(form.aralikAy?.value || duzenlenenArac?.BakimAraligiAy || 12),
+                  SonBakimTarihi: form.sonBakimTarihi?.value || duzenlenenArac?.SonBakimTarihi || new Date().toISOString().split('T')[0],
+                  SonBakimKmVeyaSaat: form.sonBakimSayac ? (Number(form.sonBakimSayac.value) || 0) : (duzenlenenArac?.SonBakimKmVeyaSaat ?? (Number(form.guncelSayac.value) || 0)),
                   SaatTakibiMi: saatTakibi,
                   MuayeneTarihi: formMuayeneTarihi || null,
                   MuayeneGecerlilikYil: Number(formMuayeneGecerlilik) || 1,
@@ -1097,11 +1132,12 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
 
                   {/* 4. BÖLÜM: PERİYODİK SAYAÇ & KM BAKIM AYARLARI */}
                   <div className="bg-slate-50/70 p-3.5 rounded-2xl border border-slate-200 space-y-3">
-                    <span className="text-xs font-black text-slate-800 uppercase tracking-wider block">
-                      4. Periyodik Sayaç &amp; Bakım Ayarları
+                    <span className="text-xs font-black text-slate-800 uppercase tracking-wider block flex items-center justify-between">
+                      <span>4. Periyodik Sayaç &amp; Bakım Ayarları</span>
+                      <span className="text-[10px] text-blue-600 font-semibold normal-case">Son Bakım + Periyot = Bir Sonraki Bakım</span>
                     </span>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                       <div>
                         <label className="font-semibold text-slate-700 block mb-1">Takip Birimi:</label>
                         <select
@@ -1132,13 +1168,39 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                           className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-mono bg-white"
                         />
                       </div>
+                      <div>
+                        <label className="font-semibold text-slate-700 block mb-1">Son Bakım Sayacı:</label>
+                        <input
+                          name="sonBakimSayac"
+                          defaultValue={duzenlenenArac?.SonBakimKmVeyaSaat ?? duzenlenenArac?.GuncelKmVeyaSaat ?? 0}
+                          onKeyDown={sadeceRakamGiris}
+                          placeholder="Örn: 279578"
+                          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-mono font-bold bg-white text-blue-900"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-slate-200/60">
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-600 block mb-1">Son Bakım Tarihi:</label>
+                        <input
+                          type="date"
+                          name="sonBakimTarihi"
+                          defaultValue={duzenlenenArac?.SonBakimTarihi ? duzenlenenArac.SonBakimTarihi.split('T')[0] : ''}
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold bg-white"
+                        />
+                      </div>
+                      <div className="flex items-center text-[11px] text-slate-500 bg-white p-2.5 rounded-xl border border-slate-200/80">
+                        <span>
+                          💡 <strong>Hesaplama Prensibi:</strong> Bakıma Kalan = (Son Bakım Sayacı + Periyot) - Güncel Sayaç
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
 
               <input type="hidden" name="aralikAy" defaultValue={duzenlenenArac?.BakimAraligiAy || 12} />
-              <input type="hidden" name="sonBakimTarihi" defaultValue={duzenlenenArac?.SonBakimTarihi || ''} />
 
               {/* Araç & Bakım Notları - Geniş Alan */}
               <div className="pt-1">
@@ -1215,6 +1277,42 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                 </button>
               </div>
             </div>
+
+            {/* Bakım Durum ve Hesaplama Özet Kartı */}
+            {(() => {
+              const bkm = bakimDurumuHesapla(aktifSeciliArac);
+              const brm = aktifSeciliArac.SaatTakibiMi ? 'Saat' : 'KM';
+              const sBakim = Number(aktifSeciliArac.SonBakimKmVeyaSaat) || 0;
+              const periyot = Number(aktifSeciliArac.BakimAraligiKmVeyaSaat) || 10000;
+              const sonrakiHedef = sBakim + periyot;
+
+              return (
+                <div className="bg-slate-50 border border-slate-200/90 rounded-xl p-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                  <div className="bg-white p-2 rounded-lg border border-slate-200/70 shadow-2xs">
+                    <span className="text-[10px] text-slate-500 block font-medium">Güncel Sayaç:</span>
+                    <strong className="text-slate-900 font-mono text-sm">{aktifSeciliArac.GuncelKmVeyaSaat.toLocaleString()} {brm}</strong>
+                  </div>
+                  <div className="bg-white p-2 rounded-lg border border-slate-200/70 shadow-2xs">
+                    <span className="text-[10px] text-slate-500 block font-medium">Son Bakım:</span>
+                    <strong className="text-blue-900 font-mono text-sm">{sBakim > 0 ? `${sBakim.toLocaleString()} ${brm}` : 'Girilmedi'}</strong>
+                    {aktifSeciliArac.SonBakimTarihi && (
+                      <span className="text-[10px] text-slate-400 block">{formatTarihTR(aktifSeciliArac.SonBakimTarihi)}</span>
+                    )}
+                  </div>
+                  <div className="bg-white p-2 rounded-lg border border-slate-200/70 shadow-2xs">
+                    <span className="text-[10px] text-slate-500 block font-medium">Sonraki Bakım Hedefi:</span>
+                    <strong className="text-slate-900 font-mono text-sm">{sonrakiHedef.toLocaleString()} {brm}</strong>
+                    <span className="text-[10px] text-slate-400 block">(Periyot: {periyot.toLocaleString()} {brm})</span>
+                  </div>
+                  <div className="bg-white p-2 rounded-lg border border-slate-200/70 shadow-2xs flex flex-col justify-between">
+                    <span className="text-[10px] text-slate-500 block font-medium">Kalan / Durum:</span>
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded border inline-block text-center ${bkm.renk}`}>
+                      {bkm.metin}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Yeni Bakım Ekle / Düzenle Formu */}
             {yeniBakimFormAcik ? (
@@ -1364,18 +1462,16 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                       Fotoğraf veya Fatura Belgesi Ekleyin
                     </span>
                     <div className="flex items-center gap-2 mt-2">
-                      <label className="cursor-pointer px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs">
+                      <button
+                        type="button"
+                        onClick={() => setShowBakimCameraModal(true)}
+                        disabled={bakimKaydediliyor}
+                        className="cursor-pointer px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs disabled:opacity-50"
+                        title="Kamerayı açarak canlı fotoğraf çek"
+                      >
                         <Camera className="w-3.5 h-3.5" />
-                        📷 Kamera ile Çek
-                        <input
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          onChange={handleBakimDosyaYukle}
-                          disabled={bakimKaydediliyor}
-                          className="hidden"
-                        />
-                      </label>
+                        <span>📷 Kamera ile Çek</span>
+                      </button>
                       <label className="cursor-pointer px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs">
                         <Upload className="w-3.5 h-3.5" />
                         📁 Harddisk / Galeri
@@ -1645,6 +1741,12 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
           </div>
         </div>
       )}
+      {/* CANLI KAMERA FOTOĞRAF ÇEKME MODALI */}
+      <CameraCaptureModal
+        isOpen={showBakimCameraModal}
+        onClose={() => setShowBakimCameraModal(false)}
+        onCapture={handleBakimCameraCapture}
+      />
     </div>
   );
 };

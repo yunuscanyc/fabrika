@@ -36,6 +36,7 @@ import {
   FileText
 } from 'lucide-react';
 import { CerideKaydi, CerideFotograf, Proje } from '../types';
+import { CameraCaptureModal } from './CameraCaptureModal';
 
 const isImageFile = (fileName: string) => {
   const ext = (fileName || '').split('.').pop()?.toLowerCase();
@@ -145,6 +146,18 @@ export const CerideView: React.FC<CerideViewProps> = ({
   const [formDetay, setFormDetay] = useState('');
   const [formIsleyenKisi, setFormIsleyenKisi] = useState(currentUserName);
   const [formFotograflar, setFormFotograflar] = useState<CerideFotograf[]>([]);
+  const [showCerideCameraModal, setShowCerideCameraModal] = useState(false);
+
+  const handleCerideCameraCapture = (base64Image: string, fileName: string) => {
+    const newPhoto: CerideFotograf = {
+      DosyaAdi: fileName,
+      DosyaBoyutu: 'Fotoğraf',
+      YuklemeTarihi: getTurkiyeTamZamanStr(),
+      DosyaIcerigi: base64Image
+    };
+    setFormFotograflar(prev => [...prev, newPhoto]);
+    setShowCerideCameraModal(false);
+  };
 
   // Fotoğraf Lightbox / Tam Ekran Görüntüleyici
   const [lightboxData, setLightboxData] = useState<{
@@ -1236,7 +1249,7 @@ export const CerideView: React.FC<CerideViewProps> = ({
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <button
                         type="button"
-                        onClick={() => cameraInputRef.current?.click()}
+                        onClick={() => setShowCerideCameraModal(true)}
                         disabled={uploadingPhotos}
                         className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
                         title="Telefon/Tablet veya Cihaz Kamerasından Canlı Fotoğraf Çek"
@@ -1338,7 +1351,7 @@ export const CerideView: React.FC<CerideViewProps> = ({
                         <div className="flex items-center gap-2 mt-2">
                           <button
                             type="button"
-                            onClick={() => cameraInputRef.current?.click()}
+                            onClick={() => setShowCerideCameraModal(true)}
                             className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
                           >
                             <Camera className="w-3.5 h-3.5" />
@@ -1469,6 +1482,12 @@ export const CerideView: React.FC<CerideViewProps> = ({
           </div>
         </div>
       )}
+      {/* CANLI KAMERA MODALI */}
+      <CameraCaptureModal
+        isOpen={showCerideCameraModal}
+        onClose={() => setShowCerideCameraModal(false)}
+        onCapture={handleCerideCameraCapture}
+      />
     </div>
   );
 };
