@@ -1182,6 +1182,8 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
         onClose={() => setImzaCizelgesiAcik(false)}
         personeller={personeller}
         varsayilanTarih={seciliTarih}
+        izinler={izinler}
+        puantajlar={tumPuantajlar}
       />
     </div>
   );

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Personel } from '../types';
-import { Printer, X, Calendar, UserCheck } from 'lucide-react';
+import { Personel, IzinKaydi, GunlukPuantaj } from '../types';
+import { Printer, X, UserCheck } from 'lucide-react';
 import { formatTarihTR, getBugunIso, formatTarihUzunTR } from '../utils/dateUtils';
 import { isPersonelCalisiyorMuTarihte } from '../utils/personelUtils';
 
@@ -10,13 +10,17 @@ interface GunlukImzaCizelgesiModalProps {
   onClose: () => void;
   personeller: Personel[];
   varsayilanTarih?: string;
+  izinler?: IzinKaydi[];
+  puantajlar?: GunlukPuantaj[];
 }
 
 export const GunlukImzaCizelgesiModal: React.FC<GunlukImzaCizelgesiModalProps> = ({
   isOpen,
   onClose,
   personeller,
-  varsayilanTarih
+  varsayilanTarih,
+  izinler,
+  puantajlar
 }) => {
   const getTomorrowDate = (baseDateStr: string) => {
     const match = (baseDateStr || '').match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
@@ -37,11 +41,38 @@ export const GunlukImzaCizelgesiModal: React.FC<GunlukImzaCizelgesiModalProps> =
     return getTomorrowDate(base);
   });
 
+  const [tumIzinler, setTumIzinler] = useState<IzinKaydi[]>(izinler || []);
+  const [gunlukPuantajlar, setGunlukPuantajlar] = useState<GunlukPuantaj[]>(puantajlar || []);
+
   useEffect(() => {
     if (varsayilanTarih) {
       setSeciliTarih(getTomorrowDate(varsayilanTarih));
     }
   }, [varsayilanTarih]);
+
+  useEffect(() => {
+    if (izinler && izinler.length > 0) {
+      setTumIzinler(izinler);
+    } else {
+      fetch('/api/izinler')
+        .then(r => r.json())
+        .then(data => {
+          if (Array.isArray(data)) setTumIzinler(data);
+        })
+        .catch(() => {});
+    }
+  }, [izinler]);
+
+  useEffect(() => {
+    if (seciliTarih) {
+      fetch(`/api/puantajlar?tarih=${seciliTarih}`)
+        .then(r => r.json())
+        .then(data => {
+          if (Array.isArray(data)) setGunlukPuantajlar(data);
+        })
+        .catch(() => {});
+    }
+  }, [seciliTarih]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -57,6 +88,62 @@ export const GunlukImzaCizelgesiModal: React.FC<GunlukImzaCizelgesiModalProps> =
   const aktifCalisanlar = personeller
     .filter(p => isPersonelCalisiyorMuTarihte(p, seciliTarih))
     .sort((a, b) => (a.AdSoyad || '').localeCompare(b.AdSoyad || 'TR'));
+
+  // Personelin ilgili tarihteki izin ve puantaj durumu
+  const getPersonelDurumVeIzinInfo = (personelId: number, tarihStr: string) => {
+    // 1. Onaylı İzin Kaydı Kontrolü
+    const aktifIzin = tumIzinler?.find(iz => 
+      iz.PersonelId === personelId &&
+      iz.Durum === 'Onaylandı' &&
+      !iz.SilindiMi &&
+      tarihStr >= iz.BaslangicTarihi &&
+      tarihStr <= iz.BitisTarihi
+    );
+
+    // 2. Puantaj Kaydı Kontrolü
+    const pKayit = gunlukPuantajlar?.find(x => x.PersonelId === personelId && (x.Tarih === tarihStr || String(x.Tarih).slice(0, 10) === tarihStr));
+
+    let isIzinli = false;
+    let izinBaslik = '';
+    let aciklamaMetni = '';
+
+    if (aktifIzin) {
+      isIzinli = true;
+      izinBaslik = aktifIzin.IzinTuru;
+      aciklamaMetni = `Onaylı ${aktifIzin.IzinTuru} (${formatTarihTR(aktifIzin.BaslangicTarihi)} - ${formatTarihTR(aktifIzin.BitisTarihi)})`;
+    } else if (pKayit) {
+      const kod = pKayit.DurumKodu;
+      if (kod === 'YI') {
+        isIzinli = true;
+        izinBaslik = 'Yıllık İzin';
+        aciklamaMetni = pKayit.Aciklama || 'Yıllık İzinli';
+      } else if (kod === 'UI') {
+        isIzinli = true;
+        izinBaslik = 'Ücretsiz İzin';
+        aciklamaMetni = pKayit.Aciklama || 'Ücretsiz İzinli';
+      } else if (kod === 'R') {
+        isIzinli = true;
+        izinBaslik = 'Raporlu';
+        aciklamaMetni = pKayit.Aciklama || 'Raporlu (Hastalık İzni)';
+      } else if (kod === 'M') {
+        isIzinli = true;
+        izinBaslik = 'Mazeret İzni';
+        aciklamaMetni = pKayit.Aciklama || 'Mazeret İzinli';
+      } else if (kod === 'D') {
+        isIzinli = true;
+        izinBaslik = 'Devamsız';
+        aciklamaMetni = pKayit.Aciklama || 'Devamsız (Gelmeyen Personel)';
+      } else if (kod === 'HT') {
+        aciklamaMetni = pKayit.Aciklama || 'Hafta Tatili';
+      } else if (kod === 'RT') {
+        aciklamaMetni = pKayit.Aciklama || 'Resmi Tatil';
+      } else if (pKayit.Aciklama) {
+        aciklamaMetni = pKayit.Aciklama;
+      }
+    }
+
+    return { isIzinli, izinBaslik, aciklamaMetni };
+  };
 
   return createPortal(
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 print-portal-container">
@@ -232,30 +319,53 @@ export const GunlukImzaCizelgesiModal: React.FC<GunlukImzaCizelgesiModalProps> =
                     </td>
                   </tr>
                 ) : (
-                  aktifCalisanlar.map((p, idx) => (
-                    <tr key={p.PersonelId} className="border-b border-black/30 hover:bg-slate-50 transition-colors">
-                      <td className="py-1 px-1.5 text-center border-r border-black font-bold text-black bg-slate-50/50 text-[10px]">
-                        {idx + 1}
-                      </td>
-                      <td className="py-1 px-3.5 border-r border-black font-black text-black text-[11px] whitespace-nowrap overflow-hidden text-ellipsis">
-                        {p.AdSoyad}
-                      </td>
-                      {/* Giriş Saati Boşluk */}
-                      <td className="py-1 px-1.5 border-r border-black h-8"></td>
-                      {/* Çıkış Saati Boşluk */}
-                      <td className="py-1 px-1.5 border-r border-black h-8"></td>
-                      {/* Fazla Mesai Boşluk */}
-                      <td className="py-1 px-1.5 border-r border-black h-8"></td>
-                      {/* Eksik Mesai Boşluk */}
-                      <td className="py-1 px-1.5 border-r border-black h-8"></td>
-                      {/* Açıklamalar Boşluk */}
-                      <td className="py-1 px-2.5 border-r border-black h-8 text-slate-400"></td>
-                      {/* İmza Atma Alanı */}
-                      <td className="py-1 px-3 h-8">
-                        <div className="w-full border-b border-dashed border-slate-400 h-5"></div>
-                      </td>
-                    </tr>
-                  ))
+                  aktifCalisanlar.map((p, idx) => {
+                    const info = getPersonelDurumVeIzinInfo(p.PersonelId, seciliTarih);
+                    return (
+                      <tr key={p.PersonelId} className={`border-b border-black/30 hover:bg-slate-50 transition-colors ${info.isIzinli ? 'bg-amber-50/40' : ''}`}>
+                        <td className="py-1 px-1.5 text-center border-r border-black font-bold text-black bg-slate-50/50 text-[10px]">
+                          {idx + 1}
+                        </td>
+                        <td className="py-1 px-3.5 border-r border-black font-black text-black text-[11px] whitespace-nowrap overflow-hidden text-ellipsis">
+                          {p.AdSoyad}
+                        </td>
+                        {/* Giriş Saati */}
+                        <td className="py-1 px-1.5 border-r border-black h-8 text-center font-bold text-[10px] text-slate-700">
+                          {info.isIzinli ? '-' : ''}
+                        </td>
+                        {/* Çıkış Saati */}
+                        <td className="py-1 px-1.5 border-r border-black h-8 text-center font-bold text-[10px] text-slate-700">
+                          {info.isIzinli ? '-' : ''}
+                        </td>
+                        {/* Fazla Mesai */}
+                        <td className="py-1 px-1.5 border-r border-black h-8 text-center font-bold text-[10px] text-slate-700">
+                          {info.isIzinli ? '-' : ''}
+                        </td>
+                        {/* Eksik Mesai */}
+                        <td className="py-1 px-1.5 border-r border-black h-8 text-center font-bold text-[10px] text-slate-700">
+                          {info.isIzinli ? '-' : ''}
+                        </td>
+                        {/* Açıklamalar */}
+                        <td className="py-1 px-2.5 border-r border-black h-8 font-bold text-black text-[10px] align-middle">
+                          {info.aciklamaMetni ? (
+                            <span className={`inline-block px-1 py-0.5 rounded text-[9.5px] ${info.isIzinli ? 'text-amber-900 bg-amber-100/90 border border-amber-300 font-extrabold' : 'text-slate-800'}`}>
+                              {info.aciklamaMetni}
+                            </span>
+                          ) : null}
+                        </td>
+                        {/* İmza Atma Alanı / İzin Durumu */}
+                        <td className="py-1 px-3 h-8 text-center align-middle">
+                          {info.isIzinli ? (
+                            <span className="text-[10px] font-black text-rose-800 uppercase tracking-tight bg-rose-100/80 border border-rose-300 px-2 py-0.5 rounded inline-block">
+                              [ {info.izinBaslik.toUpperCase()} Lİ ]
+                            </span>
+                          ) : (
+                            <div className="w-full border-b border-dashed border-slate-400 h-5"></div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
 
                 {/* Sisteme eklenmemiş veya çıktı sonrası başlayanlar için 4 adet el yazısıyla doldurulabilir boş satır */}
