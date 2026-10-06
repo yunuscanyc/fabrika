@@ -460,8 +460,8 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
     const devamsizGun = gecerliPuantaj.filter(x => x.DurumKodu === 'D').length;
     const devamsizVeUcretsizGun = ucretsizIzinGun + devamsizGun;
 
-    // Normal çalışma saati (Günde 7.5 saat yasal esasıyla)
-    const toplamNormalSaat = normalGun * 7.5;
+    // Normal çalışma saati (Fiili normal mesai saatleri toplamı)
+    const toplamNormalSaat = gecerliPuantaj.reduce((sum, x) => sum + Number(x.NormalCalismaSaati || 0), 0);
     const toplamFazlaMesai = gecerliPuantaj.reduce((sum, x) => sum + (x.FazlaMesaiSaati || 0), 0);
     const toplamTatilMesai = gecerliPuantaj.reduce((sum, x) => sum + (x.HaftaTatiliMesaiSaati || 0) + (x.ResmiTatilMesaiSaati || 0), 0);
     

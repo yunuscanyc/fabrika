@@ -191,6 +191,11 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
             }
           }
 
+          let kesintiSaat = Number(mevcut.SaatlikKesintiUcretsiz || 0);
+          if ((dKod === 'UI' || dKod === 'D') && kesintiSaat === 0 && !targetNormalEngelli) {
+            kesintiSaat = targetIs6GunCumartesi ? 5.0 : (rejim === '5gun' ? 9.0 : 8.0);
+          }
+
           return {
             PersonelId: p.PersonelId,
             DurumKodu: dKod,
@@ -199,7 +204,7 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
             // Yalnızca resmi tatil ise %100 mesai geçerlidir
             HaftaTatiliMesaiSaati: yuzdeYuzGecerli ? htSaat : 0,
             ResmiTatilMesaiSaati: yuzdeYuzGecerli ? Number(mevcut.ResmiTatilMesaiSaati || 0) : 0,
-            SaatlikKesintiUcretsiz: Number(mevcut.SaatlikKesintiUcretsiz || 0),
+            SaatlikKesintiUcretsiz: kesintiSaat,
             Aciklama: mevcut.Aciklama || ''
           };
         }
@@ -211,9 +216,13 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
         let varsayilanKod = 'N';
         let customAciklama = '';
         let initialNormalCalisma = 0;
+        let initialKesinti = 0;
 
         if (aktifIzin) {
-          if (aktifIzin.IzinTuru === 'Ücretsiz İzin') varsayilanKod = 'UI';
+          if (aktifIzin.IzinTuru === 'Ücretsiz İzin') {
+            varsayilanKod = 'UI';
+            initialKesinti = standartSaat;
+          }
           else if (aktifIzin.IzinTuru === 'Hastalık / Rapor') varsayilanKod = 'R';
           else if (aktifIzin.IzinTuru === 'Mazeret İzni') varsayilanKod = 'M';
           else varsayilanKod = 'YI'; // Yıllık İzin default
@@ -242,7 +251,7 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
           FazlaMesaiSaati: 0,
           HaftaTatiliMesaiSaati: 0,
           ResmiTatilMesaiSaati: 0,
-          SaatlikKesintiUcretsiz: 0,
+          SaatlikKesintiUcretsiz: initialKesinti,
           Aciklama: customAciklama
         };
       });
@@ -349,21 +358,30 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
       return;
     }
 
-    const standartSaat = getStandartNormalSaat(seciliTarih, calismaRejimi);
+    const standartSaat = is6GunCumartesi ? 5.0 : getStandartNormalSaat(seciliTarih, calismaRejimi);
     setSatirlar(prev => prev.map(s => {
       if (s.PersonelId !== personelId) return s;
       if (kod === 'N') {
         const normalHedef = is6GunCumartesi 
-          ? Math.min(5, Math.max(0, 5 - s.SaatlikKesintiUcretsiz)) 
-          : Math.max(0, standartSaat - s.SaatlikKesintiUcretsiz);
+          ? Math.min(5, Math.max(0, 5 - (s.SaatlikKesintiUcretsiz || 0))) 
+          : Math.max(0, standartSaat - (s.SaatlikKesintiUcretsiz || 0));
         return { 
           ...s, 
           DurumKodu: kod, 
-          NormalCalismaSaati: normalHedef 
+          NormalCalismaSaati: normalHedef,
+          SaatlikKesintiUcretsiz: 0
+        };
+      } else if (kod === 'UI' || kod === 'D') {
+        // Ücretsiz İzin veya Devamsız seçildiğinde tam gün çalışma saati (9s / 8s / 5s) otomatik eksik saat olarak yazılır
+        return {
+          ...s,
+          DurumKodu: kod,
+          NormalCalismaSaati: 0,
+          SaatlikKesintiUcretsiz: standartSaat
         };
       } else {
-        // İzin, Tatil, Devamsız vb. ise normal mesai 0 olur
-        return { ...s, DurumKodu: kod, NormalCalismaSaati: 0 };
+        // İzin, Tatil vb. ise normal mesai 0 ve eksik saat 0 olur
+        return { ...s, DurumKodu: kod, NormalCalismaSaati: 0, SaatlikKesintiUcretsiz: 0 };
       }
     }));
   };
@@ -938,7 +956,7 @@ export const PuantajView: React.FC<PuantajViewProps> = ({ personeller, izinler }
                   );
 
                   const ayOzet = buAyPuantajHaritasi.get(s.PersonelId);
-                  const toplamGunlukSaat = Math.max(0, (s.NormalCalismaSaati || 0) + (s.FazlaMesaiSaati || 0) + (s.HaftaTatiliMesaiSaati || 0) - (s.SaatlikKesintiUcretsiz || 0));
+                  const toplamGunlukSaat = Math.max(0, (s.NormalCalismaSaati || 0) + (s.FazlaMesaiSaati || 0) + (s.HaftaTatiliMesaiSaati || 0));
 
                   return (
                     <tr key={s.PersonelId} className="hover:bg-slate-800/30 transition">

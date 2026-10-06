@@ -8300,6 +8300,7 @@ app.post('/api/puantajlar', async (req, res) => {
   );
 
   // İzinli personelin puantajını otomatik olarak izne sabitle ve çalışma/mesai saatlerini 0 yap
+  const stdSaatGunun = isNormalEngelli ? 0 : (is6GunCumartesi ? 5.0 : (rejim === '5gun' ? 9.0 : 8.0));
   const filtrelenmisSatirlar = satirlar.map((s: any) => {
     const aktifIzin = gununIzinlileri.find(iz => iz.PersonelId === s.PersonelId);
     if (aktifIzin) {
@@ -8308,6 +8309,10 @@ app.post('/api/puantajlar', async (req, res) => {
       else if (aktifIzin.IzinTuru === 'Hastalık / Rapor') izinKodu = 'R';
       else if (aktifIzin.IzinTuru === 'Mazeret İzni') izinKodu = 'M';
 
+      const kesintiIzin = (aktifIzin.IzinTuru === 'Ücretsiz İzin')
+        ? (Number(s.SaatlikKesintiUcretsiz) > 0 ? Number(s.SaatlikKesintiUcretsiz) : stdSaatGunun)
+        : 0;
+
       return {
         ...s,
         DurumKodu: izinKodu,
@@ -8315,7 +8320,7 @@ app.post('/api/puantajlar', async (req, res) => {
         FazlaMesaiSaati: 0,
         HaftaTatiliMesaiSaati: 0,
         ResmiTatilMesaiSaati: 0,
-        SaatlikKesintiUcretsiz: 0,
+        SaatlikKesintiUcretsiz: kesintiIzin,
         Aciklama: s.Aciklama || `Onaylı ${aktifIzin.IzinTuru} İzninde (${aktifIzin.BaslangicTarihi} - ${aktifIzin.BitisTarihi})`
       };
     }
@@ -8325,6 +8330,7 @@ app.post('/api/puantajlar', async (req, res) => {
     let htMesai = Number(s.HaftaTatiliMesaiSaati || 0);
     let rtMesai = Number(s.ResmiTatilMesaiSaati || 0);
     let dKod = s.DurumKodu || 'N';
+    let kesinti = Number(s.SaatlikKesintiUcretsiz || 0);
 
     if (isNormalEngelli) {
       // 5 günlük rejimde hafta sonları veya 6 günlükte Pazar günü normal mesai engellenmiştir.
@@ -8347,13 +8353,18 @@ app.post('/api/puantajlar', async (req, res) => {
       }
     }
 
+    if ((dKod === 'UI' || dKod === 'D') && kesinti === 0 && stdSaatGunun > 0) {
+      kesinti = stdSaatGunun;
+    }
+
     return {
       ...s,
       DurumKodu: dKod,
       NormalCalismaSaati: norm,
       FazlaMesaiSaati: fazla,
       HaftaTatiliMesaiSaati: htMesai,
-      ResmiTatilMesaiSaati: rtMesai
+      ResmiTatilMesaiSaati: rtMesai,
+      SaatlikKesintiUcretsiz: kesinti
     };
   });
 
