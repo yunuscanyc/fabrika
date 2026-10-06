@@ -416,39 +416,27 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
       }
     }
 
-    // Geçerli puantaj kayıtları (Cari ayda henüz tamamlanmamış bugün veya gelecek günler hesaba katılmaz)
+    // Geçerli puantaj kayıtları (Cari ayda 'Bugüne Kadar' modunda henüz tamamlanmamış bugün veya gelecek günler hesaba katılmaz)
     const gecerliPuantaj = pPuantaj.filter(x => {
       const clean = String(x.Tarih || '').slice(0, 10);
       if (!isPersonelCalisiyorMuTarihte(p, clean)) return false;
 
       if (isCariAy && cariHesapTuru === 'buguneKadar') {
-        if (clean > bugunIso) return false;
+        if (clean >= bugunIso) return false; // Bugün henüz tamamlanmadığı için dahil edilmez
       }
       if (isGelecekAy) return false;
       return true;
     });
 
     const normalGun = gecerliPuantaj.filter(x => {
-      const clean = String(x.Tarih || '').slice(0, 10);
-      if (isCariAy && cariHesapTuru === 'buguneKadar' && clean === bugunIso) {
-        return Number(x.NormalCalismaSaati || 0) > 0;
-      }
       return x.DurumKodu === 'N' || Number(x.NormalCalismaSaati || 0) > 0;
     }).length;
 
     const haftaTatiliGun = gecerliPuantaj.filter(x => {
-      const clean = String(x.Tarih || '').slice(0, 10);
-      if (isCariAy && cariHesapTuru === 'buguneKadar' && clean === bugunIso) {
-        return x.DurumKodu === 'HT' && (Number(x.FazlaMesaiSaati || 0) > 0 || Number(x.HaftaTatiliMesaiSaati || 0) > 0);
-      }
       return x.DurumKodu === 'HT';
     }).length;
 
     const resmiTatilGun = gecerliPuantaj.filter(x => {
-      const clean = String(x.Tarih || '').slice(0, 10);
-      if (isCariAy && cariHesapTuru === 'buguneKadar' && clean === bugunIso) {
-        return x.DurumKodu === 'RT' && (Number(x.ResmiTatilMesaiSaati || 0) > 0 || Number(x.FazlaMesaiSaati || 0) > 0);
-      }
       return x.DurumKodu === 'RT';
     }).length;
     
@@ -468,9 +456,6 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
     // Eksik saat hesabı: Saatlik ücretsiz kesintiler + Tam gün Ücretsiz İzin (UI) ve Devamsızlık (D) günleri
     const toplamEksikSaat = gecerliPuantaj.reduce((sum, x) => {
       const cleanDate = String(x.Tarih || '').slice(0, 10);
-      if (isCariAy && cariHesapTuru === 'buguneKadar' && cleanDate === bugunIso) {
-        return sum; // Bugün henüz tamamlanmadı
-      }
       const stdSaat = getStandartNormalSaat(cleanDate, rejim);
       const kesinti = Number(x.SaatlikKesintiUcretsiz || 0);
       if (x.DurumKodu === 'UI' || x.DurumKodu === 'D') {
@@ -481,75 +466,30 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
     }, 0);
 
     // Fazla mesai ve tatil mesaileri (4857 Sayılı İş Kanunu ve Yargıtay İçtihatları Esasları):
-    // 1) Hafta tatilinde çalışma (HT):
-    //    Hafta tatili için maktu yevmiye (7.5 saat) bordro esasına/baz saate dahildir.
-    //    Hafta tatilinde çalışılan saatler %50 zamlı olduğundan, bazın üzerine eklenen saat: (Saat x 0.5)'tir.
-    //    Böylece günün toplamı: 7.5 (tatil maktu ücreti) + (Saat x 0.5) olur.
-    // 2) Resmi tatilde çalışma (RT):
-    //    Resmi tatil için maktu gün (7.5 saat) bazda yer alır. Çalışıldığında %100 zam (1 ilave yevmiye) eklenir: (Saat x 1.0)
-    // 3) Normal iş gününde fazla mesai (N):
-    //    Normal 7.5 saatin üzerindeki fiili çalışma saati %50 zamlı eklenir: (Saat x 1.5)
-
+    // 1) Hafta tatilinde çalışma (HT): %50 zamlı ilave mesai katkısı
+    // 2) Resmi tatilde çalışma (RT): %100 zam (1 tam ilave yevmiye) katkısı
+    // 3) Normal iş gününde fazla mesai (N): %50 zam farkı (1.5x hakediş saat ücreti)
     let ekstraMesaiSaati = 0;
-    let bugunNetKatkisi = 0;
 
     gecerliPuantaj.forEach(x => {
-      const cleanDate = String(x.Tarih || '').slice(0, 10);
-      const isBugunKaydi = (isCariAy && cariHesapTuru === 'buguneKadar' && cleanDate === bugunIso);
       const fazlaSaat = Number(x.FazlaMesaiSaati || 0);
       const tatilMesai = Number(x.HaftaTatiliMesaiSaati || 0) + Number(x.ResmiTatilMesaiSaati || 0);
 
-      if (isBugunKaydi) {
-        // Bugün henüz bitmediği için bazSaat'e dahil edilmemiştir.
-        if (x.DurumKodu === 'HT') {
-          // Hafta tatili: 7.5 saat maktu tatil yevmiyesi + %50 zam farkı
-          if (fazlaSaat > 0 || tatilMesai > 0) {
-            bugunNetKatkisi += 7.5 + (fazlaSaat * 0.5) + (tatilMesai * 1.0);
-          }
-        } else if (x.DurumKodu === 'RT') {
-          const rtSaat = tatilMesai > 0 ? tatilMesai : fazlaSaat;
-          if (rtSaat > 0) {
-            // Resmi tatil: 7.5 saat maktu tatil yevmiyesi + %100 ilave tam yevmiye (çift yevmiye)
-            bugunNetKatkisi += 7.5 + (rtSaat * 1.0);
-          }
-        } else if (x.DurumKodu === 'N') {
-          const norm = Math.min(7.5, Number(x.NormalCalismaSaati || 0));
-          const fz = fazlaSaat * 1.5;
-          const tm = tatilMesai * 1.0;
-          const kes = Number(x.SaatlikKesintiUcretsiz || 0);
-          bugunNetKatkisi += Math.max(0, norm + fz + tm - kes);
-        }
+      if (x.DurumKodu === 'HT') {
+        if (fazlaSaat > 0) ekstraMesaiSaati += fazlaSaat * 0.5;
+        if (tatilMesai > 0) ekstraMesaiSaati += tatilMesai * 1.0;
+      } else if (x.DurumKodu === 'RT') {
+        const rtSaat = tatilMesai > 0 ? tatilMesai : fazlaSaat;
+        if (rtSaat > 0) ekstraMesaiSaati += rtSaat * 1.0;
       } else {
-        // Geçmiş günler veya Tam Ay Projeksiyonunda: Bu günün 7.5 saati zaten bazSaat (225 saat) içinde mevcuttur!
-        if (x.DurumKodu === 'HT') {
-          // 7.5 saat zaten bazda var; %50 mesai artırımı (fazlaSaat x 0.5) ve %100 mesai (tatilMesai x 1.0) eklenir
-          if (fazlaSaat > 0) {
-            ekstraMesaiSaati += fazlaSaat * 0.5;
-          }
-          if (tatilMesai > 0) {
-            ekstraMesaiSaati += tatilMesai * 1.0;
-          }
-        } else if (x.DurumKodu === 'RT') {
-          const rtSaat = tatilMesai > 0 ? tatilMesai : fazlaSaat;
-          if (rtSaat > 0) {
-            // 7.5 saat zaten bazda var, %100 mesai (rtSaat x 1.0) eklenir -> Toplam gün çift yevmiye eder!
-            ekstraMesaiSaati += rtSaat * 1.0;
-          }
-        } else {
-          // Normal gün (N): Normal 7.5 saat bazda vardır; aşan fazla mesai %50 zamlı (1.5x), varsa tatil mesaisi %100 zamlı (1.0x) eklenir!
-          if (fazlaSaat > 0) {
-            ekstraMesaiSaati += fazlaSaat * 1.5;
-          }
-          if (tatilMesai > 0) {
-            ekstraMesaiSaati += tatilMesai * 1.0;
-          }
-        }
+        if (fazlaSaat > 0) ekstraMesaiSaati += fazlaSaat * 1.5;
+        if (tatilMesai > 0) ekstraMesaiSaati += tatilMesai * 1.0;
       }
     });
 
-    const netSaat = Math.max(0, bazSaat - toplamEksikSaat + ekstraMesaiSaati + bugunNetKatkisi);
+    const netSaat = Math.max(0, bazSaat - toplamEksikSaat + ekstraMesaiSaati);
     const netGun = netSaat / 7.5;
-    const artirimliMesaiSaati = ekstraMesaiSaati + (bugunNetKatkisi > 0 ? (bugunNetKatkisi >= 7.5 ? bugunNetKatkisi - 7.5 : bugunNetKatkisi) : 0);
+    const artirimliMesaiSaati = ekstraMesaiSaati;
 
     return {
       personelId: p.PersonelId,
