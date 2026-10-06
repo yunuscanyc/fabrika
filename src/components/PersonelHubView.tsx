@@ -19,6 +19,7 @@ interface PersonelHubViewProps {
   initialAltSekme?: 'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci' | 'gorevlendirme';
   initialPersonelId?: number;
   initialIsgSekme?: 'kkd' | 'saglik' | 'egitim';
+  initialYeniIzinModalAcik?: boolean;
   onNavigateTab?: (tab: any) => void;
 }
 
@@ -32,11 +33,13 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
   initialAltSekme = 'liste',
   initialPersonelId,
   initialIsgSekme,
+  initialYeniIzinModalAcik,
   onNavigateTab,
 }) => {
   const [altSekme, setAltSekme] = useState<'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci' | 'gorevlendirme'>(initialAltSekme);
   const [hubPersonelId, setHubPersonelId] = useState<number | undefined>(initialPersonelId);
   const [hubIsgSekme, setHubIsgSekme] = useState<'kkd' | 'saglik' | 'egitim' | undefined>(initialIsgSekme);
+  const [hubIzinModalAcik, setHubIzinModalAcik] = useState<boolean>(Boolean(initialYeniIzinModalAcik));
 
   useEffect(() => {
     if (initialAltSekme) {
@@ -56,10 +59,17 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
     }
   }, [initialIsgSekme]);
 
+  useEffect(() => {
+    if (initialYeniIzinModalAcik !== undefined) {
+      setHubIzinModalAcik(initialYeniIzinModalAcik);
+    }
+  }, [initialYeniIzinModalAcik]);
+
   const handleNavigateAltSekme = (
     subTab: 'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci' | 'gorevlendirme',
     personelId?: number,
-    isgSekmeTarget?: 'kkd' | 'saglik' | 'egitim'
+    isgSekmeTarget?: 'kkd' | 'saglik' | 'egitim',
+    yeniIzinModalAcik?: boolean
   ) => {
     setAltSekme(subTab);
     if (personelId !== undefined) {
@@ -67,6 +77,9 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
     }
     if (isgSekmeTarget) {
       setHubIsgSekme(isgSekmeTarget);
+    }
+    if (yeniIzinModalAcik !== undefined) {
+      setHubIzinModalAcik(yeniIzinModalAcik);
     }
   };
 
@@ -212,6 +225,7 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
           izinler={izinler}
           onRefresh={onRefresh}
           initialPersonelId={hubPersonelId}
+          initialYeniIzinModalAcik={hubIzinModalAcik}
         />
       )}
 

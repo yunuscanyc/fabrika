@@ -42,7 +42,7 @@ interface PersonelViewProps {
   onRefresh: () => void;
   onSelectPersonel?: (p: Personel) => void;
   onNavigateTab?: (tab: string) => void;
-  onNavigateAltSekme?: (subTab: 'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci' | 'gorevlendirme', personelId?: number, isgSekme?: 'kkd' | 'saglik' | 'egitim') => void;
+  onNavigateAltSekme?: (subTab: 'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci' | 'gorevlendirme', personelId?: number, isgSekme?: 'kkd' | 'saglik' | 'egitim', yeniIzinModalAcik?: boolean) => void;
 }
 
 export const PersonelView: React.FC<PersonelViewProps> = ({
@@ -111,9 +111,9 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
         setZimmetModalAcik(true);
       }
     } else if (evrakTipi === 'izin_formu') {
-      // Kullanıcı talebi: Önce izin kaydı girilmesi gerektiği için İzinler sayfasına yönlendir
+      // Kullanıcı talebi: İzinler sayfasına yönlendir ve Yeni İzin Talebi popupını otomatik aç (kişi combodan seçili)
       if (onNavigateAltSekme) {
-        onNavigateAltSekme('izin', seciliEvrakPersonel.PersonelId);
+        onNavigateAltSekme('izin', seciliEvrakPersonel.PersonelId, undefined, true);
       } else {
         const taslakIzin: IzinKaydi = {
           IzinId: 0,

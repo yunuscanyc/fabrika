@@ -22,6 +22,7 @@ interface IzinViewProps {
   izinler: IzinKaydi[];
   onRefresh: () => void;
   initialPersonelId?: number;
+  initialYeniIzinModalAcik?: boolean;
 }
 
 export const IzinView: React.FC<IzinViewProps> = ({
@@ -29,21 +30,28 @@ export const IzinView: React.FC<IzinViewProps> = ({
   izinler,
   onRefresh,
   initialPersonelId,
+  initialYeniIzinModalAcik = false,
 }) => {
   const [arama, setArama] = useState('');
   const [durumFiltre, setDurumFiltre] = useState('Tümü');
   const [seciliPersonelId, setSeciliPersonelId] = useState<number | 'tumu'>(initialPersonelId || 'tumu');
   const [yazdirIzin, setYazdirIzin] = useState<IzinKaydi | null>(null);
-  const [modalAcik, setModalAcik] = useState(false);
+  const [modalAcik, setModalAcik] = useState(Boolean(initialYeniIzinModalAcik && initialPersonelId));
   const [islemSuruyor, setIslemSuruyor] = useState(false);
   const [haftalikCalismaGunu, setHaftalikCalismaGunu] = useState<number>(5);
+
+  // Yeni İzin Form State
+  const [formPersonelId, setFormPersonelId] = useState<number>(initialPersonelId || personeller[0]?.PersonelId || 0);
 
   useEffect(() => {
     if (initialPersonelId) {
       setSeciliPersonelId(initialPersonelId);
       setFormPersonelId(initialPersonelId);
+      if (initialYeniIzinModalAcik) {
+        setModalAcik(true);
+      }
     }
-  }, [initialPersonelId]);
+  }, [initialPersonelId, initialYeniIzinModalAcik]);
 
   // Şirket çalışma ayarlarını çek (5 gün mü 6 gün mü)
   useEffect(() => {
@@ -76,7 +84,6 @@ export const IzinView: React.FC<IzinViewProps> = ({
   } | null>(null);
 
   // Yeni İzin Form State
-  const [formPersonelId, setFormPersonelId] = useState<number>(personeller[0]?.PersonelId || 0);
   const [formIzinTuru, setFormIzinTuru] = useState('Yıllık İzin');
   const [formBaslangic, setFormBaslangic] = useState(new Date().toISOString().split('T')[0]);
   const [formBitis, setFormBitis] = useState(new Date().toISOString().split('T')[0]);
