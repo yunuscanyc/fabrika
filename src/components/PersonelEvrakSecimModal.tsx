@@ -49,7 +49,7 @@ export const PersonelEvrakSecimModal: React.FC<PersonelEvrakSecimModalProps> = (
       id: 'kismi_sozlesme' as EvrakTipi,
       baslik: 'Kısmi Süreli (Part-Time) İş Sözleşmesi',
       aciklama: '4857 Sayılı İş Kanunu Madde 13 uyarınca resmi part-time istihdam ve çalışma şartları sözleşmesi.',
-      mevzuat: '4857 SK. Md. 13',
+      mevzuat: '📄 Sözleşme Yazdır',
       ikon: FileText,
       renk: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30 hover:border-indigo-500 hover:bg-indigo-500/30',
       badgeRenk: 'bg-indigo-950/80 text-indigo-300 border-indigo-800'
@@ -57,8 +57,8 @@ export const PersonelEvrakSecimModal: React.FC<PersonelEvrakSecimModalProps> = (
     {
       id: 'kvkk' as EvrakTipi,
       baslik: 'KVKK Çalışan Aydınlatma Metni & Beyan Formu',
-      aciklama: '6698 Sayılı Kişisel Verilerin Korunması Kanunu Madde 10 uyarınca aydınlatma, haklar ve tebliğ alındı onayı.',
-      mevzuat: '6698 SK. Md. 10',
+      aciklama: '6698 Sayılı Kişisel Verilerin Korunması Kanunu Madde 10 uyarınca aydınlatma ve tebliğ alındı onayı.',
+      mevzuat: '🛡️ KVKK Yazdır',
       ikon: Shield,
       renk: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:border-emerald-500 hover:bg-emerald-500/30',
       badgeRenk: 'bg-emerald-950/80 text-emerald-300 border-emerald-800'
@@ -66,8 +66,8 @@ export const PersonelEvrakSecimModal: React.FC<PersonelEvrakSecimModalProps> = (
     {
       id: 'kkd_zimmet' as EvrakTipi,
       baslik: 'KKD & Ekipman Zimmet Teslim Tutanağı',
-      aciklama: 'Personelin üzerine zimmetlenen iş sağlığı ve güvenliği ekipmanları, alet ve koruyucu donanım teslim formu.',
-      mevzuat: 'İSG Zimmet',
+      aciklama: 'Önce personele verilecek ekipman ve donanım girişini yapın, ardından tutanağı yazdırın.',
+      mevzuat: '➡️ İSG & Zimmet Sayfasına Git',
       ikon: ShieldCheck,
       renk: 'bg-amber-500/20 text-amber-400 border-amber-500/30 hover:border-amber-500 hover:bg-amber-500/30',
       badgeRenk: 'bg-amber-950/80 text-amber-300 border-amber-800'
@@ -75,8 +75,8 @@ export const PersonelEvrakSecimModal: React.FC<PersonelEvrakSecimModalProps> = (
     {
       id: 'izin_formu' as EvrakTipi,
       baslik: 'Personel İzin Talep & Onay Formu',
-      aciklama: 'Yıllık izin, mazeret ve ücretsiz izinler için imzalı resmi izin kullanım ve amir onay formu.',
-      mevzuat: 'İzin Evrakı',
+      aciklama: 'Önce personelin izin tarihlerini ve gün sayısını kaydedin, ardından imzalı izin formunu yazdırın.',
+      mevzuat: '➡️ İzin Girişi Sayfasına Git',
       ikon: Calendar,
       renk: 'bg-blue-500/20 text-blue-400 border-blue-500/30 hover:border-blue-500 hover:bg-blue-500/30',
       badgeRenk: 'bg-blue-950/80 text-blue-300 border-blue-800'

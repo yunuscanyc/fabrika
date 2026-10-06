@@ -35,12 +35,40 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
   onNavigateTab,
 }) => {
   const [altSekme, setAltSekme] = useState<'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci' | 'gorevlendirme'>(initialAltSekme);
+  const [hubPersonelId, setHubPersonelId] = useState<number | undefined>(initialPersonelId);
+  const [hubIsgSekme, setHubIsgSekme] = useState<'kkd' | 'saglik' | 'egitim' | undefined>(initialIsgSekme);
 
   useEffect(() => {
     if (initialAltSekme) {
       setAltSekme(initialAltSekme);
     }
   }, [initialAltSekme]);
+
+  useEffect(() => {
+    if (initialPersonelId) {
+      setHubPersonelId(initialPersonelId);
+    }
+  }, [initialPersonelId]);
+
+  useEffect(() => {
+    if (initialIsgSekme) {
+      setHubIsgSekme(initialIsgSekme);
+    }
+  }, [initialIsgSekme]);
+
+  const handleNavigateAltSekme = (
+    subTab: 'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci' | 'gorevlendirme',
+    personelId?: number,
+    isgSekmeTarget?: 'kkd' | 'saglik' | 'egitim'
+  ) => {
+    setAltSekme(subTab);
+    if (personelId !== undefined) {
+      setHubPersonelId(personelId);
+    }
+    if (isgSekmeTarget) {
+      setHubIsgSekme(isgSekmeTarget);
+    }
+  };
 
   return (
     <div className="space-y-6 pb-20 md:pb-6">
@@ -158,6 +186,7 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
           gorevler={gorevler}
           onRefresh={onRefresh}
           onNavigateTab={onNavigateTab}
+          onNavigateAltSekme={handleNavigateAltSekme}
         />
       )}
 
@@ -182,6 +211,7 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
           personeller={personeller}
           izinler={izinler}
           onRefresh={onRefresh}
+          initialPersonelId={hubPersonelId}
         />
       )}
 
@@ -207,8 +237,8 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
         <IsgView
           personeller={personeller}
           onRefresh={onRefresh}
-          initialPersonelId={initialPersonelId}
-          initialSekme={initialIsgSekme}
+          initialPersonelId={hubPersonelId}
+          initialSekme={hubIsgSekme}
         />
       )}
     </div>

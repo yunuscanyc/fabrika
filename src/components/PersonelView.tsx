@@ -42,6 +42,7 @@ interface PersonelViewProps {
   onRefresh: () => void;
   onSelectPersonel?: (p: Personel) => void;
   onNavigateTab?: (tab: string) => void;
+  onNavigateAltSekme?: (subTab: 'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci' | 'gorevlendirme', personelId?: number, isgSekme?: 'kkd' | 'saglik' | 'egitim') => void;
 }
 
 export const PersonelView: React.FC<PersonelViewProps> = ({
@@ -50,6 +51,7 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
   gorevler,
   onRefresh,
   onNavigateTab,
+  onNavigateAltSekme,
 }) => {
   const [arama, setArama] = useState('');
   const [durumFiltre, setDurumFiltre] = useState<'tumu' | 'aktif' | 'pasif'>('aktif');
@@ -89,35 +91,45 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
       setKvkkSeciliPersonel(seciliEvrakPersonel);
       setKvkkModalAcik(true);
     } else if (evrakTipi === 'kkd_zimmet') {
-      try {
-        const res = await fetch('/api/isg/zimmetler');
-        if (res.ok) {
-          const all: PersonelKkdZimmet[] = await res.json();
-          const pZimmet = all.filter(z => z.PersonelId === seciliEvrakPersonel.PersonelId);
-          setPersonelZimmetleri(pZimmet);
-        } else {
+      // Kullanıcı talebi: Önce zimmet girişi yapılması gerektiği için İSG / Zimmet sayfasına yönlendir
+      if (onNavigateAltSekme) {
+        onNavigateAltSekme('isg', seciliEvrakPersonel.PersonelId, 'kkd');
+      } else {
+        try {
+          const res = await fetch('/api/isg/zimmetler');
+          if (res.ok) {
+            const all: PersonelKkdZimmet[] = await res.json();
+            const pZimmet = all.filter(z => z.PersonelId === seciliEvrakPersonel.PersonelId);
+            setPersonelZimmetleri(pZimmet);
+          } else {
+            setPersonelZimmetleri([]);
+          }
+        } catch {
           setPersonelZimmetleri([]);
         }
-      } catch {
-        setPersonelZimmetleri([]);
+        setZimmetSeciliPersonel(seciliEvrakPersonel);
+        setZimmetModalAcik(true);
       }
-      setZimmetSeciliPersonel(seciliEvrakPersonel);
-      setZimmetModalAcik(true);
     } else if (evrakTipi === 'izin_formu') {
-      const taslakIzin: IzinKaydi = {
-        IzinId: 0,
-        PersonelId: seciliEvrakPersonel.PersonelId,
-        PersonelAdSoyad: seciliEvrakPersonel.AdSoyad,
-        IzinTuru: 'Yıllık Ücretli İzin',
-        BaslangicTarihi: new Date().toISOString().split('T')[0],
-        BitisTarihi: new Date().toISOString().split('T')[0],
-        IsGunuSayisi: 1,
-        Durum: 'Onaylandı',
-        Aciklama: 'Personel İzin Talep ve Onay Formu'
-      };
-      setSeciliIzinKaydi(taslakIzin);
-      setIzinSeciliPersonel(seciliEvrakPersonel);
-      setIzinModalAcik(true);
+      // Kullanıcı talebi: Önce izin kaydı girilmesi gerektiği için İzinler sayfasına yönlendir
+      if (onNavigateAltSekme) {
+        onNavigateAltSekme('izin', seciliEvrakPersonel.PersonelId);
+      } else {
+        const taslakIzin: IzinKaydi = {
+          IzinId: 0,
+          PersonelId: seciliEvrakPersonel.PersonelId,
+          PersonelAdSoyad: seciliEvrakPersonel.AdSoyad,
+          IzinTuru: 'Yıllık Ücretli İzin',
+          BaslangicTarihi: new Date().toISOString().split('T')[0],
+          BitisTarihi: new Date().toISOString().split('T')[0],
+          IsGunuSayisi: 1,
+          Durum: 'Onaylandı',
+          Aciklama: 'Personel İzin Talep ve Onay Formu'
+        };
+        setSeciliIzinKaydi(taslakIzin);
+        setIzinSeciliPersonel(seciliEvrakPersonel);
+        setIzinModalAcik(true);
+      }
     }
   };
 

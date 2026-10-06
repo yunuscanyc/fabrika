@@ -21,20 +21,29 @@ interface IzinViewProps {
   personeller: Personel[];
   izinler: IzinKaydi[];
   onRefresh: () => void;
+  initialPersonelId?: number;
 }
 
 export const IzinView: React.FC<IzinViewProps> = ({
   personeller,
   izinler,
   onRefresh,
+  initialPersonelId,
 }) => {
   const [arama, setArama] = useState('');
   const [durumFiltre, setDurumFiltre] = useState('Tümü');
-  const [seciliPersonelId, setSeciliPersonelId] = useState<number | 'tumu'>('tumu');
+  const [seciliPersonelId, setSeciliPersonelId] = useState<number | 'tumu'>(initialPersonelId || 'tumu');
   const [yazdirIzin, setYazdirIzin] = useState<IzinKaydi | null>(null);
   const [modalAcik, setModalAcik] = useState(false);
   const [islemSuruyor, setIslemSuruyor] = useState(false);
   const [haftalikCalismaGunu, setHaftalikCalismaGunu] = useState<number>(5);
+
+  useEffect(() => {
+    if (initialPersonelId) {
+      setSeciliPersonelId(initialPersonelId);
+      setFormPersonelId(initialPersonelId);
+    }
+  }, [initialPersonelId]);
 
   // Şirket çalışma ayarlarını çek (5 gün mü 6 gün mü)
   useEffect(() => {
