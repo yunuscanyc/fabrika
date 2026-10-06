@@ -9,6 +9,7 @@ import {
 import { Yevmiyeci, YevmiyeCalismaKaydi, Proje, Departman, Gorev } from '../types';
 import { KismiSureliSozlesmeModal } from './KismiSureliSozlesmeModal';
 import { KvkkAydinlatmaModal } from './KvkkAydinlatmaModal';
+import { PersonelEvrakSecimModal, EvrakTipi } from './PersonelEvrakSecimModal';
 
 interface YevmiyeciViewProps {
   projeler?: Proje[];
@@ -56,13 +57,27 @@ export const YevmiyeciView: React.FC<YevmiyeciViewProps> = ({ projeler = [], dep
   const [gecmisModalAcik, setGecmisModalAcik] = useState(false);
   const [detayYevmiyeci, setDetayYevmiyeci] = useState<Yevmiyeci | null>(null);
 
-  // Kısmi Süreli İş Sözleşmesi Modal State
+  // Evrak & Form Çıkarma State'leri
+  const [evrakSecimModalAcik, setEvrakSecimModalAcik] = useState(false);
+  const [seciliEvrakYevmiyeci, setSeciliEvrakYevmiyeci] = useState<Yevmiyeci | null>(null);
+
   const [sozlesmeModalAcik, setSozlesmeModalAcik] = useState(false);
   const [sozlesmeSeciliYevmiyeci, setSozlesmeSeciliYevmiyeci] = useState<Yevmiyeci | null>(null);
 
-  // KVKK Aydınlatma Metni & Beyan Formu Modal State
   const [kvkkModalAcik, setKvkkModalAcik] = useState(false);
   const [kvkkSeciliYevmiyeci, setKvkkSeciliYevmiyeci] = useState<Yevmiyeci | null>(null);
+
+  const handleEvrakSecildi = (evrakTipi: EvrakTipi) => {
+    if (!seciliEvrakYevmiyeci) return;
+
+    if (evrakTipi === 'kismi_sozlesme') {
+      setSozlesmeSeciliYevmiyeci(seciliEvrakYevmiyeci);
+      setSozlesmeModalAcik(true);
+    } else if (evrakTipi === 'kvkk') {
+      setKvkkSeciliYevmiyeci(seciliEvrakYevmiyeci);
+      setKvkkModalAcik(true);
+    }
+  };
 
   // Form States (Ekleme / Düzenleme)
   const [adSoyad, setAdSoyad] = useState('');
@@ -911,32 +926,18 @@ export const YevmiyeciView: React.FC<YevmiyeciViewProps> = ({ projeler = [], dep
                       Geçmiş ({y.CalismaGecmisi?.length || 0})
                     </button>
 
-                    {/* Kısmi Süreli Sözleşme / Evrak Çıkar Butonu */}
+                    {/* Tek Evrak & Formlar Menü Butonu */}
                     <button
                       type="button"
                       onClick={() => {
-                        setSozlesmeSeciliYevmiyeci(y);
-                        setSozlesmeModalAcik(true);
+                        setSeciliEvrakYevmiyeci(y);
+                        setEvrakSecimModalAcik(true);
                       }}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-950/70 hover:bg-indigo-900 text-indigo-300 hover:text-indigo-100 border border-indigo-700/60 text-xs font-semibold transition cursor-pointer shadow-xs"
-                      title="Bu usta için Kısmi Süreli (Part-Time) İş Sözleşmesi hazırla ve yazdır"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-indigo-950/70 hover:bg-indigo-900 text-indigo-300 hover:text-indigo-100 border border-indigo-700/60 text-xs font-semibold transition cursor-pointer shadow-xs"
+                      title="Usta için Sözleşme, KVKK ve Resmi Evrakları Çıkar"
                     >
                       <FileText className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>Sözleşme</span>
-                    </button>
-
-                    {/* KVKK Aydınlatma & Beyan Formu Butonu */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setKvkkSeciliYevmiyeci(y);
-                        setKvkkModalAcik(true);
-                      }}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-950/70 hover:bg-emerald-900 text-emerald-300 hover:text-emerald-100 border border-emerald-700/60 text-xs font-semibold transition cursor-pointer shadow-xs"
-                      title="Bu usta için KVKK Aydınlatma Metni & Beyan Formu hazırla ve yazdır"
-                    >
-                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>KVKK</span>
+                      <span>Evrak &amp; Formlar</span>
                     </button>
                   </div>
 
@@ -1575,6 +1576,17 @@ export const YevmiyeciView: React.FC<YevmiyeciViewProps> = ({ projeler = [], dep
           </div>
         </div>
       )}
+
+      {/* Personel Evrak & Form Seçim Modalı */}
+      <PersonelEvrakSecimModal
+        isOpen={evrakSecimModalAcik}
+        onClose={() => {
+          setEvrakSecimModalAcik(false);
+          setSeciliEvrakYevmiyeci(null);
+        }}
+        personel={seciliEvrakYevmiyeci}
+        onSelectEvrak={handleEvrakSecildi}
+      />
 
       {/* Kısmi Süreli (Part-Time) İş Sözleşmesi Evrak / Yazdırma Modalı */}
       <KismiSureliSozlesmeModal
