@@ -22,7 +22,17 @@ import {
   FileCheck,
   Loader2,
   Sparkles,
-  Search
+  Search,
+  ZoomIn,
+  ZoomOut,
+  RotateCw,
+  RotateCcw,
+  ExternalLink,
+  FileSpreadsheet,
+  FileArchive,
+  FileCode,
+  File as FileIcon,
+  Maximize2
 } from 'lucide-react';
 
 interface HatirlaticilarViewProps {
@@ -94,6 +104,33 @@ export const getBelgeDosyaIcerigi = (file: any): string => {
     }
   }
   return '';
+};
+
+// Dosya uzantısı ve türü tespiti
+export const getFileInfo = (file: any) => {
+  const name = String(file?.DosyaAdi || file?.name || '').trim();
+  const ext = name.split('.').pop()?.toLowerCase() || '';
+  const content = getBelgeDosyaIcerigi(file);
+  
+  const isPdf = ext === 'pdf' || content.startsWith('data:application/pdf') || content.startsWith('data:application/x-pdf');
+  const isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'svg'].includes(ext) || content.startsWith('data:image/');
+  const isExcel = ['xls', 'xlsx', 'csv'].includes(ext) || content.includes('spreadsheet') || content.includes('excel');
+  const isWord = ['doc', 'docx'].includes(ext) || content.includes('word') || content.includes('officedocument.word');
+  const isArchive = ['zip', 'rar', '7z', 'tar', 'gz'].includes(ext);
+  const isText = ['txt', 'log', 'json', 'xml'].includes(ext) || content.startsWith('data:text/');
+  
+  return {
+    name: name || 'isimsiz_dosya',
+    ext: ext.toUpperCase() || (isPdf ? 'PDF' : isImage ? 'GÖRSEL' : 'DOSYA'),
+    content,
+    isPdf,
+    isImage,
+    isExcel,
+    isWord,
+    isArchive,
+    isText,
+    isDocument: !isImage
+  };
 };
 
 export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
@@ -214,8 +251,46 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
   const [guncelleniyor, setGuncelleniyor] = useState(false);
   const [guncellemeHatasi, setGuncellemeHatasi] = useState<string | null>(null);
 
-  // Fotoğraf Lightbox/Önizleme State
+  // Fotoğraf & Belge Lightbox/Önizleme State & Zoom & Pan
   const [lightboxDosya, setLightboxDosya] = useState<any | null>(null);
+  const [zoomLevel, setZoomLevel] = useState<number>(1);
+  const [rotation, setRotation] = useState<number>(0);
+
+  // ESC Tuşu ile Kapatma ve Body Scroll Kilidi
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setLightboxDosya(null);
+      }
+    };
+    if (lightboxDosya) {
+      window.addEventListener('keydown', handleKeyDown);
+      setZoomLevel(1);
+      setRotation(0);
+      document.body.style.overflow = 'hidden';
+    }
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = '';
+    };
+  }, [lightboxDosya]);
+
+  const handleZoomIn = () => {
+    setZoomLevel(prev => Math.min(prev + 0.25, 4.0));
+  };
+
+  const handleZoomOut = () => {
+    setZoomLevel(prev => Math.max(prev - 0.25, 0.25));
+  };
+
+  const handleZoomReset = () => {
+    setZoomLevel(1);
+    setRotation(0);
+  };
+
+  const handleRotate = () => {
+    setRotation(prev => (prev + 90) % 360);
+  };
 
   const bugunStr = new Date().toISOString().split('T')[0];
 
@@ -237,9 +312,11 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
           else if (['png'].includes(ext)) dataUrl = dataUrl.replace(/^data:[^;]*/, 'data:image/png');
           else if (['webp'].includes(ext)) dataUrl = dataUrl.replace(/^data:[^;]*/, 'data:image/webp');
           else if (['gif'].includes(ext)) dataUrl = dataUrl.replace(/^data:[^;]*/, 'data:image/gif');
+          else if (['svg'].includes(ext)) dataUrl = dataUrl.replace(/^data:[^;]*/, 'data:image/svg+xml');
+          else if (['pdf'].includes(ext)) dataUrl = dataUrl.replace(/^data:[^;]*/, 'data:application/pdf');
         }
 
-        const isImage = file.type.startsWith('image/') || /\.(jpe?g|png|webp|bmp)$/i.test(file.name);
+        const isImage = file.type.startsWith('image/') || /\.(jpe?g|png|webp|bmp|gif|svg)$/i.test(file.name);
         if (!isImage) {
           resolve(dataUrl);
           return;
@@ -365,7 +442,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
     return a.Tarih.localeCompare(b.Tarih);
   });
 
-  // Çoklu Dosya Yükleme (Tam Orijinal Çözünürlük & Kalite)
+  // Çoklu Dosya Yükleme (Fotoğraf, PDF, Word, Excel, vb.)
   const handleDosyaYukle = async (e: React.ChangeEvent<HTMLInputElement>, isEditMode: boolean) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -430,70 +507,65 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
             <Bell className="w-6 h-6 text-blue-600" />
             <span>Ajanda, Görev &amp; Hatırlatıcılar</span>
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Teklif takipleri, muayene günleri, bakım hatırlatıcıları ve görsel belgeleri
+          <p className="text-xs text-slate-500 mt-1">
+            Fabrika günlük işleri, araç muayeneleri, montaj randevuları ve belge ekleri
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              setYeniBelgeler([]);
-              setModalAcik(true);
-            }}
-            className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Hatırlatıcı Ekle</span>
-          </button>
-        </div>
+        <button
+          onClick={() => {
+            setModalAcik(true);
+            setKayitHatasi(null);
+            setYeniBelgeler([]);
+          }}
+          className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Yeni Görev / Not Ekle</span>
+        </button>
       </div>
 
-      {/* Arama ve Filtre Çubuğu */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        {/* Arama Kutusu */}
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+      {/* Arama & Filtreler */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+        <div className="relative">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
           <input
             type="text"
-            placeholder="Başlık, açıklama veya detaylarda kelime ara..."
+            placeholder="Başlık, açıklama, kategori veya personel ara..."
             value={aramaMetni}
             onChange={(e) => setAramaMetni(e.target.value)}
-            className="w-full pl-9 pr-8 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs transition-all"
+            className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 outline-none"
           />
           {aramaMetni && (
             <button
-              type="button"
               onClick={() => setAramaMetni('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full cursor-pointer transition-colors"
-              title="Aramayı Temizle"
+              className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-4 h-4" />
             </button>
           )}
         </div>
 
-        {/* Filtre Butonları */}
-        <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100">
+          <button
+            onClick={() => setFiltre('tamamlanmayan')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              filtre === 'tamamlanmayan'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            Açık Görevler ({hatirlaticilar.filter(h => !h.TamamlandiMi).length})
+          </button>
           <button
             onClick={() => setFiltre('hepsi')}
             className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
               filtre === 'hepsi'
-                ? 'bg-slate-900 text-white shadow-sm'
+                ? 'bg-slate-800 text-white shadow-sm'
                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
             }`}
           >
-            Tüm Görevler ({hatirlaticilar.length})
-          </button>
-          <button
-            onClick={() => setFiltre('tamamlanmayan')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-              filtre === 'tamamlanmayan'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            Açık Kalanlar ({hatirlaticilar.filter(h => !h.TamamlandiMi).length})
+            Tümü ({hatirlaticilar.length})
           </button>
           <button
             onClick={() => setFiltre('bugun')}
@@ -626,11 +698,11 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                         {formatTarihTR(h.Tarih)}
                       </span>
                       
-                      {/* Belgeler / Fotoğraflar Mevcutsa Göster */}
+                      {/* Belgeler / Dosyalar / Fotoğraflar Mevcutsa Göster */}
                       {belgeSayisi > 0 && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 flex items-center gap-1 animate-pulse">
-                          <ImageIcon className="w-3 h-3" />
-                          <span>{belgeSayisi} Görsel / Belge</span>
+                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1 shadow-2xs">
+                          <Paperclip className="w-3 h-3 text-blue-600" />
+                          <span>{belgeSayisi} Dosya / Görsel</span>
                         </span>
                       )}
                     </div>
@@ -651,35 +723,51 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
 
                     {/* Doğrudan Kart Üzerinde Belge / Görsel Önizleme Galerisi */}
                     {h.Belgeler && h.Belgeler.length > 0 && (
-                      <div className="flex flex-wrap items-center gap-1.5 mt-2.5 pt-2 border-t border-slate-200/50">
-                        {h.Belgeler.slice(0, 4).map((belge, bIdx) => (
-                          <div
-                            key={bIdx}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setLightboxDosya(belge);
-                            }}
-                            className="relative group/thumb w-12 h-12 rounded-lg border border-slate-200 overflow-hidden bg-slate-100 flex items-center justify-center cursor-zoom-in hover:ring-2 hover:ring-blue-500 transition-all shadow-xs"
-                            title={belge.DosyaAdi || 'Belgeyi Büyüt'}
-                          >
-                            {getBelgeDosyaIcerigi(belge) ? (
-                              <img
-                                src={getBelgeDosyaIcerigi(belge)}
-                                alt={belge.DosyaAdi}
-                                referrerPolicy="no-referrer"
-                                className="w-full h-full object-cover group-hover/thumb:scale-110 transition-transform"
-                              />
-                            ) : (
-                              <FileText className="w-5 h-5 text-slate-500" />
-                            )}
-                            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover/thumb:opacity-100 flex items-center justify-center transition-opacity">
-                              <Eye className="w-3.5 h-3.5 text-white" />
+                      <div className="flex flex-wrap items-center gap-2 mt-2.5 pt-2 border-t border-slate-200/50">
+                        {h.Belgeler.slice(0, 5).map((belge, bIdx) => {
+                          const fInfo = getFileInfo(belge);
+                          return (
+                            <div
+                              key={bIdx}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setLightboxDosya(belge);
+                              }}
+                              className="relative group/thumb h-12 rounded-xl border border-slate-200 overflow-hidden bg-white flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all shadow-xs"
+                              title={fInfo.name}
+                            >
+                              {fInfo.isImage && fInfo.content ? (
+                                <div className="w-12 h-12">
+                                  <img
+                                    src={fInfo.content}
+                                    alt={fInfo.name}
+                                    referrerPolicy="no-referrer"
+                                    className="w-full h-full object-cover group-hover/thumb:scale-110 transition-transform"
+                                  />
+                                </div>
+                              ) : (
+                                <div className={`px-2.5 h-12 flex items-center gap-1.5 text-xs font-bold ${
+                                  fInfo.isPdf ? 'bg-red-50 text-red-700' :
+                                  fInfo.isExcel ? 'bg-emerald-50 text-emerald-700' :
+                                  fInfo.isWord ? 'bg-blue-50 text-blue-700' :
+                                  'bg-slate-100 text-slate-700'
+                                }`}>
+                                  {fInfo.isPdf ? <FileText className="w-4 h-4 text-red-600" /> :
+                                   fInfo.isExcel ? <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> :
+                                   fInfo.isWord ? <FileText className="w-4 h-4 text-blue-600" /> :
+                                   <FileIcon className="w-4 h-4 text-slate-500" />}
+                                  <span className="text-[10px] tracking-tight">{fInfo.ext}</span>
+                                </div>
+                              )}
+                              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover/thumb:opacity-100 flex items-center justify-center transition-opacity">
+                                <Eye className="w-3.5 h-3.5 text-white" />
+                              </div>
                             </div>
-                          </div>
-                        ))}
-                        {h.Belgeler.length > 4 && (
-                          <div className="w-12 h-12 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-[11px] font-bold text-slate-600">
-                            +{h.Belgeler.length - 4}
+                          );
+                        })}
+                        {h.Belgeler.length > 5 && (
+                          <div className="h-12 px-2.5 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-[11px] font-bold text-slate-600">
+                            +{h.Belgeler.length - 5}
                           </div>
                         )}
                       </div>
@@ -705,7 +793,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
         )}
       </div>
 
-      {/* DETAY VE ÇOKLU FOTOĞRAF MODALI */}
+      {/* DETAY VE ÇOKLU FOTOĞRAF / BELGE MODALI */}
       {secilenHatirlatici && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-2xl max-w-xl md:max-w-4xl lg:max-w-5xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh]">
@@ -713,11 +801,11 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
               <div className="flex items-center gap-2">
                 <Bell className="w-5 h-5 text-blue-600" />
                 <div>
-                  <h3 className="font-extrabold text-slate-900 text-base">Ajanda Notu Detayları &amp; Görseller</h3>
-                  <p className="text-[11px] text-slate-500 hidden sm:block">Görev detaylarını güncelleyin, geniş açıklama girin ve fotoğraf/belge ekleyin</p>
+                  <h3 className="font-extrabold text-slate-900 text-base">Ajanda Notu Detayları &amp; Ekler</h3>
+                  <p className="text-[11px] text-slate-500 hidden sm:block">Görev detaylarını güncelleyin, geniş açıklama girin ve fotoğraf / dosya / belge ekleyin</p>
                 </div>
               </div>
-              <button onClick={() => setSecilenHatirlatici(null)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
+              <button onClick={() => setSecilenHatirlatici(null)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -790,12 +878,12 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                   </div>
                 </div>
 
-                {/* SAĞ SÜTUN: Fotoğraflar / Belgeler Bölümü */}
+                {/* SAĞ SÜTUN: Fotoğraflar / Belgeler / Dosyalar Bölümü */}
                 <div className="space-y-3 flex flex-col md:border-l md:border-slate-100 md:pl-5 border-t md:border-t-0 pt-4 md:pt-0">
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-extrabold text-slate-900 text-xs sm:text-sm flex items-center gap-1.5">
-                      <ImageIcon className="w-4 h-4 text-blue-500" />
-                      Fotoğraf ve Belge Ekleri ({editBelgeler.length})
+                      <Paperclip className="w-4 h-4 text-blue-500" />
+                      Dosya &amp; Fotoğraf Ekleri ({editBelgeler.length})
                     </span>
                     
                     {/* Dosya / Kamera Seçme Butonları */}
@@ -803,12 +891,12 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                       {isProcessingFiles && (
                         <span className="text-[11px] text-blue-600 flex items-center gap-1 font-semibold animate-pulse mr-1">
                           <Loader2 className="w-3 h-3 animate-spin" />
-                          Görsel işleniyor...
+                          Dosya işleniyor...
                         </span>
                       )}
-                      <label className="cursor-pointer bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold px-2.5 py-1.5 rounded-xl border border-rose-200 flex items-center gap-1 transition-colors" title="Kamera ile çek">
+                      <label className="cursor-pointer bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold px-2 py-1.5 rounded-xl border border-rose-200 flex items-center gap-1 transition-colors shadow-2xs" title="Kamera ile fotoğraf çek">
                         <Camera className="w-3.5 h-3.5" />
-                        📷 Kamera
+                        <span className="hidden sm:inline">Kamera</span>
                         <input
                           type="file"
                           accept="image/*"
@@ -817,13 +905,24 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                           className="hidden"
                         />
                       </label>
-                      <label className="cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold px-2.5 py-1.5 rounded-xl border border-blue-200 flex items-center gap-1 transition-colors" title="Harddisk veya galeriden seç">
-                        <Upload className="w-3.5 h-3.5" />
-                        📁 Dosya
+                      <label className="cursor-pointer bg-sky-50 hover:bg-sky-100 text-sky-700 text-xs font-bold px-2 py-1.5 rounded-xl border border-sky-200 flex items-center gap-1 transition-colors shadow-2xs" title="Galeriden fotoğraf seç">
+                        <ImageIcon className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Fotoğraf</span>
                         <input
                           type="file"
                           multiple
                           accept="image/*"
+                          onChange={(e) => handleDosyaYukle(e, true)}
+                          className="hidden"
+                        />
+                      </label>
+                      <label className="cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold px-2.5 py-1.5 rounded-xl border border-blue-200 flex items-center gap-1 transition-colors shadow-2xs" title="PDF, Word, Excel veya her türlü dosya ekle">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Dosya / Belge</span>
+                        <input
+                          type="file"
+                          multiple
+                          accept="*/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,.rar,.dwg"
                           onChange={(e) => handleDosyaYukle(e, true)}
                           className="hidden"
                         />
@@ -843,50 +942,68 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                   <div className="flex-1 overflow-y-auto max-h-[420px]">
                     {editBelgeler.length === 0 ? (
                       <div className="border-2 border-dashed border-slate-200 hover:border-blue-400 rounded-2xl p-6 text-center text-slate-400 text-xs flex flex-col items-center justify-center h-48 bg-slate-50/50 transition-colors">
-                        <ImageIcon className="w-10 h-10 text-slate-300 mb-2" />
-                        <span className="font-semibold text-slate-600">Eklenmiş fotoğraf bulunmuyor</span>
-                        <span className="text-[11px] text-slate-400 mt-1">Görsel Ekle butonuna basarak fotoğraf ekleyebilirsiniz.</span>
+                        <Paperclip className="w-10 h-10 text-slate-300 mb-2" />
+                        <span className="font-semibold text-slate-600">Eklenmiş belge veya fotoğraf bulunmuyor</span>
+                        <span className="text-[11px] text-slate-400 mt-1">Dosya/Belge veya Fotoğraf butonlarına basarak ekleyebilirsiniz.</span>
                       </div>
                     ) : (
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                        {editBelgeler.map((file, idx) => (
-                          <div key={idx} className="relative group rounded-xl border border-slate-200 overflow-hidden bg-slate-50 h-32 flex flex-col justify-between shadow-2xs">
-                            {/* Resim Önizleme */}
-                            {getBelgeDosyaIcerigi(file) ? (
-                              <div className="w-full h-24 overflow-hidden relative cursor-zoom-in" onClick={() => setLightboxDosya(file)}>
-                                <img
-                                  src={getBelgeDosyaIcerigi(file)}
-                                  alt={file.DosyaAdi}
-                                  referrerPolicy="no-referrer"
-                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                                />
-                                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                  <Eye className="w-5 h-5 text-white" />
+                        {editBelgeler.map((file, idx) => {
+                          const fInfo = getFileInfo(file);
+                          return (
+                            <div key={idx} className="relative group rounded-xl border border-slate-200 overflow-hidden bg-slate-50 h-32 flex flex-col justify-between shadow-2xs">
+                              {/* Önizleme Alanı */}
+                              {fInfo.isImage && fInfo.content ? (
+                                <div className="w-full h-24 overflow-hidden relative cursor-zoom-in bg-slate-900" onClick={() => setLightboxDosya(file)}>
+                                  <img
+                                    src={fInfo.content}
+                                    alt={fInfo.name}
+                                    referrerPolicy="no-referrer"
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                  />
+                                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                    <Eye className="w-5 h-5 text-white" />
+                                  </div>
                                 </div>
-                              </div>
-                            ) : (
-                              <div className="w-full h-24 flex flex-col items-center justify-center text-slate-400 bg-slate-100 p-2">
-                                <FileText className="w-6 h-6 text-slate-400 mb-1" />
-                                <span className="text-[9px] text-slate-500 font-medium">Belge / Dosya</span>
-                              </div>
-                            )}
+                              ) : (
+                                <div 
+                                  className={`w-full h-24 flex flex-col items-center justify-center p-2 cursor-pointer transition-colors ${
+                                    fInfo.isPdf ? 'bg-red-50 hover:bg-red-100 text-red-700' :
+                                    fInfo.isExcel ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700' :
+                                    fInfo.isWord ? 'bg-blue-50 hover:bg-blue-100 text-blue-700' :
+                                    'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                                  }`}
+                                  onClick={() => setLightboxDosya(file)}
+                                  title="Dosyayı Önizle / Aç"
+                                >
+                                  {fInfo.isPdf ? <FileText className="w-7 h-7 text-red-600 mb-1" /> :
+                                   fInfo.isExcel ? <FileSpreadsheet className="w-7 h-7 text-emerald-600 mb-1" /> :
+                                   fInfo.isWord ? <FileText className="w-7 h-7 text-blue-600 mb-1" /> :
+                                   fInfo.isArchive ? <FileArchive className="w-7 h-7 text-purple-600 mb-1" /> :
+                                   <FileIcon className="w-7 h-7 text-slate-500 mb-1" />}
+                                  <span className="text-[10px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded bg-white/80 border border-slate-200">
+                                    {fInfo.ext}
+                                  </span>
+                                </div>
+                              )}
 
-                            {/* Alt Dosya Bilgileri ve Silme */}
-                            <div className="px-2 py-1 bg-white border-t border-slate-100 flex items-center justify-between text-[10px] shrink-0">
-                              <span className="truncate font-semibold max-w-[70%] text-slate-700" title={file.DosyaAdi}>
-                                {file.DosyaAdi}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => dosyaSil(idx, true)}
-                                className="p-1 text-slate-400 hover:text-red-600 rounded transition-colors"
-                                title="Dosyayı Kaldır"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
+                              {/* Alt Dosya Bilgileri ve Silme */}
+                              <div className="px-2 py-1 bg-white border-t border-slate-100 flex items-center justify-between text-[10px] shrink-0">
+                                <span className="truncate font-semibold max-w-[70%] text-slate-700" title={fInfo.name}>
+                                  {fInfo.name}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => dosyaSil(idx, true)}
+                                  className="p-1 text-slate-400 hover:text-red-600 rounded transition-colors cursor-pointer"
+                                  title="Dosyayı Kaldır"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -903,7 +1020,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                     onToggleTamamlandi(secilenHatirlatici.Id, !secilenHatirlatici.TamamlandiMi);
                     setSecilenHatirlatici(null);
                   }}
-                  className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors ${
+                  className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer ${
                     secilenHatirlatici.TamamlandiMi 
                       ? 'bg-slate-100 hover:bg-slate-200 text-slate-700' 
                       : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200'
@@ -914,7 +1031,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setSilinecekHatirlatici(secilenHatirlatici)}
-                  className="px-3 py-2 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 hover:border-red-300 border border-red-200 flex items-center gap-1 transition-colors"
+                  className="px-3 py-2 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 hover:border-red-300 border border-red-200 flex items-center gap-1 transition-colors cursor-pointer"
                   title="Hatırlatıcıyı Ajandadan Sil (Onay İster)"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -927,7 +1044,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                   type="button"
                   onClick={() => setSecilenHatirlatici(null)}
                   disabled={guncelleniyor}
-                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 text-xs font-semibold"
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 text-xs font-semibold cursor-pointer"
                 >
                   Kapat
                 </button>
@@ -957,7 +1074,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                       setSecilenHatirlatici(null);
                     }
                   }}
-                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 disabled:opacity-50 transition-colors"
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 disabled:opacity-50 transition-colors cursor-pointer"
                 >
                   {guncelleniyor ? (
                     <>
@@ -983,7 +1100,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                 <Bell className="w-5 h-5 text-blue-600" />
                 <div>
                   <h3 className="font-extrabold text-slate-900 text-base">Yeni Görev / Hatırlatıcı Ekle</h3>
-                  <p className="text-[11px] text-slate-500 hidden sm:block">Görevin detaylarını belirleyin, geniş açıklama girin ve evrak/fotoğrafları ekleyin</p>
+                  <p className="text-[11px] text-slate-500 hidden sm:block">Görevin detaylarını belirleyin, geniş açıklama girin ve evrak / dosya / fotoğrafları ekleyin</p>
                 </div>
               </div>
               <button 
@@ -992,7 +1109,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                   setKayitHatasi(null);
                   setYeniBelgeler([]);
                 }} 
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1093,23 +1210,23 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                   </div>
                 </div>
 
-                {/* SAĞ SÜTUN: Çoklu Fotoğraf Ekleme Alanı */}
+                {/* SAĞ SÜTUN: Çoklu Fotoğraf / Belge Ekleme Alanı */}
                 <div className="space-y-3 flex flex-col md:border-l md:border-slate-100 md:pl-5 border-t md:border-t-0 pt-4 md:pt-0">
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-extrabold text-slate-900 text-xs sm:text-sm flex items-center gap-1.5">
-                      <ImageIcon className="w-4 h-4 text-blue-500" />
-                      Fotoğraf / Belge Ekle ({yeniBelgeler.length})
+                      <Paperclip className="w-4 h-4 text-blue-500" />
+                      Dosya &amp; Fotoğraf Ekle ({yeniBelgeler.length})
                     </span>
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {isProcessingFiles && (
                         <span className="text-[11px] text-blue-600 flex items-center gap-1 font-semibold animate-pulse mr-1">
                           <Loader2 className="w-3 h-3 animate-spin" />
-                          Görsel işleniyor...
+                          İşleniyor...
                         </span>
                       )}
-                      <label className="cursor-pointer bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold px-2.5 py-1.5 rounded-xl border border-rose-200 flex items-center gap-1 transition-colors" title="Kamera ile çek">
+                      <label className="cursor-pointer bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold px-2 py-1.5 rounded-xl border border-rose-200 flex items-center gap-1 transition-colors shadow-2xs" title="Kamera ile çek">
                         <Camera className="w-3.5 h-3.5" />
-                        📷 Kamera
+                        <span className="hidden sm:inline">Kamera</span>
                         <input
                           type="file"
                           accept="image/*"
@@ -1118,13 +1235,24 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                           className="hidden"
                         />
                       </label>
-                      <label className="cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold px-2.5 py-1.5 rounded-xl border border-blue-200 flex items-center gap-1 transition-colors" title="Harddisk veya galeriden seç">
-                        <Upload className="w-3.5 h-3.5" />
-                        📁 Dosya
+                      <label className="cursor-pointer bg-sky-50 hover:bg-sky-100 text-sky-700 text-xs font-bold px-2 py-1.5 rounded-xl border border-sky-200 flex items-center gap-1 transition-colors shadow-2xs" title="Galeriden fotoğraf seç">
+                        <ImageIcon className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Fotoğraf</span>
                         <input
                           type="file"
                           multiple
                           accept="image/*"
+                          onChange={(e) => handleDosyaYukle(e, false)}
+                          className="hidden"
+                        />
+                      </label>
+                      <label className="cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold px-2.5 py-1.5 rounded-xl border border-blue-200 flex items-center gap-1 transition-colors shadow-2xs" title="PDF, Word, Excel veya her türlü dosya ekle">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Dosya / Belge</span>
+                        <input
+                          type="file"
+                          multiple
+                          accept="*/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,.rar,.dwg"
                           onChange={(e) => handleDosyaYukle(e, false)}
                           className="hidden"
                         />
@@ -1135,48 +1263,67 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                   <div className="flex-1 overflow-y-auto max-h-[420px]">
                     {yeniBelgeler.length === 0 ? (
                       <div className="border-2 border-dashed border-slate-200 hover:border-blue-400 rounded-2xl p-6 text-center text-slate-400 text-xs flex flex-col items-center justify-center h-48 bg-slate-50/50 transition-colors">
-                        <ImageIcon className="w-10 h-10 text-slate-300 mb-2" />
-                        <span className="font-semibold text-slate-600">Henüz görsel eklenmedi</span>
-                        <span className="text-[11px] text-slate-400 mt-1">Görsel Seç butonuna basarak dosya veya fotoğraf ekleyebilirsiniz.</span>
+                        <Paperclip className="w-10 h-10 text-slate-300 mb-2" />
+                        <span className="font-semibold text-slate-600">Henüz dosya veya fotoğraf eklenmedi</span>
+                        <span className="text-[11px] text-slate-400 mt-1">Dosya/Belge veya Fotoğraf butonlarına basarak ekleyebilirsiniz.</span>
                       </div>
                     ) : (
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                        {yeniBelgeler.map((file, idx) => (
-                          <div key={idx} className="relative group rounded-xl border border-slate-200 overflow-hidden bg-slate-50 h-32 flex flex-col justify-between shadow-2xs">
-                            <div 
-                              className="w-full h-24 overflow-hidden relative cursor-zoom-in"
-                              onClick={() => setLightboxDosya(file)}
-                              title="Önizlemeyi Büyüt"
-                            >
-                              {getBelgeDosyaIcerigi(file) ? (
-                                <img
-                                  src={getBelgeDosyaIcerigi(file)}
-                                  alt={file.DosyaAdi}
-                                  referrerPolicy="no-referrer"
-                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                                />
+                        {yeniBelgeler.map((file, idx) => {
+                          const fInfo = getFileInfo(file);
+                          return (
+                            <div key={idx} className="relative group rounded-xl border border-slate-200 overflow-hidden bg-slate-50 h-32 flex flex-col justify-between shadow-2xs">
+                              {fInfo.isImage && fInfo.content ? (
+                                <div 
+                                  className="w-full h-24 overflow-hidden relative cursor-zoom-in bg-slate-900"
+                                  onClick={() => setLightboxDosya(file)}
+                                  title="Önizlemeyi Büyüt"
+                                >
+                                  <img
+                                    src={fInfo.content}
+                                    alt={fInfo.name}
+                                    referrerPolicy="no-referrer"
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                  />
+                                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                    <Eye className="w-5 h-5 text-white" />
+                                  </div>
+                                </div>
                               ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-400">
-                                  <FileText className="w-6 h-6" />
+                                <div 
+                                  className={`w-full h-24 flex flex-col items-center justify-center p-2 cursor-pointer transition-colors ${
+                                    fInfo.isPdf ? 'bg-red-50 hover:bg-red-100 text-red-700' :
+                                    fInfo.isExcel ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700' :
+                                    fInfo.isWord ? 'bg-blue-50 hover:bg-blue-100 text-blue-700' :
+                                    'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                                  }`}
+                                  onClick={() => setLightboxDosya(file)}
+                                  title="Dosyayı Önizle / Aç"
+                                >
+                                  {fInfo.isPdf ? <FileText className="w-7 h-7 text-red-600 mb-1" /> :
+                                   fInfo.isExcel ? <FileSpreadsheet className="w-7 h-7 text-emerald-600 mb-1" /> :
+                                   fInfo.isWord ? <FileText className="w-7 h-7 text-blue-600 mb-1" /> :
+                                   fInfo.isArchive ? <FileArchive className="w-7 h-7 text-purple-600 mb-1" /> :
+                                   <FileIcon className="w-7 h-7 text-slate-500 mb-1" />}
+                                  <span className="text-[10px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded bg-white/80 border border-slate-200">
+                                    {fInfo.ext}
+                                  </span>
                                 </div>
                               )}
-                              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                <Eye className="w-4 h-4 text-white" />
+                              <div className="px-2 py-1 bg-white border-t border-slate-100 flex items-center justify-between text-[10px] truncate text-slate-700">
+                                <span className="truncate max-w-[70%] font-semibold">{fInfo.name}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => dosyaSil(idx, false)}
+                                  className="text-slate-400 hover:text-red-600 p-0.5 rounded cursor-pointer"
+                                  title="Kaldır"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
                               </div>
                             </div>
-                            <div className="px-2 py-1 bg-white border-t border-slate-100 flex items-center justify-between text-[10px] truncate text-slate-700">
-                              <span className="truncate max-w-[70%] font-semibold">{file.DosyaAdi}</span>
-                              <button
-                                type="button"
-                                onClick={() => dosyaSil(idx, false)}
-                                className="text-slate-400 hover:text-red-600 p-0.5 rounded"
-                                title="Kaldır"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -1192,14 +1339,14 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                     setKayitHatasi(null);
                     setYeniBelgeler([]);
                   }}
-                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 text-xs font-semibold"
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 text-xs font-semibold cursor-pointer"
                 >
                   İptal
                 </button>
                 <button
                   type="submit"
                   disabled={kaydediliyor || isProcessingFiles}
-                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 disabled:opacity-50 transition-colors"
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 disabled:opacity-50 transition-colors cursor-pointer"
                 >
                   {kaydediliyor ? (
                     <>
@@ -1243,8 +1390,8 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
               </div>
               {silinecekHatirlatici.Belgeler && silinecekHatirlatici.Belgeler.length > 0 && (
                 <div className="text-[11px] text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-200/60 flex items-center gap-1 font-medium mt-1">
-                  <ImageIcon className="w-3.5 h-3.5 shrink-0" />
-                  <span>Bu kayda ait {silinecekHatirlatici.Belgeler.length} adet ekli fotoğraf da silinecektir.</span>
+                  <Paperclip className="w-3.5 h-3.5 shrink-0" />
+                  <span>Bu kayda ait {silinecekHatirlatici.Belgeler.length} adet ekli dosya/belge de silinecektir.</span>
                 </div>
               )}
             </div>
@@ -1254,7 +1401,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                 type="button"
                 disabled={siliniyor}
                 onClick={() => setSilinecekHatirlatici(null)}
-                className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 text-xs font-semibold transition-colors"
+                className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 text-xs font-semibold transition-colors cursor-pointer"
               >
                 Vazgeç
               </button>
@@ -1276,7 +1423,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                     setSiliniyor(false);
                   }
                 }}
-                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer"
               >
                 {siliniyor ? (
                   <>
@@ -1295,54 +1442,208 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
         </div>
       )}
 
-      {/* LIGHTBOX (FOTOĞRAF TAM BOY GÖSTERİM) MODALI */}
-      {lightboxDosya && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
-          <div className="relative max-w-4xl w-full bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border border-slate-800 flex flex-col">
-            {/* Üst Bar */}
-            <div className="flex items-center justify-between p-4 bg-slate-950/40 text-white shrink-0">
-              <span className="text-xs font-bold truncate max-w-[60%] flex items-center gap-2">
-                <ImageIcon className="w-4 h-4 text-sky-400" />
-                {lightboxDosya.DosyaAdi} ({lightboxDosya.DosyaBoyutu})
-              </span>
-              <div className="flex items-center gap-2">
-                <a
-                  href={getBelgeDosyaIcerigi(lightboxDosya)}
-                  download={lightboxDosya.DosyaAdi || 'gorsel.png'}
-                  className="p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-xl transition-all flex items-center gap-1 text-xs font-semibold"
-                  title="Görseli İndir"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>İndir</span>
-                </a>
-                <button
-                  onClick={() => setLightboxDosya(null)}
-                  className="p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-xl transition-all"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+      {/* LIGHTBOX (FOTOĞRAF VE BELGE ÖNİZLEME / ZOOM / SCROLL / ESC İLE KAPATMA) */}
+      {lightboxDosya && (() => {
+        const fileInfo = getFileInfo(lightboxDosya);
+        const dataUrl = fileInfo.content;
+        const fileName = lightboxDosya.DosyaAdi || 'dosya';
+        const fileSize = lightboxDosya.DosyaBoyutu || '';
+
+        return (
+          <div 
+            onClick={() => setLightboxDosya(null)}
+            className="fixed inset-0 z-[120] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-slate-950/90 backdrop-blur-md animate-in fade-in duration-200"
+            role="dialog"
+            aria-modal="true"
+          >
+            <div 
+              onClick={(e) => e.stopPropagation()}
+              className="relative max-w-5xl w-full h-[92vh] bg-slate-900 rounded-2xl md:rounded-3xl overflow-hidden shadow-2xl border border-slate-800 flex flex-col"
+            >
+              {/* Üst Bar: Başlık, Bilgi, Zoom & Döndürme Araçları, İndirme ve Kapatma Butonu */}
+              <div className="flex flex-wrap items-center justify-between gap-3 p-3 sm:p-4 bg-slate-950/90 border-b border-slate-800 text-white shrink-0">
+                <div className="flex items-center gap-2.5 min-w-0 max-w-[50%] sm:max-w-[45%]">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                    fileInfo.isPdf ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
+                    fileInfo.isExcel ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                    fileInfo.isWord ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                    fileInfo.isArchive ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' :
+                    'bg-sky-500/20 text-sky-400 border border-sky-500/30'
+                  }`}>
+                    {fileInfo.isPdf ? <FileText className="w-4 h-4" /> :
+                     fileInfo.isExcel ? <FileSpreadsheet className="w-4 h-4" /> :
+                     fileInfo.isWord ? <FileText className="w-4 h-4" /> :
+                     fileInfo.isArchive ? <FileArchive className="w-4 h-4" /> :
+                     <ImageIcon className="w-4 h-4" />}
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="text-xs sm:text-sm font-bold text-white truncate" title={fileName}>
+                      {fileName}
+                    </h4>
+                    <p className="text-[10px] text-slate-400 truncate">
+                      {fileSize ? `${fileSize} • ` : ''}{fileInfo.ext} Dosyası
+                    </p>
+                  </div>
+                </div>
+
+                {/* Kontroller: Zoom / Döndür / İndir / Yeni Sekme / Kapat */}
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  {fileInfo.isImage && (
+                    <div className="flex items-center bg-slate-800/90 rounded-xl p-1 border border-slate-700 text-slate-200">
+                      <button
+                        type="button"
+                        onClick={handleZoomOut}
+                        className="p-1.5 hover:bg-slate-700 hover:text-white rounded-lg transition-colors cursor-pointer"
+                        title="Uzaklaştır (-)"
+                      >
+                        <ZoomOut className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleZoomReset}
+                        className="px-2 py-1 hover:bg-slate-700 hover:text-white rounded-lg text-[11px] font-mono font-bold transition-colors cursor-pointer"
+                        title="Varsayılan Boyut (%100)"
+                      >
+                        %{Math.round(zoomLevel * 100)}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleZoomIn}
+                        className="p-1.5 hover:bg-slate-700 hover:text-white rounded-lg transition-colors cursor-pointer"
+                        title="Yakınlaştır (+)"
+                      >
+                        <ZoomIn className="w-4 h-4" />
+                      </button>
+                      <div className="w-[1px] h-4 bg-slate-700 mx-1" />
+                      <button
+                        type="button"
+                        onClick={handleRotate}
+                        className="p-1.5 hover:bg-slate-700 hover:text-white rounded-lg transition-colors cursor-pointer"
+                        title="90° Döndür"
+                      >
+                        <RotateCw className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+
+                  {dataUrl && (
+                    <a
+                      href={dataUrl}
+                      download={fileName}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all flex items-center gap-1.5 text-xs font-bold shadow-sm"
+                      title="Dosyayı İndir"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">İndir</span>
+                    </a>
+                  )}
+
+                  {dataUrl && (
+                    <a
+                      href={dataUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl border border-slate-700 transition-all text-xs font-semibold"
+                      title="Yeni Sekmede Aç / Tam Ekran"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setLightboxDosya(null)}
+                    className="p-2 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white rounded-xl border border-rose-500/30 hover:border-rose-600 transition-all cursor-pointer flex items-center gap-1 text-xs font-bold"
+                    title="Kapat (ESC tuşuna da basabilirsiniz)"
+                  >
+                    <X className="w-4 h-4" />
+                    <span className="hidden md:inline">Kapat</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* İçerik Sahnesi (Tam Scroll & Zoom Desteği) */}
+              <div className="flex-1 bg-slate-950 p-2 sm:p-4 overflow-auto flex items-center justify-center relative select-none">
+                {fileInfo.isImage && dataUrl ? (
+                  <div className="min-w-full min-h-full flex items-center justify-center overflow-auto p-4">
+                    <img
+                      src={dataUrl}
+                      alt={fileName}
+                      referrerPolicy="no-referrer"
+                      style={{
+                        transform: `scale(${zoomLevel}) rotate(${rotation}deg)`,
+                        transformOrigin: 'center center',
+                        transition: 'transform 0.15s ease-out',
+                        maxWidth: zoomLevel <= 1 ? '100%' : 'none',
+                        maxHeight: zoomLevel <= 1 ? '75vh' : 'none'
+                      }}
+                      className="object-contain rounded-lg shadow-2xl cursor-grab active:cursor-grabbing"
+                    />
+                  </div>
+                ) : fileInfo.isPdf && dataUrl ? (
+                  <div className="w-full h-full flex flex-col rounded-xl overflow-hidden bg-slate-900 border border-slate-800">
+                    <iframe
+                      src={dataUrl}
+                      title={fileName}
+                      className="w-full h-full border-0 rounded-xl bg-white"
+                    />
+                  </div>
+                ) : (
+                  /* Diğer Belgeler (Word, Excel, Zip, vb.) */
+                  <div className="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl text-center space-y-4 shadow-xl">
+                    <div className="w-20 h-20 mx-auto rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center">
+                      {fileInfo.isExcel ? <FileSpreadsheet className="w-10 h-10 text-emerald-400" /> :
+                       fileInfo.isWord ? <FileText className="w-10 h-10 text-blue-400" /> :
+                       fileInfo.isArchive ? <FileArchive className="w-10 h-10 text-purple-400" /> :
+                       <FileIcon className="w-10 h-10 text-slate-300" />}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-white text-base break-all">{fileName}</h3>
+                      <p className="text-xs text-slate-400 mt-1">{fileSize || 'Belge Dosyası'} • {fileInfo.ext}</p>
+                    </div>
+                    <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2.5">
+                      {dataUrl && (
+                        <a
+                          href={dataUrl}
+                          download={fileName}
+                          className="w-full sm:w-auto px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+                        >
+                          <Download className="w-4 h-4" />
+                          <span>Dosyayı İndir</span>
+                        </a>
+                      )}
+                      {dataUrl && (
+                        <a
+                          href={dataUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full sm:w-auto px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-2 border border-slate-700 cursor-pointer"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          <span>Tarayıcıda Aç</span>
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Alt Bilgi İpucu Çubuğu */}
+              <div className="px-4 py-2 bg-slate-950 border-t border-slate-800/80 text-[11px] text-slate-400 flex flex-wrap items-center justify-between gap-2 shrink-0">
+                <span className="flex items-center gap-1.5">
+                  <span className="font-semibold text-slate-300">İpucu:</span>
+                  <span>Kapatmak için <kbd className="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-[10px] text-slate-200 font-mono">ESC</kbd> tuşuna basabilir veya dışarıya tıklayabilirsiniz.</span>
+                </span>
+                {fileInfo.isImage && (
+                  <span className="text-slate-500 hidden sm:inline">
+                    Yakınlaştırma: %{Math.round(zoomLevel * 100)} {rotation > 0 ? `• Döndürme: ${rotation}°` : ''}
+                  </span>
+                )}
               </div>
             </div>
-
-            {/* Görsel Sahnesi */}
-            <div className="flex-1 flex items-center justify-center p-6 bg-slate-950 h-[60vh]">
-              {getBelgeDosyaIcerigi(lightboxDosya) ? (
-                <img
-                  src={getBelgeDosyaIcerigi(lightboxDosya)}
-                  alt={lightboxDosya.DosyaAdi}
-                  referrerPolicy="no-referrer"
-                  className="max-w-full max-h-full object-contain rounded-lg shadow-xl"
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center text-slate-400 gap-2">
-                  <FileText className="w-12 h-12 text-slate-500" />
-                  <span className="text-xs">Görsel önizleme yüklenemedi</span>
-                </div>
-              )}
-            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 };
