@@ -129,18 +129,21 @@ export const Navbar: React.FC<NavbarProps> = ({
                 )}
               </button>
               <button
-                onClick={() => setActiveTab('ruhsatlar')}
+                onClick={() => {
+                  setActiveTab('hatirlaticilar');
+                  onMarkAllAjandaRead?.();
+                }}
                 className={`relative px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 ${
-                  activeTab === 'ruhsatlar'
+                  activeTab === 'hatirlaticilar'
                     ? 'bg-amber-600 text-white shadow-sm'
                     : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
                 }`}
-                title="Ruhsatlar & Periyodik İzinler"
+                title="Ajanda & Hatırlatıcılar"
               >
-                <span>🛡️ Ruhsatlar</span>
-                {Boolean(counts.ruhsatlar && counts.ruhsatlar > 0) && (
+                <span>🔔 Ajanda</span>
+                {counts.hatirlaticilar > 0 && (
                   <span className="px-1.5 py-0.2 rounded-full bg-red-500 text-white text-[10px] font-black animate-pulse">
-                    {counts.ruhsatlar}
+                    {counts.hatirlaticilar}
                   </span>
                 )}
               </button>

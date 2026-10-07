@@ -74,18 +74,21 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           </button>
 
           <button
-            onClick={() => setActiveTab('ruhsatlar')}
+            onClick={() => {
+              setActiveTab('hatirlaticilar');
+              onMarkAllAjandaRead?.();
+            }}
             className={`flex items-center justify-center gap-1.5 py-2 rounded-xl transition-all text-xs font-bold ${
-              activeTab === 'ruhsatlar'
+              activeTab === 'hatirlaticilar'
                 ? 'text-white bg-amber-600 shadow-md ring-1 ring-amber-400/30'
                 : 'text-slate-400 hover:text-slate-200 bg-slate-800/80 border border-slate-700/50'
             }`}
           >
-            <FileCheck className="w-3.5 h-3.5" />
-            <span>Ruhsat</span>
-            {Boolean(badgeCounts.ruhsatlar && badgeCounts.ruhsatlar > 0) && (
+            <Bell className="w-3.5 h-3.5" />
+            <span>Ajanda</span>
+            {Boolean((badgeCounts.ajandaBildirim || badgeCounts.hatirlatici) && ((badgeCounts.ajandaBildirim || 0) + (badgeCounts.hatirlatici || 0) > 0)) && (
               <span className="w-3.5 h-3.5 rounded-full bg-red-500 text-white text-[8px] font-black flex items-center justify-center animate-pulse">
-                {badgeCounts.ruhsatlar}
+                {(badgeCounts.ajandaBildirim || 0) + (badgeCounts.hatirlatici || 0)}
               </span>
             )}
           </button>

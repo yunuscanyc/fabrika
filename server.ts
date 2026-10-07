@@ -776,6 +776,7 @@ function normalizeHatirlatici(row: any) {
     Belgeler: Array.isArray(row.Belgeler) ? row.Belgeler : [],
     FotoSayisi: Array.isArray(row.Belgeler) ? row.Belgeler.length : Number(row.FotoSayisi || 0),
     UstabasiGorsun: Boolean(getProp(row, 'UstabasiGorsun', 'ustabasigorsun', 'ustabasi_gorsun') ?? false),
+    OlusturanKisi: String(getProp(row, 'OlusturanKisi', 'olusturankisi', 'olusturan_kisi', 'YapanKisi', 'yapankisi') || ''),
     _directPhoto: directPhotoContent,
     _directPhotoName: directName,
     _directPhotoSize: directSize
@@ -1237,6 +1238,8 @@ async function saveHatirlaticiToDb(id: number | null, data: any, isNew: boolean)
     setIfColExists(['Kategori'], data.Kategori || 'Gorev');
     setIfColExists(['OnemDerecesi', 'Oncelik'], data.OnemDerecesi || 'Normal');
     setIfColExists(['SorumluPersonelId'], data.SorumluPersonelId ? Number(data.SorumluPersonelId) : null);
+    setIfColExists(['UstabasiGorsun', 'ustabasigorsun', 'ustabasi_gorsun'], Boolean(data.UstabasiGorsun));
+    setIfColExists(['OlusturanKisi', 'olusturankisi', 'olusturan_kisi', 'YapanKisi', 'yapankisi'], data.OlusturanKisi || data.YapanKisi || '');
 
     // NOT NULL audit/date columns for database schema constraints
     setIfColExists(['GirisTarihi', 'giristarihi', 'giris_tarihi', 'GirisTarih'], data.GirisTarihi || data.Tarih || getBugunStr());
@@ -1288,6 +1291,12 @@ async function saveHatirlaticiToDb(id: number | null, data: any, isNew: boolean)
       const durumCol = mapCol(['Durum', 'durum']);
       if (tamamCol) rowData[tamamCol] = Boolean(data.TamamlandiMi);
       if (durumCol) rowData[durumCol] = data.TamamlandiMi ? 'Tamamlandı' : 'Bekliyor';
+    }
+    if (data.UstabasiGorsun !== undefined) {
+      setIfColExists(['UstabasiGorsun', 'ustabasigorsun', 'ustabasi_gorsun'], Boolean(data.UstabasiGorsun));
+    }
+    if (data.OlusturanKisi !== undefined) {
+      setIfColExists(['OlusturanKisi', 'olusturankisi', 'olusturan_kisi', 'YapanKisi', 'yapankisi'], data.OlusturanKisi);
     }
 
     const keys = Object.keys(rowData);
@@ -3666,6 +3675,7 @@ export interface CerideRecord {
   Fotograflar?: any[];
   FotoSayisi?: number;
   OtomatikMi?: boolean;
+  UstabasiGorsun?: boolean;
 }
 
 let memCeride: CerideRecord[] = [
@@ -3728,6 +3738,7 @@ async function recordCerideEvent(eventData: {
   Detay?: string;
   Fotograflar?: any[];
   OtomatikMi?: boolean;
+  UstabasiGorsun?: boolean;
 }): Promise<CerideRecord> {
   const dateStr = eventData.Tarih || getTurkiyeTarihStr();
   const timeStr = eventData.Saat || getTurkiyeSaatStr();
@@ -3748,7 +3759,8 @@ async function recordCerideEvent(eventData: {
     Detay: eventData.Detay || '',
     Fotograflar: fotolar,
     FotoSayisi: fotolar.length,
-    OtomatikMi: eventData.OtomatikMi !== undefined ? eventData.OtomatikMi : true
+    OtomatikMi: eventData.OtomatikMi !== undefined ? eventData.OtomatikMi : true,
+    UstabasiGorsun: Boolean(eventData.UstabasiGorsun)
   };
 
   memCeride.unshift(newRecord);
@@ -3796,6 +3808,9 @@ async function recordCerideEvent(eventData: {
 
       const otoCol = mapCol(['OtomatikMi', 'otomatikmi', 'otomatik_mi']);
       if (otoCol) rowData[otoCol] = newRecord.OtomatikMi;
+
+      const ustabasiCol = mapCol(['UstabasiGorsun', 'ustabasigorsun', 'ustabasi_gorsun']);
+      if (ustabasiCol) rowData[ustabasiCol] = newRecord.UstabasiGorsun;
 
       const keys = Object.keys(rowData);
       if (keys.length > 0) {
@@ -7080,14 +7095,30 @@ app.post('/api/push/test', async (req, res) => {
 });
 
 app.get('/api/hatirlaticilar', async (req, res) => {
-  const list = await getHatirlaticilarList();
+  let list = await getHatirlaticilarList();
+  const userRole = String(req.headers['x-user-role'] || req.query.role || '').toLowerCase();
+  const userName = parseSafeUserName(req.headers['x-user-name'] || req.query.user || '');
+  const isUstabasi = userRole === 'ustabasi' || userName.toLowerCase().includes('ustabaşı') || userName.toLowerCase().includes('ustabasi');
+
+  if (isUstabasi) {
+    const uLower = userName.toLowerCase().trim();
+    list = list.filter((h: any) => {
+      const olusturan = (h.OlusturanKisi || h.YapanKisi || '').toLowerCase().trim();
+      const isKendi = olusturan === uLower || olusturan.includes('ustabaşı') || olusturan.includes('ustabasi');
+      return Boolean(h.UstabasiGorsun) || isKendi;
+    });
+  }
+
   res.json(list);
 });
 
 app.post('/api/hatirlaticilar', async (req, res) => {
   try {
     const belgelerList = (req.body.Belgeler && Array.isArray(req.body.Belgeler)) ? req.body.Belgeler : [];
-    const yapanKisi = req.body.YapanKisi || req.headers['x-user-name'] || '1. Yönetici';
+    const userRole = String(req.headers['x-user-role'] || req.query.role || '').toLowerCase();
+    const yapanKisi = parseSafeUserName(req.body.YapanKisi || req.body.OlusturanKisi || req.headers['x-user-name'] || (userRole === 'ustabasi' ? 'Ustabaşı' : '1. Yönetici'));
+    const isUstabasi = userRole === 'ustabasi' || yapanKisi.toLowerCase().includes('ustabaşı') || yapanKisi.toLowerCase().includes('ustabasi');
+
     const yeni = {
       Id: req.body.Id || Date.now(),
       Baslik: req.body.Baslik,
@@ -7098,7 +7129,9 @@ app.post('/api/hatirlaticilar', async (req, res) => {
       OnemDerecesi: req.body.OnemDerecesi || 'Normal',
       SorumluPersonelId: req.body.SorumluPersonelId ? Number(req.body.SorumluPersonelId) : null,
       Belgeler: belgelerList,
-      FotoSayisi: belgelerList.length
+      FotoSayisi: belgelerList.length,
+      UstabasiGorsun: req.body.UstabasiGorsun !== undefined ? Boolean(req.body.UstabasiGorsun) : isUstabasi,
+      OlusturanKisi: req.body.OlusturanKisi || yapanKisi
     };
 
     let insertedRecord: any = null;
@@ -7159,6 +7192,8 @@ app.put('/api/hatirlaticilar/:id', async (req, res) => {
     if (req.body.OnemDerecesi !== undefined && req.body.OnemDerecesi !== null) patchData.OnemDerecesi = req.body.OnemDerecesi;
     if (req.body.SorumluPersonelId !== undefined) patchData.SorumluPersonelId = req.body.SorumluPersonelId ? Number(req.body.SorumluPersonelId) : null;
     if (req.body.Belgeler !== undefined) patchData.Belgeler = req.body.Belgeler;
+    if (req.body.UstabasiGorsun !== undefined) patchData.UstabasiGorsun = Boolean(req.body.UstabasiGorsun);
+    if (req.body.OlusturanKisi !== undefined) patchData.OlusturanKisi = req.body.OlusturanKisi;
 
     // Mevcut kaydı bul
     const existing = memHatirlaticilar.find(h => h.Id === id);
@@ -11228,7 +11263,12 @@ app.get('/api/ceride', async (req, res) => {
         // Ustabaşı sadece kendi girdiklerini görebilir, yöneticilerinkini KESİNLİKLE göremez!
         if (isUstabasi) {
           const ustabasiAd = userName || 'Ustabaşı';
-          whereClauses.push(`(LOWER(TRIM("${kisiCol}")) = LOWER(TRIM($${pIndex++})) OR LOWER("${kisiCol}") LIKE '%ustaba%')`);
+          const ustabasiCol = mapCol(['UstabasiGorsun', 'ustabasigorsun', 'ustabasi_gorsun']);
+          if (ustabasiCol) {
+            whereClauses.push(`(LOWER(TRIM("${kisiCol}")) = LOWER(TRIM($${pIndex++})) OR LOWER("${kisiCol}") LIKE '%ustaba%' OR "${ustabasiCol}" = true)`);
+          } else {
+            whereClauses.push(`(LOWER(TRIM("${kisiCol}")) = LOWER(TRIM($${pIndex++})) OR LOWER("${kisiCol}") LIKE '%ustaba%')`);
+          }
           queryParams.push(ustabasiAd);
         }
 
@@ -11241,7 +11281,7 @@ app.get('/api/ceride', async (req, res) => {
           const uLower = (userName || 'ustabaşı').toLowerCase().trim();
           list = list.filter(item => {
             const isleyen = (item.IsleyenKisi || '').toLowerCase().trim();
-            return isleyen === uLower || isleyen.includes('ustabaşı') || isleyen.includes('ustabasi');
+            return isleyen === uLower || isleyen.includes('ustabaşı') || isleyen.includes('ustabasi') || Boolean(item.UstabasiGorsun);
           });
         }
         return res.json(list);
@@ -11268,12 +11308,12 @@ app.get('/api/ceride', async (req, res) => {
       filteredMem = memCeride.filter(c => c.Tarih === bugunStr);
     }
 
-    // Ustabaşı Sadece Kendi Girdiklerini Görebilir
+    // Ustabaşı Sadece Kendi Girdiklerini ve "Ustabaşı Görsün" Seçilenleri Görebilir
     if (isUstabasi) {
       const uLower = (userName || 'ustabaşı').toLowerCase().trim();
       filteredMem = filteredMem.filter(c => {
         const isleyen = (c.IsleyenKisi || '').toLowerCase().trim();
-        return isleyen === uLower || isleyen.includes('ustabaşı') || isleyen.includes('ustabasi');
+        return isleyen === uLower || isleyen.includes('ustabaşı') || isleyen.includes('ustabasi') || Boolean(c.UstabasiGorsun);
       });
     }
 
@@ -11285,7 +11325,7 @@ app.get('/api/ceride', async (req, res) => {
 
 app.post('/api/ceride', async (req, res) => {
   try {
-    const { Olay, Tarih, Saat, ProjeId, ProjeAdi, IsleyenKisi, Kategori, Detay, Fotograflar, OtomatikMi } = req.body;
+    const { Olay, Tarih, Saat, ProjeId, ProjeAdi, IsleyenKisi, Kategori, Detay, Fotograflar, OtomatikMi, UstabasiGorsun } = req.body;
     if (!Olay || !String(Olay).trim()) {
       return res.status(400).json({ error: 'Olay tanımı zorunludur.' });
     }
@@ -11308,7 +11348,8 @@ app.post('/api/ceride', async (req, res) => {
       Kategori: Kategori || 'Genel',
       Detay: Detay ? String(Detay).trim() : '',
       Fotograflar: Array.isArray(Fotograflar) ? Fotograflar : [],
-      OtomatikMi: OtomatikMi !== undefined ? Boolean(OtomatikMi) : false
+      OtomatikMi: OtomatikMi !== undefined ? Boolean(OtomatikMi) : false,
+      UstabasiGorsun: UstabasiGorsun !== undefined ? Boolean(UstabasiGorsun) : isUstabasi
     });
 
     return res.status(201).json(newRecord);
@@ -11320,7 +11361,7 @@ app.post('/api/ceride', async (req, res) => {
 app.put('/api/ceride/:id', async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const { Olay, Tarih, Saat, ProjeId, ProjeAdi, IsleyenKisi, Kategori, Detay, Fotograflar } = req.body;
+    const { Olay, Tarih, Saat, ProjeId, ProjeAdi, IsleyenKisi, Kategori, Detay, Fotograflar, UstabasiGorsun } = req.body;
     
     const userRole = String(req.headers['x-user-role'] || req.query.role || '').toLowerCase();
     const userName = parseSafeUserName(req.headers['x-user-name'] || req.query.user || (userRole === 'ustabasi' ? 'Ustabaşı' : 'Yönetici'));
@@ -11370,7 +11411,8 @@ app.put('/api/ceride/:id', async (req, res) => {
       Kategori: Kategori !== undefined ? Kategori : (existing?.Kategori || 'Genel'),
       Detay: Detay !== undefined ? String(Detay).trim() : (existing?.Detay || ''),
       Fotograflar: updatedFotolar,
-      FotoSayisi: updatedFotolar.length
+      FotoSayisi: updatedFotolar.length,
+      UstabasiGorsun: UstabasiGorsun !== undefined ? Boolean(UstabasiGorsun) : Boolean(existing?.UstabasiGorsun)
     };
 
     if (index !== -1) {
@@ -11416,6 +11458,9 @@ app.put('/api/ceride/:id', async (req, res) => {
 
         const fotoSayCol = mapCol(['FotoSayisi', 'fotosayisi', 'foto_sayisi']);
         if (fotoSayCol) rowData[fotoSayCol] = updated.FotoSayisi || 0;
+
+        const ustabasiCol = mapCol(['UstabasiGorsun', 'ustabasigorsun', 'ustabasi_gorsun']);
+        if (ustabasiCol) rowData[ustabasiCol] = updated.UstabasiGorsun;
 
         const setClauses: string[] = [];
         const values: any[] = [];

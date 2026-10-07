@@ -199,7 +199,7 @@ export const CerideView: React.FC<CerideViewProps> = ({
           const uLower = (currentUserName || 'ustabaşı').toLowerCase().trim();
           list = list.filter(item => {
             const isleyen = (item.IsleyenKisi || '').toLowerCase().trim();
-            return isleyen === uLower || isleyen.includes('ustabaşı') || isleyen.includes('ustabasi');
+            return isleyen === uLower || isleyen.includes('ustabaşı') || isleyen.includes('ustabasi') || Boolean(item.UstabasiGorsun);
           });
         }
         setToplamCount(list.length);

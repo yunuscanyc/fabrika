@@ -304,6 +304,7 @@ export interface Hatirlatici {
   FotoSayisi?: number;
   Belgeler?: any[];
   UstabasiGorsun?: boolean;
+  OlusturanKisi?: string;
 }
 
 export interface AjandaBildirimi {

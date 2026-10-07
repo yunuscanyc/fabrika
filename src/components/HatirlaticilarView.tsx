@@ -576,7 +576,12 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
   };
 
   const filtrelenenler = hatirlaticilar.filter((h) => {
-    if (userRole === 'ustabasi' && !h.UstabasiGorsun) return false;
+    if (userRole === 'ustabasi') {
+      const uLower = (currentUserName || 'ustabaşı').toLowerCase().trim();
+      const olusturan = ((h.OlusturanKisi || (h as any).YapanKisi || (h as any).EkleyenKisi || '') as string).toLowerCase().trim();
+      const isKendi = olusturan === uLower || olusturan.includes('ustabaşı') || olusturan.includes('ustabasi');
+      if (!h.UstabasiGorsun && !isKendi) return false;
+    }
     if (filtre === 'bugun' && (h.Tarih !== bugunStr || h.TamamlandiMi)) return false;
     if (filtre === 'tamamlanmayan' && h.TamamlandiMi) return false;
     if (filtre === 'tamamlanan' && !h.TamamlandiMi) return false;
@@ -1323,7 +1328,8 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                     TamamlandiMi: false,
                     OnemDerecesi: form.onem.value,
                     Belgeler: yeniBelgeler,
-                    UstabasiGorsun: Boolean(form.ustabasiGorsun?.checked)
+                    UstabasiGorsun: userRole === 'ustabasi' ? true : Boolean(form.ustabasiGorsun?.checked),
+                    OlusturanKisi: currentUserName || (userRole === 'ustabasi' ? 'Ustabaşı' : '1. Yönetici')
                   });
                   setModalAcik(false);
                   setYeniBelgeler([]);

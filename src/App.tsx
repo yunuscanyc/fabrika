@@ -105,7 +105,12 @@ export default function App() {
   const lastSyncTsRef = useRef<number>(0);
 
   const triggerDataSync = () => {
-    fetch('/api/hatirlaticilar')
+    fetch('/api/hatirlaticilar', {
+      headers: {
+        'x-user-role': encodeURIComponent(userRole),
+        'x-user-name': toSafeHeader(currentUserName)
+      }
+    })
       .then(r => r.json())
       .then(data => {
         if (Array.isArray(data)) {
@@ -514,7 +519,6 @@ export default function App() {
 
   // Ajanda Bildirimlerini Getir (Canlı Senkronizasyon - Bildirim Polling)
   const yukleAjandaBildirimleri = useCallback(async () => {
-    if (userRole !== 'admin') return;
     try {
       const uName = sessionStorage.getItem('rende_user_name') || currentUserName || '1. Yönetici';
       const resBildirim = await fetch(`/api/ajanda/bildirimler?user=${encodeURIComponent(uName)}`);
@@ -525,17 +529,17 @@ export default function App() {
         }
       }
     } catch (e) {}
-  }, [userRole, currentUserName]);
+  }, [currentUserName]);
 
   // Periyodik Ajanda Bildirim Polling (4 saniyede bir)
   useEffect(() => {
-    if (!isAuthenticated || isLocked || userRole !== 'admin') return;
+    if (!isAuthenticated || isLocked) return;
     yukleAjandaBildirimleri();
     const notifTimer = setInterval(() => {
       yukleAjandaBildirimleri();
     }, 4000);
     return () => clearInterval(notifTimer);
-  }, [isAuthenticated, isLocked, userRole, yukleAjandaBildirimleri]);
+  }, [isAuthenticated, isLocked, yukleAjandaBildirimleri]);
 
   const handleMarkAjandaRead = async (notificationId?: number, hatirlaticiId?: number) => {
     const uName = currentUserName || sessionStorage.getItem('rende_user_name') || '1. Yönetici';
@@ -683,7 +687,7 @@ export default function App() {
 
     const yukleAktifSekmeVerisi = async () => {
       try {
-        if (userRole === 'ustabasi' || activeTab === 'ceride' || activeTab === 'siparisler') {
+        if ((userRole === 'ustabasi' && activeTab !== 'hatirlaticilar') || activeTab === 'ceride' || activeTab === 'siparisler') {
           setSayfaYukleniyor(false);
           return;
         }
@@ -720,7 +724,12 @@ export default function App() {
           finishPageLoadingWithCount(list.length);
         } else if (activeTab === 'hatirlaticilar') {
           startPageLoading('Ajanda & Hatırlatıcılar Yükleniyor...');
-          const resHatirlaticilar = await fetch('/api/hatirlaticilar').then(r => r.json()).catch(() => []);
+          const resHatirlaticilar = await fetch('/api/hatirlaticilar', {
+            headers: {
+              'x-user-role': encodeURIComponent(userRole),
+              'x-user-name': toSafeHeader(currentUserName)
+            }
+          }).then(r => r.json()).catch(() => []);
           const list = Array.isArray(resHatirlaticilar) ? resHatirlaticilar : [];
           setHatirlaticilar(list);
           try {
@@ -1338,7 +1347,7 @@ export default function App() {
           />
         )}
 
-        {/* Ustabaşı Modunda Siparişler ve Şantiye Ceridesi Sekmeleri */}
+        {/* Ustabaşı Modunda Siparişler, Ceride ve Ajanda Sekmeleri */}
         {userRole === 'ustabasi' ? (
           activeTab === 'ceride' ? (
             <CerideView
@@ -1346,6 +1355,24 @@ export default function App() {
               currentUserName={currentUserName}
               userRole={userRole}
               onNavigateTab={setActiveTab}
+            />
+          ) : activeTab === 'hatirlaticilar' ? (
+            <HatirlaticilarView
+              hatirlaticilar={hatirlaticilar}
+              personeller={personeller}
+              onAddHatirlatici={handleAddHatirlatici}
+              onToggleTamamlandi={handleToggleTamamlandi}
+              onUpdateHatirlatici={handleUpdateHatirlatici}
+              onDeleteHatirlatici={handleDeleteHatirlatici}
+              unreadNotifHatirlaticiIds={unreadNotifHatirlaticiIds}
+              ajandaBildirimler={ajandaBildirimler}
+              currentUserName={currentUserName}
+              userRole={userRole}
+              onHatirlaticiInspected={(id) => handleMarkAjandaRead(undefined, id)}
+              onMarkNotificationRead={handleMarkAjandaRead}
+              onMarkAllNotificationsRead={handleMarkAllAjandaRead}
+              targetOpenHatirlaticiId={targetOpenHatirlaticiId}
+              onClearTargetOpenHatirlaticiId={() => setTargetOpenHatirlaticiId(null)}
             />
           ) : (
             <SiparislerView
