@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Users, Cog, FolderGit2, Truck, Bell, ShoppingCart, BookOpen } from 'lucide-react';
+import { LayoutDashboard, Users, Cog, FolderGit2, Truck, Bell, ShoppingCart, BookOpen, FileCheck } from 'lucide-react';
 import { TabType } from './Navbar';
 
 interface BadgeCounts {
@@ -11,6 +11,7 @@ interface BadgeCounts {
   personel?: number;
   makineler?: number;
   projeler?: number;
+  ruhsatlar?: number;
   ajandaBildirim?: number;
 }
 
@@ -37,19 +38,19 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.35rem)'
         }}
       >
-        <div className="grid grid-cols-2 gap-2 text-center max-w-sm mx-auto">
+        <div className="grid grid-cols-3 gap-1.5 text-center max-w-md mx-auto">
           <button
             onClick={() => setActiveTab('siparisler')}
-            className={`flex items-center justify-center gap-2 py-2.5 rounded-xl transition-all text-xs font-bold ${
+            className={`flex items-center justify-center gap-1.5 py-2 rounded-xl transition-all text-xs font-bold ${
               activeTab === 'siparisler'
                 ? 'text-white bg-amber-600 shadow-md ring-1 ring-amber-400/30'
                 : 'text-slate-400 hover:text-slate-200 bg-slate-800/80 border border-slate-700/50'
             }`}
           >
-            <ShoppingCart className="w-4 h-4" />
-            <span>Malzeme Sipariş</span>
+            <ShoppingCart className="w-3.5 h-3.5" />
+            <span>Sipariş</span>
             {Boolean(badgeCounts.siparis && badgeCounts.siparis > 0) && (
-              <span className="w-4 h-4 rounded-full bg-amber-400 text-slate-950 text-[9px] font-black flex items-center justify-center">
+              <span className="w-3.5 h-3.5 rounded-full bg-amber-400 text-slate-950 text-[8px] font-black flex items-center justify-center">
                 {badgeCounts.siparis}
               </span>
             )}
@@ -57,17 +58,34 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
           <button
             onClick={() => setActiveTab('ceride')}
-            className={`flex items-center justify-center gap-2 py-2.5 rounded-xl transition-all text-xs font-bold ${
+            className={`flex items-center justify-center gap-1.5 py-2 rounded-xl transition-all text-xs font-bold ${
               activeTab === 'ceride'
                 ? 'text-white bg-amber-600 shadow-md ring-1 ring-amber-400/30'
                 : 'text-slate-400 hover:text-slate-200 bg-slate-800/80 border border-slate-700/50'
             }`}
           >
-            <BookOpen className="w-4 h-4" />
-            <span>Şantiye Ceridesi</span>
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>Ceride</span>
             {Boolean(badgeCounts.ceride && badgeCounts.ceride > 0) && (
-              <span className="w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-black flex items-center justify-center animate-pulse">
+              <span className="w-3.5 h-3.5 rounded-full bg-red-500 text-white text-[8px] font-black flex items-center justify-center animate-pulse">
                 {badgeCounts.ceride}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('ruhsatlar')}
+            className={`flex items-center justify-center gap-1.5 py-2 rounded-xl transition-all text-xs font-bold ${
+              activeTab === 'ruhsatlar'
+                ? 'text-white bg-amber-600 shadow-md ring-1 ring-amber-400/30'
+                : 'text-slate-400 hover:text-slate-200 bg-slate-800/80 border border-slate-700/50'
+            }`}
+          >
+            <FileCheck className="w-3.5 h-3.5" />
+            <span>Ruhsat</span>
+            {Boolean(badgeCounts.ruhsatlar && badgeCounts.ruhsatlar > 0) && (
+              <span className="w-3.5 h-3.5 rounded-full bg-red-500 text-white text-[8px] font-black flex items-center justify-center animate-pulse">
+                {badgeCounts.ruhsatlar}
               </span>
             )}
           </button>

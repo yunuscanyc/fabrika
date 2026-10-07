@@ -97,6 +97,7 @@ let detectedTables: {
   malzemeKatalog?: string;
   sehirDisiGorevler?: string;
   ceride?: string;
+  ruhsatlar?: string;
 } = {};
 
 // Nesnelerden büyük/küçük harf duyarsız ve alternatif alan isimlerini okuma
@@ -774,6 +775,7 @@ function normalizeHatirlatici(row: any) {
     SorumluPersonelId: getProp(row, 'SorumluPersonelId', 'sorumlupersonelid') ? Number(getProp(row, 'SorumluPersonelId', 'sorumlupersonelid')) : null,
     Belgeler: Array.isArray(row.Belgeler) ? row.Belgeler : [],
     FotoSayisi: Array.isArray(row.Belgeler) ? row.Belgeler.length : Number(row.FotoSayisi || 0),
+    UstabasiGorsun: Boolean(getProp(row, 'UstabasiGorsun', 'ustabasigorsun', 'ustabasi_gorsun') ?? false),
     _directPhoto: directPhotoContent,
     _directPhotoName: directName,
     _directPhotoSize: directSize
@@ -807,7 +809,42 @@ function normalizeCeride(row: any) {
     Detay: String(getProp(row, 'Detay', 'detay', 'notlar', 'not') || ''),
     Fotograflar: fotolar,
     FotoSayisi: Number(getProp(row, 'FotoSayisi', 'fotosayisi', 'foto_sayisi')) || fotolar.length,
-    OtomatikMi: Boolean(getProp(row, 'OtomatikMi', 'otomatikmi', 'otomatik_mi') ?? false)
+    OtomatikMi: Boolean(getProp(row, 'OtomatikMi', 'otomatikmi', 'otomatik_mi') ?? false),
+    UstabasiGorsun: Boolean(getProp(row, 'UstabasiGorsun', 'ustabasigorsun', 'ustabasi_gorsun') ?? false)
+  };
+}
+
+function normalizeRuhsat(row: any) {
+  let belgeler: any[] = [];
+  const rawBelgeler = getProp(row, 'Belgeler', 'belgeler', 'dosyalar', 'foto');
+  try {
+    if (typeof rawBelgeler === 'string') {
+      belgeler = JSON.parse(rawBelgeler || '[]');
+    } else if (Array.isArray(rawBelgeler)) {
+      belgeler = rawBelgeler;
+    }
+  } catch {}
+
+  const rawId = getProp(row, 'Id', 'id', 'RuhsatId', 'ruhsatid');
+  const numId = Number(rawId);
+
+  return {
+    Id: isNaN(numId) ? Date.now() : numId,
+    BelgeAdi: String(getProp(row, 'BelgeAdi', 'belgeadi', 'ad', 'baslik') || 'Ruhsat / İzin Belgesi'),
+    Kategori: String(getProp(row, 'Kategori', 'kategori', 'tur') || 'Diğer'),
+    KurumMakam: String(getProp(row, 'KurumMakam', 'kurummakam', 'kurum') || ''),
+    RuhsatNo: String(getProp(row, 'RuhsatNo', 'ruhsatno', 'no') || ''),
+    BaslangicTarihi: String(formatDate(getProp(row, 'BaslangicTarihi', 'baslangictarihi')) || getBugunStr()),
+    BitisTarihi: String(formatDate(getProp(row, 'BitisTarihi', 'bitistarihi')) || getBugunStr()),
+    UyariSuresiGun: Number(getProp(row, 'UyariSuresiGun', 'uyarisuresigun', 'uyarisuresi')) || 30,
+    SorumluKisi: String(getProp(row, 'SorumluKisi', 'sorumlukisi', 'sorumlu') || ''),
+    Aciklama: String(getProp(row, 'Aciklama', 'aciklama', 'notlar') || ''),
+    Durum: String(getProp(row, 'Durum', 'durum') || 'Gecerli'),
+    UstabasiGorsun: Boolean(getProp(row, 'UstabasiGorsun', 'ustabasigorsun', 'ustabasi_gorsun') ?? false),
+    FotoSayisi: Number(getProp(row, 'FotoSayisi', 'fotosayisi')) || belgeler.length,
+    Belgeler: belgeler,
+    KayitTarihi: String(getProp(row, 'KayitTarihi', 'kayittarihi') || getBugunStr()),
+    SonYenilemeTarihi: getProp(row, 'SonYenilemeTarihi', 'sonyenelemetarihi') ? String(getProp(row, 'SonYenilemeTarihi', 'sonyenelemetarihi')) : undefined
   };
 }
 
@@ -2082,7 +2119,8 @@ async function checkDbConnection() {
       malzemeSiparisBelgeler: matchTable(['MalzemeSiparisBelgeleri', 'malzeme_siparis_belgeleri', 'SiparisBelgeleri', 'siparis_belgeleri']),
       malzemeKatalog: matchTable(['MalzemeKatalog', 'malzeme_katalog', 'MalzemeKatalogu', 'malzeme_katalogu', 'MalzemeKataloglari']),
       sehirDisiGorevler: matchTable(['SehirDisiGorevler', 'sehir_disi_gorevler', 'SehirDisiGorevlendirme', 'sehir_disi_gorevlendirme']),
-      ceride: matchTable(['Ceride', 'ceride', 'Cerideler', 'cerideler', 'SantiyeCeridesi', 'santiye_ceridesi', 'GunlukVukuat', 'gunluk_vukuat', 'FaaliyetDefteri', 'faaliyet_defteri'])
+      ceride: matchTable(['Ceride', 'ceride', 'Cerideler', 'cerideler', 'SantiyeCeridesi', 'santiye_ceridesi', 'GunlukVukuat', 'gunluk_vukuat', 'FaaliyetDefteri', 'faaliyet_defteri']),
+      ruhsatlar: matchTable(['Ruhsatlar', 'ruhsatlar', 'PeriyodikIzinler', 'periyodik_izinler', 'RuhsatVeIzinler', 'ruhsat_ve_izinler'])
     };
 
     if (!detectedTables.projeBelgeler) {
@@ -11477,6 +11515,311 @@ app.delete('/api/ceride/:id', async (req, res) => {
     return res.json({ success: true, message: 'Ceride kaydı silindi.' });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================================================
+// MEMORY STORAGE FOR RUHSATLAR & PERİYODİK İZİNLER
+// ============================================================================
+const RUHSATLAR_FILE = path.join(DATA_DIR, 'mem_ruhsatlar.json');
+
+let memRuhsatlar: any[] = [
+  {
+    Id: 1,
+    BelgeAdi: 'Ses & Gürültü Emisyon İzni',
+    Kategori: 'Çevre & Ses',
+    KurumMakam: 'İl Çevre, Şehircilik ve İklim Değişikliği Mülk.',
+    RuhsatNo: 'ÇVR-2025-8821',
+    BaslangicTarihi: '2025-01-15',
+    BitisTarihi: (() => { const d = new Date(); d.setDate(d.getDate() + 25); return d.toISOString().split('T')[0]; })(),
+    UyariSuresiGun: 30,
+    SorumluKisi: 'İSG & Çevre Birimi',
+    Aciklama: 'Fabrika imalat alanı ses ve gürültü seviyesi mutad izin belgesi.',
+    Durum: 'Yaklasiyor',
+    UstabasiGorsun: true,
+    Belgeler: [],
+    FotoSayisi: 0,
+    KayitTarihi: '2025-01-15'
+  },
+  {
+    Id: 2,
+    BelgeAdi: 'Cila & Boyahane Baca Duman Ruhsatı',
+    Kategori: 'Duman & Baca',
+    KurumMakam: 'Büyükşehir Belediyesi Çevre Koruma Dşk.',
+    RuhsatNo: 'BC-2025-4102',
+    BaslangicTarihi: '2025-02-01',
+    BitisTarihi: (() => { const d = new Date(); d.setDate(d.getDate() + 18); return d.toISOString().split('T')[0]; })(),
+    UyariSuresiGun: 30,
+    SorumluKisi: 'Fabrika Müdürü',
+    Aciklama: 'Mobilya cila ve lake spray filtre bacası duman ve filtre uygunluk belgesi.',
+    Durum: 'Yaklasiyor',
+    UstabasiGorsun: true,
+    Belgeler: [],
+    FotoSayisi: 0,
+    KayitTarihi: '2025-02-01'
+  },
+  {
+    Id: 3,
+    BelgeAdi: 'İşyeri Açma ve Çalışma Ruhsatı',
+    Kategori: 'İşyeri & Belediye',
+    KurumMakam: 'İlçe Belediyesi Ruhsat ve Denetim Md.',
+    RuhsatNo: 'RUH-2020-0012',
+    BaslangicTarihi: '2020-05-10',
+    BitisTarihi: '2028-05-10',
+    UyariSuresiGun: 30,
+    SorumluKisi: 'İdari İşler',
+    Aciklama: 'Süresiz genel işyeri çalıştırma ve imalathane ruhsatı.',
+    Durum: 'Gecerli',
+    UstabasiGorsun: false,
+    Belgeler: [],
+    FotoSayisi: 0,
+    KayitTarihi: '2020-05-10'
+  }
+];
+
+function loadMemRuhsatlar() {
+  try {
+    if (fs.existsSync(RUHSATLAR_FILE)) {
+      const data = fs.readFileSync(RUHSATLAR_FILE, 'utf8');
+      const list = JSON.parse(data);
+      if (Array.isArray(list) && list.length > 0) {
+        memRuhsatlar = list;
+      }
+    }
+  } catch (e: any) {
+    console.error('[LOAD RUHSATLAR FILE ERROR]', e.message);
+  }
+}
+
+function saveMemRuhsatlar() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(RUHSATLAR_FILE, JSON.stringify(memRuhsatlar, null, 2), 'utf8');
+  } catch (e: any) {
+    console.error('[SAVE RUHSATLAR FILE ERROR]', e.message);
+  }
+}
+loadMemRuhsatlar();
+
+// ============================================================================
+// RUHSATLAR & PERİYODİK İZİNLER API ENDPOINTS
+// ============================================================================
+
+app.get('/api/ruhsatlar', async (req, res) => {
+  try {
+    const userRole = String(req.headers['x-user-role'] || req.query.role || '').toLowerCase();
+    const isUstabasi = userRole === 'ustabasi';
+
+    if (isDbConnected && detectedTables.ruhsatlar) {
+      try {
+        const idCol = 'Id';
+        let whereSql = '';
+        if (isUstabasi) {
+          whereSql = 'WHERE "UstabasiGorsun" = true';
+        }
+        const dbRes = await pool.query(`SELECT * FROM ${detectedTables.ruhsatlar} ${whereSql} ORDER BY "${idCol}" DESC`);
+        const list = dbRes.rows.map(normalizeRuhsat);
+        return res.json(list);
+      } catch (err: any) {
+        console.error('[DB RUHSATLAR ERROR]', err.message);
+      }
+    }
+
+    let list = memRuhsatlar.map(normalizeRuhsat);
+    if (isUstabasi) {
+      list = list.filter(r => Boolean(r.UstabasiGorsun));
+    }
+    res.json(list);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/ruhsatlar', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const newItem = normalizeRuhsat({
+      ...body,
+      Id: Date.now()
+    });
+
+    if (isDbConnected && detectedTables.ruhsatlar) {
+      try {
+        const belgelerJson = JSON.stringify(newItem.Belgeler || []);
+        const sql = `
+          INSERT INTO ${detectedTables.ruhsatlar} 
+          ("BelgeAdi", "Kategori", "KurumMakam", "RuhsatNo", "BaslangicTarihi", "BitisTarihi", "UyariSuresiGun", "SorumluKisi", "Aciklama", "Durum", "UstabasiGorsun", "Belgeler", "FotoSayisi", "KayitTarihi")
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          RETURNING *
+        `;
+        const insRes = await pool.query(sql, [
+          newItem.BelgeAdi,
+          newItem.Kategori,
+          newItem.KurumMakam,
+          newItem.RuhsatNo,
+          newItem.BaslangicTarihi,
+          newItem.BitisTarihi,
+          newItem.UyariSuresiGun,
+          newItem.SorumluKisi,
+          newItem.Aciklama,
+          newItem.Durum,
+          newItem.UstabasiGorsun,
+          belgelerJson,
+          newItem.FotoSayisi,
+          newItem.KayitTarihi
+        ]);
+        const inserted = normalizeRuhsat(insRes.rows[0]);
+        memRuhsatlar.unshift(inserted);
+        saveMemRuhsatlar();
+        return res.json(inserted);
+      } catch (err: any) {
+        console.error('[DB POST RUHSAT ERROR]', err.message);
+      }
+    }
+
+    memRuhsatlar.unshift(newItem);
+    saveMemRuhsatlar();
+    res.json(newItem);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/ruhsatlar/:id', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const body = req.body || {};
+
+    if (isDbConnected && detectedTables.ruhsatlar) {
+      try {
+        const cols = await getTableColumns(detectedTables.ruhsatlar);
+        const idCol = cols.find(c => ['id', 'ruhsatid'].includes(c.toLowerCase())) || 'Id';
+
+        const belgelerJson = JSON.stringify(body.Belgeler || []);
+        const sql = `
+          UPDATE ${detectedTables.ruhsatlar}
+          SET "BelgeAdi" = $1, "Kategori" = $2, "KurumMakam" = $3, "RuhsatNo" = $4,
+              "BaslangicTarihi" = $5, "BitisTarihi" = $6, "UyariSuresiGun" = $7,
+              "SorumluKisi" = $8, "Aciklama" = $9, "UstabasiGorsun" = $10, "Belgeler" = $11, "FotoSayisi" = $12
+          WHERE "${idCol}" = $13
+          RETURNING *
+        `;
+        const dbRes = await pool.query(sql, [
+          body.BelgeAdi,
+          body.Kategori,
+          body.KurumMakam,
+          body.RuhsatNo,
+          body.BaslangicTarihi,
+          body.BitisTarihi,
+          Number(body.UyariSuresiGun) || 30,
+          body.SorumluKisi,
+          body.Aciklama,
+          Boolean(body.UstabasiGorsun),
+          belgelerJson,
+          (body.Belgeler || []).length,
+          id
+        ]);
+        if (dbRes.rows.length > 0) {
+          const updated = normalizeRuhsat(dbRes.rows[0]);
+          const idx = memRuhsatlar.findIndex(r => r.Id === id);
+          if (idx !== -1) memRuhsatlar[idx] = updated;
+          else memRuhsatlar.unshift(updated);
+          saveMemRuhsatlar();
+          return res.json(updated);
+        }
+      } catch (err: any) {
+        console.error('[DB PUT RUHSAT ERROR]', err.message);
+      }
+    }
+
+    const idx = memRuhsatlar.findIndex(r => r.Id === id);
+    if (idx !== -1) {
+      memRuhsatlar[idx] = normalizeRuhsat({
+        ...memRuhsatlar[idx],
+        ...body,
+        Id: id
+      });
+      saveMemRuhsatlar();
+      return res.json(memRuhsatlar[idx]);
+    }
+    res.status(404).json({ error: 'Ruhsat kaydı bulunamadı' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/ruhsatlar/:id/yenile', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { yeniBitisTarihi, aciklama } = req.body || {};
+    const bugünStr = getBugunStr();
+
+    if (!yeniBitisTarihi) {
+      return res.status(400).json({ error: 'Yeni bitiş tarihi gereklidir.' });
+    }
+
+    if (isDbConnected && detectedTables.ruhsatlar) {
+      try {
+        const cols = await getTableColumns(detectedTables.ruhsatlar);
+        const idCol = cols.find(c => ['id', 'ruhsatid'].includes(c.toLowerCase())) || 'Id';
+
+        const sql = `
+          UPDATE ${detectedTables.ruhsatlar}
+          SET "BitisTarihi" = $1, "Durum" = 'Gecerli', "SonYenilemeTarihi" = $2, "Aciklama" = COALESCE($3, "Aciklama")
+          WHERE "${idCol}" = $4
+          RETURNING *
+        `;
+        const dbRes = await pool.query(sql, [yeniBitisTarihi, bugünStr, aciklama ? `[Yenilendi: ${bugünStr}] ${aciklama}` : null, id]);
+        if (dbRes.rows.length > 0) {
+          const updated = normalizeRuhsat(dbRes.rows[0]);
+          const idx = memRuhsatlar.findIndex(r => r.Id === id);
+          if (idx !== -1) memRuhsatlar[idx] = updated;
+          saveMemRuhsatlar();
+          return res.json(updated);
+        }
+      } catch (err: any) {
+        console.error('[DB YENILE RUHSAT ERROR]', err.message);
+      }
+    }
+
+    const idx = memRuhsatlar.findIndex(r => r.Id === id);
+    if (idx !== -1) {
+      memRuhsatlar[idx].BitisTarihi = yeniBitisTarihi;
+      memRuhsatlar[idx].Durum = 'Gecerli';
+      memRuhsatlar[idx].SonYenilemeTarihi = bugünStr;
+      if (aciklama) {
+        memRuhsatlar[idx].Aciklama = `[Yenilendi: ${bugünStr}] ${aciklama} - ${memRuhsatlar[idx].Aciklama || ''}`;
+      }
+      saveMemRuhsatlar();
+      return res.json(memRuhsatlar[idx]);
+    }
+    res.status(404).json({ error: 'Ruhsat kaydı bulunamadı' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/ruhsatlar/:id', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    if (isDbConnected && detectedTables.ruhsatlar) {
+      try {
+        const cols = await getTableColumns(detectedTables.ruhsatlar);
+        const idCol = cols.find(c => ['id', 'ruhsatid'].includes(c.toLowerCase())) || 'Id';
+        await pool.query(`DELETE FROM ${detectedTables.ruhsatlar} WHERE "${idCol}" = $1`, [id]);
+      } catch (err: any) {
+        console.error('[DB DELETE RUHSAT ERROR]', err.message);
+      }
+    }
+
+    memRuhsatlar = memRuhsatlar.filter(r => r.Id !== id);
+    saveMemRuhsatlar();
+    res.json({ success: true, id });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 

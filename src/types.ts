@@ -303,6 +303,7 @@ export interface Hatirlatici {
   SorumluPersonelAd?: string;
   FotoSayisi?: number;
   Belgeler?: any[];
+  UstabasiGorsun?: boolean;
 }
 
 export interface AjandaBildirimi {
@@ -622,7 +623,38 @@ export interface CerideKaydi {
   Fotograflar?: CerideFotograf[];
   FotoSayisi?: number;
   OtomatikMi?: boolean;
+  UstabasiGorsun?: boolean;
 }
+
+export type RuhsatKategori = 
+  | 'Çevre & Ses'
+  | 'Duman & Baca'
+  | 'İşyeri & Belediye'
+  | 'Yangın & İtfaiye'
+  | 'İSG & Periyodik Kontrol'
+  | 'Makine & Ekipman Muayenesi'
+  | 'Diğer';
+
+export interface RuhsatKaydi {
+  Id: number;
+  BelgeAdi: string;
+  Kategori: RuhsatKategori;
+  KurumMakam?: string;
+  RuhsatNo?: string;
+  BaslangicTarihi: string;
+  BitisTarihi: string;
+  UyariSuresiGun: number; // Varsayılan 30 (1 ay kala uyarır)
+  SorumluKisi?: string;
+  Aciklama?: string;
+  Durum: 'Gecerli' | 'Yaklasiyor' | 'SuresiDoldu' | 'Yenilendi';
+  UstabasiGorsun?: boolean;
+  FotoSayisi?: number;
+  Belgeler?: any[];
+  KayitTarihi?: string;
+  SonYenilemeTarihi?: string;
+  KalanGun?: number;
+}
+
 
 
 

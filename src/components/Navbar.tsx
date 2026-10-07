@@ -3,7 +3,7 @@ import { Factory, Lock, Shield, LogOut, BellRing, Database } from 'lucide-react'
 import { DbStatusData } from './DatabaseStatusModal';
 import { PWAInstallPrompt } from './PWAInstallPrompt';
 
-export type TabType = 'dashboard' | 'personel' | 'ceride' | 'makineler' | 'projeler' | 'araclar' | 'hatirlaticilar' | 'siparisler';
+export type TabType = 'dashboard' | 'personel' | 'ceride' | 'makineler' | 'projeler' | 'araclar' | 'hatirlaticilar' | 'siparisler' | 'ruhsatlar';
 
 export interface UnreadBadgeCounts {
   siparisler: number;
@@ -13,6 +13,7 @@ export interface UnreadBadgeCounts {
   araclar: number;
   makineler: number;
   hatirlaticilar: number;
+  ruhsatlar?: number;
 }
 
 interface NavbarProps {
@@ -124,6 +125,22 @@ export const Navbar: React.FC<NavbarProps> = ({
                 {counts.ceride > 0 && (
                   <span className="px-1.5 py-0.2 rounded-full bg-red-500 text-white text-[10px] font-black animate-pulse">
                     {counts.ceride}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('ruhsatlar')}
+                className={`relative px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 ${
+                  activeTab === 'ruhsatlar'
+                    ? 'bg-amber-600 text-white shadow-sm'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
+                }`}
+                title="Ruhsatlar & Periyodik İzinler"
+              >
+                <span>🛡️ Ruhsatlar</span>
+                {Boolean(counts.ruhsatlar && counts.ruhsatlar > 0) && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-red-500 text-white text-[10px] font-black animate-pulse">
+                    {counts.ruhsatlar}
                   </span>
                 )}
               </button>
@@ -253,6 +270,23 @@ export const Navbar: React.FC<NavbarProps> = ({
                 {counts.hatirlaticilar > 0 && (
                   <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-black animate-pulse shadow-md ring-2 ring-slate-900">
                     {counts.hatirlaticilar}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('ruhsatlar')}
+                className={`relative px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+                  activeTab === 'ruhsatlar'
+                    ? 'bg-amber-600 text-white shadow-sm'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
+                }`}
+                title="Ruhsatlar & Periyodik İzinler"
+              >
+                <span>🛡️ Ruhsatlar</span>
+                {Boolean(counts.ruhsatlar && counts.ruhsatlar > 0) && (
+                  <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-black animate-pulse shadow-md ring-2 ring-slate-900">
+                    {counts.ruhsatlar}
                   </span>
                 )}
               </button>

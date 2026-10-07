@@ -10,6 +10,7 @@ import { PersonelHubView } from './components/PersonelHubView';
 import { MakineView } from './components/MakineView';
 import { SiparislerView } from './components/SiparislerView';
 import { CerideView } from './components/CerideView';
+import { RuhsatlarView } from './components/RuhsatlarView';
 import { UstabasiSiparisBildirim } from './components/UstabasiSiparisBildirim';
 import { AjandaBildirimBari } from './components/AjandaBildirimBari';
 import { ServerSetupModal } from './components/ServerSetupModal';
@@ -23,7 +24,7 @@ import { PushPromptBanner } from './components/PushPromptBanner';
 import { PageLoadingIndicator } from './components/PageLoadingIndicator';
 import { subscribeToPushNotifications } from './utils/pushManager';
 import { toSafeHeader } from './utils/dateUtils';
-import { Proje, Arac, BakimKaydi, Hatirlatici, OzetIstatistikler, Personel, IzinKaydi, Makine, Departman, Gorev, AjandaBildirimi } from './types';
+import { Proje, Arac, BakimKaydi, Hatirlatici, OzetIstatistikler, Personel, IzinKaydi, Makine, Departman, Gorev, AjandaBildirimi, RuhsatKaydi } from './types';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
@@ -32,6 +33,7 @@ export default function App() {
   const [currentAdminId, setCurrentAdminId] = useState<string>(() => sessionStorage.getItem('rende_admin_id') || 'admin1');
   const [unreadOrdersCount, setUnreadOrdersCount] = useState<number>(0);
   const [ajandaBildirimler, setAjandaBildirimler] = useState<AjandaBildirimi[]>([]);
+  const [ruhsatlar, setRuhsatlar] = useState<RuhsatKaydi[]>([]);
   
   // Bildirimin hangi modüle ait olduğunu tespit etme
   const getNotificationCategory = useCallback((b: AjandaBildirimi): TabType => {
@@ -74,6 +76,14 @@ export default function App() {
     araclar: unreadAjandaNotifs.filter(b => getNotificationCategory(b) === 'araclar').length,
     makineler: unreadAjandaNotifs.filter(b => getNotificationCategory(b) === 'makineler').length,
     hatirlaticilar: unreadAjandaNotifs.filter(b => getNotificationCategory(b) === 'hatirlaticilar').length,
+    ruhsatlar: ruhsatlar.filter(r => {
+      const bugun = new Date();
+      bugun.setHours(0, 0, 0, 0);
+      const bitis = new Date(r.BitisTarihi);
+      bitis.setHours(0, 0, 0, 0);
+      const diffDays = Math.ceil((bitis.getTime() - bugun.getTime()) / (1000 * 60 * 60 * 24));
+      return diffDays <= (r.UyariSuresiGun || 30);
+    }).length,
   };
 
   const [targetOpenHatirlaticiId, setTargetOpenHatirlaticiId] = useState<number | null>(null);
@@ -737,6 +747,14 @@ export default function App() {
           const list = Array.isArray(resMakineler) ? resMakineler : [];
           setMakineler(list);
           finishPageLoadingWithCount(list.length);
+        } else if (activeTab === 'ruhsatlar') {
+          startPageLoading('Ruhsatlar & Periyodik İzinler Yükleniyor...');
+          const resRuhsatlar = await fetch('/api/ruhsatlar', {
+            headers: { 'x-user-role': encodeURIComponent(userRole) }
+          }).then(r => r.json()).catch(() => []);
+          const list = Array.isArray(resRuhsatlar) ? resRuhsatlar : [];
+          setRuhsatlar(list);
+          finishPageLoadingWithCount(list.length);
         } else {
           setSayfaYukleniyor(false);
         }
@@ -1153,6 +1171,96 @@ export default function App() {
     }
   };
 
+  // Ruhsat İşlemleri (Ekle, Güncelle, Yenile, Sil)
+  const handleAddRuhsat = async (ruhsatData: Partial<RuhsatKaydi>) => {
+    try {
+      const res = await fetch('/api/ruhsatlar', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': encodeURIComponent(userRole)
+        },
+        body: JSON.stringify(ruhsatData)
+      });
+      if (res.ok) {
+        const newRuhsat = await res.json();
+        setRuhsatlar(prev => [newRuhsat, ...prev]);
+        triggerDataSync();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Ruhsat eklenemedi.');
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Ruhsat ekleme hatası.');
+    }
+  };
+
+  const handleUpdateRuhsat = async (id: number, fields: Partial<RuhsatKaydi>) => {
+    try {
+      const res = await fetch(`/api/ruhsatlar/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': encodeURIComponent(userRole)
+        },
+        body: JSON.stringify(fields)
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setRuhsatlar(prev => prev.map(r => r.Id === id ? updated : r));
+        triggerDataSync();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Ruhsat güncellenemedi.');
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Ruhsat güncelleme hatası.');
+    }
+  };
+
+  const handleYenileRuhsat = async (id: number, yeniBitisTarihi: string, aciklama?: string) => {
+    try {
+      const res = await fetch(`/api/ruhsatlar/${id}/yenile`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': encodeURIComponent(userRole)
+        },
+        body: JSON.stringify({ yeniBitisTarihi, aciklama })
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setRuhsatlar(prev => prev.map(r => r.Id === id ? updated : r));
+        triggerDataSync();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Ruhsat yenilenemedi.');
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Ruhsat yenileme hatası.');
+    }
+  };
+
+  const handleDeleteRuhsat = async (id: number) => {
+    try {
+      const res = await fetch(`/api/ruhsatlar/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'x-user-role': encodeURIComponent(userRole)
+        }
+      });
+      if (res.ok) {
+        setRuhsatlar(prev => prev.filter(r => r.Id !== id));
+        triggerDataSync();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Ruhsat silinemedi.');
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Ruhsat silme hatası.');
+    }
+  };
+
   // Başlangıç Oturum Kontrolü Yükleniyor Ekranı
   if (authChecking) {
     return (
@@ -1334,11 +1442,24 @@ export default function App() {
                 unreadNotifHatirlaticiIds={unreadNotifHatirlaticiIds}
                 ajandaBildirimler={ajandaBildirimler}
                 currentUserName={currentUserName}
+                userRole={userRole}
                 onHatirlaticiInspected={(id) => handleMarkAjandaRead(undefined, id)}
                 onMarkNotificationRead={handleMarkAjandaRead}
                 onMarkAllNotificationsRead={handleMarkAllAjandaRead}
                 targetOpenHatirlaticiId={targetOpenHatirlaticiId}
                 onClearTargetOpenHatirlaticiId={() => setTargetOpenHatirlaticiId(null)}
+              />
+            )}
+
+            {activeTab === 'ruhsatlar' && (
+              <RuhsatlarView
+                ruhsatlar={ruhsatlar}
+                onAddRuhsat={handleAddRuhsat}
+                onUpdateRuhsat={handleUpdateRuhsat}
+                onDeleteRuhsat={handleDeleteRuhsat}
+                onYenileRuhsat={handleYenileRuhsat}
+                userRole={userRole}
+                currentUserName={currentUserName}
               />
             )}
           </>
@@ -1399,6 +1520,7 @@ export default function App() {
           bakim: ozet?.bakimBekleyenArac,
           hatirlatici: unreadBadgeCounts.hatirlaticilar,
           ajandaBildirim: unreadBadgeCounts.hatirlaticilar,
+          ruhsatlar: unreadBadgeCounts.ruhsatlar,
         }}
       />
 

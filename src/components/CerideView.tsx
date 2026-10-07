@@ -146,6 +146,7 @@ export const CerideView: React.FC<CerideViewProps> = ({
   const [formDetay, setFormDetay] = useState('');
   const [formIsleyenKisi, setFormIsleyenKisi] = useState(currentUserName);
   const [formFotograflar, setFormFotograflar] = useState<CerideFotograf[]>([]);
+  const [formUstabasiGorsun, setFormUstabasiGorsun] = useState(false);
   const [showCerideCameraModal, setShowCerideCameraModal] = useState(false);
 
   const handleCerideCameraCapture = (base64Image: string, fileName: string) => {
@@ -258,6 +259,7 @@ export const CerideView: React.FC<CerideViewProps> = ({
     setFormDetay('');
     setFormIsleyenKisi(currentUserName || 'Yönetici');
     setFormFotograflar([]);
+    setFormUstabasiGorsun(userRole === 'ustabasi');
     setModalOpen(true);
   };
 
@@ -272,6 +274,7 @@ export const CerideView: React.FC<CerideViewProps> = ({
     setFormDetay(item.Detay || '');
     setFormIsleyenKisi(item.IsleyenKisi || currentUserName);
     setFormFotograflar(Array.isArray(item.Fotograflar) ? [...item.Fotograflar] : []);
+    setFormUstabasiGorsun(Boolean(item.UstabasiGorsun));
     setModalOpen(true);
   };
 
@@ -373,7 +376,8 @@ export const CerideView: React.FC<CerideViewProps> = ({
         Detay: formDetay.trim(),
         Fotograflar: formFotograflar,
         FotoSayisi: formFotograflar.length,
-        OtomatikMi: editingItem ? editingItem.OtomatikMi : false
+        OtomatikMi: editingItem ? editingItem.OtomatikMi : false,
+        UstabasiGorsun: formUstabasiGorsun
       };
 
       let res;
@@ -506,7 +510,7 @@ export const CerideView: React.FC<CerideViewProps> = ({
         const uLower = (currentUserName || 'ustabaşı').toLowerCase().trim();
         const isleyen = (item.IsleyenKisi || '').toLowerCase().trim();
         const isOwn = isleyen === uLower || isleyen.includes('ustabaşı') || isleyen.includes('ustabasi');
-        if (!isOwn) return false;
+        if (!isOwn && !item.UstabasiGorsun) return false;
       }
 
       // Metin arama
@@ -1213,6 +1217,28 @@ export const CerideView: React.FC<CerideViewProps> = ({
                         Ustabaşı hesabınızla işlem yapıyorsunuz. Yalnızca kendi kayıtlarınızı ekleyebilir, düzenleyebilir ve silebilirsiniz.
                       </span>
                     )}
+                  </div>
+
+                  {/* Ustabaşı Görsün Toggle */}
+                  <div className="flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">🔨</span>
+                      <div>
+                        <label htmlFor="cerideUstabasiGorsun" className="font-bold text-amber-900 dark:text-amber-200 text-xs sm:text-sm cursor-pointer">
+                          Ustabaşı da Görsün
+                        </label>
+                        <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                          Etkinleştirilirse bu ceride kaydı Ustabaşı PIN girişi yapıldığında görünür olur.
+                        </p>
+                      </div>
+                    </div>
+                    <input
+                      id="cerideUstabasiGorsun"
+                      type="checkbox"
+                      checked={formUstabasiGorsun}
+                      onChange={(e) => setFormUstabasiGorsun(e.target.checked)}
+                      className="w-5 h-5 accent-amber-600 rounded cursor-pointer"
+                    />
                   </div>
 
                   {/* Detay & Notlar - Geniş Alan */}

@@ -46,6 +46,7 @@ interface HatirlaticilarViewProps {
   unreadNotifHatirlaticiIds?: number[];
   ajandaBildirimler?: AjandaBildirimi[];
   currentUserName?: string;
+  userRole?: 'admin' | 'ustabasi';
   onHatirlaticiInspected?: (id: number) => void;
   onMarkNotificationRead?: (notificationId?: number, hatirlaticiId?: number) => void;
   targetOpenHatirlaticiId?: number | null;
@@ -143,6 +144,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
   unreadNotifHatirlaticiIds = [],
   ajandaBildirimler = [],
   currentUserName = '',
+  userRole = 'admin',
   onHatirlaticiInspected,
   onMarkNotificationRead,
   targetOpenHatirlaticiId,
@@ -249,6 +251,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
   const [editKategori, setEditKategori] = useState<any>('Gorev');
   const [editOnem, setEditOnem] = useState<any>('Normal');
   const [editBelgeler, setEditBelgeler] = useState<any[]>([]);
+  const [editUstabasiGorsun, setEditUstabasiGorsun] = useState(false);
   const [guncelleniyor, setGuncelleniyor] = useState(false);
   const [guncellemeHatasi, setGuncellemeHatasi] = useState<string | null>(null);
 
@@ -531,8 +534,10 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
       setEditKategori(secilenHatirlatici.Kategori);
       setEditOnem(secilenHatirlatici.OnemDerecesi);
       setEditBelgeler(secilenHatirlatici.Belgeler || []);
+      setEditUstabasiGorsun(Boolean(secilenHatirlatici.UstabasiGorsun));
     } else {
       setEditBelgeler([]);
+      setEditUstabasiGorsun(false);
     }
   }, [secilenHatirlatici]);
 
@@ -571,6 +576,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
   };
 
   const filtrelenenler = hatirlaticilar.filter((h) => {
+    if (userRole === 'ustabasi' && !h.UstabasiGorsun) return false;
     if (filtre === 'bugun' && (h.Tarih !== bugunStr || h.TamamlandiMi)) return false;
     if (filtre === 'tamamlanmayan' && h.TamamlandiMi) return false;
     if (filtre === 'tamamlanan' && !h.TamamlandiMi) return false;
@@ -1016,6 +1022,28 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                     </select>
                   </div>
 
+                  {/* USTABAŞI DA GÖRSÜN CHECKBOX */}
+                  <div className="flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">🔨</span>
+                      <div>
+                        <label htmlFor="editUstabasiGorsunCheck" className="font-bold text-amber-900 dark:text-amber-200 text-xs sm:text-sm cursor-pointer">
+                          Ustabaşı da Görsün
+                        </label>
+                        <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                          İşaretlenirse bu ajanda notu Ustabaşı PIN girişi yapıldığında görünür olur.
+                        </p>
+                      </div>
+                    </div>
+                    <input
+                      id="editUstabasiGorsunCheck"
+                      type="checkbox"
+                      checked={editUstabasiGorsun}
+                      onChange={(e) => setEditUstabasiGorsun(e.target.checked)}
+                      className="w-5 h-5 accent-amber-600 rounded cursor-pointer"
+                    />
+                  </div>
+
                   <div className="flex-1 flex flex-col pt-1">
                     <div className="flex items-center justify-between mb-1">
                       <label className="font-bold text-slate-700 block">Açıklama / Detaylı Not:</label>
@@ -1215,7 +1243,8 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                           Tarih: editTarih,
                           Kategori: editKategori,
                           OnemDerecesi: editOnem,
-                          Belgeler: editBelgeler
+                          Belgeler: editBelgeler,
+                          UstabasiGorsun: editUstabasiGorsun
                         });
                         setSecilenHatirlatici(null);
                       } catch (err: any) {
@@ -1293,7 +1322,8 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                     Kategori: form.kategori.value,
                     TamamlandiMi: false,
                     OnemDerecesi: form.onem.value,
-                    Belgeler: yeniBelgeler
+                    Belgeler: yeniBelgeler,
+                    UstabasiGorsun: Boolean(form.ustabasiGorsun?.checked)
                   });
                   setModalAcik(false);
                   setYeniBelgeler([]);
@@ -1347,6 +1377,27 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                       <option value="Onemli">Önemli</option>
                       <option value="Kritik">Kritik / Acil</option>
                     </select>
+                  </div>
+
+                  {/* USTABAŞI DA GÖRSÜN CHECKBOX */}
+                  <div className="flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">🔨</span>
+                      <div>
+                        <label htmlFor="addUstabasiGorsunCheck" className="font-bold text-amber-900 text-xs sm:text-sm cursor-pointer">
+                          Ustabaşı da Görsün
+                        </label>
+                        <p className="text-[11px] text-amber-700">
+                          İşaretlenirse bu ajanda notu Ustabaşı PIN girişi yapıldığında görünür olur.
+                        </p>
+                      </div>
+                    </div>
+                    <input
+                      id="addUstabasiGorsunCheck"
+                      type="checkbox"
+                      name="ustabasiGorsun"
+                      className="w-5 h-5 accent-amber-600 rounded cursor-pointer"
+                    />
                   </div>
 
                   <div className="flex-1 flex flex-col pt-1">
