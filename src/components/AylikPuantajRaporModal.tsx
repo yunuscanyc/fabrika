@@ -178,48 +178,54 @@ function getPersonelAyGunleri(
     let gunlukNetSaat = 0;
     let gunlukNetAciklama = '';
 
+    // Günün rejim standart vardiya saati (5 günlükte hafta içi 9s; 6 günlükte hafta içi 8s, Cumartesi 5s)
+    const stdVardiyaSaat = rejim === '5gun'
+      ? (isHaftaSonu ? 0 : 9.0)
+      : (gunIdx === 0 ? 0 : gunIdx === 6 ? 5.0 : 8.0);
+
     if (!istihdamdaMi) {
       gunlukNetSaat = 0;
       gunlukNetAciklama = 'İstihdam Dışı';
+    } else if (['YI', 'R', 'M'].includes(durumKodu)) {
+      // Ücretli İzin (Yıllık İzin, Rapor, Mazeret): Günün yasal vardiya saati
+      gunlukNetSaat = stdVardiyaSaat;
+      gunlukNetAciklama = `${stdVardiyaSaat.toFixed(1)}s Ücretli İzin (${durumEtiket})`;
     } else if (durumKodu === 'HT') {
       const htSaat = fazlaSaat;
       const rtSaat = tatilMesai;
       if (htSaat > 0 || rtSaat > 0) {
-        // Hafta tatilinde çalışma: 7.5 saat maktu tatil yevmiyesi + %50 zam farkı (htSaat x 0.5) + %100 zam (rtSaat x 1.0)
-        // Örn: 7.5 saat %50 mesai için günün toplamı: 7.5 + (7.5 x 0.5) = 7.5 + 3.75 = 11.25 SAAT!
-        // Örn: 7.5 saat %100 mesai için günün toplamı: 7.5 + (7.5 x 1.0) = 7.5 + 7.5 = 15.0 SAAT!
-        gunlukNetSaat = 7.5 + (htSaat * 0.5) + (rtSaat * 1.0);
-        const parcalar = ['7.5s Tatil'];
-        if (htSaat > 0) parcalar.push(`${(htSaat * 0.5).toFixed(1)}s (%50)`);
-        if (rtSaat > 0) parcalar.push(`${rtSaat.toFixed(1)}s (%100)`);
+        gunlukNetSaat = Math.max(0, (htSaat * 1.5) + (rtSaat * 2.0) - eksikSaat);
+        const parcalar = [];
+        if (htSaat > 0) parcalar.push(`${(htSaat * 1.5).toFixed(1)}s (%50 x1.5)`);
+        if (rtSaat > 0) parcalar.push(`${(rtSaat * 2.0).toFixed(1)}s (%100 x2)`);
+        if (eksikSaat > 0) parcalar.push(`-${eksikSaat.toFixed(1)}s Kesinti`);
         gunlukNetAciklama = parcalar.join(' + ');
       } else {
-        gunlukNetSaat = 7.5;
-        gunlukNetAciklama = '7.5s Maktu Hafta Tatili';
+        gunlukNetSaat = 0;
+        gunlukNetAciklama = 'Hafta Tatili';
       }
     } else if (durumKodu === 'RT') {
       const rtSaat = tatilMesai > 0 ? tatilMesai : fazlaSaat;
       if (rtSaat > 0) {
-        // Resmi tatilde çalışma: %100 mesai (saat x 2.0)
-        gunlukNetSaat = 7.5 + (rtSaat * 2.0);
-        gunlukNetAciklama = `7.5s Tatil + ${(rtSaat * 2.0).toFixed(1)}s (%100 Mesai x2)`;
+        gunlukNetSaat = Math.max(0, (rtSaat * 2.0) - eksikSaat);
+        gunlukNetAciklama = `${(rtSaat * 2.0).toFixed(1)}s (%100 Mesai x2)${eksikSaat > 0 ? ` - ${eksikSaat.toFixed(1)}s Kesinti` : ''}`;
       } else {
-        gunlukNetSaat = 7.5;
-        gunlukNetAciklama = '7.5s Maktu Resmi Tatil';
+        gunlukNetSaat = 0;
+        gunlukNetAciklama = 'Resmi Tatil';
       }
-    } else if (durumKodu === 'N') {
+    } else if (durumKodu === 'N' || normalSaat > 0) {
+      // Normal Çalışma + (%50 * 1.5) + (%100 * 2) - Eksik Mesai
+      const basSaat = normalSaat > 0 ? normalSaat : stdVardiyaSaat;
       const fz = fazlaSaat * 1.5;
       const tm = tatilMesai * 2.0;
-      gunlukNetSaat = Math.max(0, 7.5 - eksikSaat + fz + tm);
+      gunlukNetSaat = Math.max(0, basSaat + fz + tm - eksikSaat);
+
       const parcalar = [];
-      if (eksikSaat > 0) parcalar.push(`7.5s - ${eksikSaat.toFixed(1)}s Kesinti`);
-      else parcalar.push('7.5s Normal');
+      parcalar.push(`${basSaat.toFixed(1)}s Normal`);
       if (fazlaSaat > 0) parcalar.push(`+${fz.toFixed(1)}s (%50 x1.5)`);
       if (tatilMesai > 0) parcalar.push(`+${tm.toFixed(1)}s (%100 x2)`);
+      if (eksikSaat > 0) parcalar.push(`-${eksikSaat.toFixed(1)}s Kesinti`);
       gunlukNetAciklama = parcalar.join(' ');
-    } else if (['YI', 'R', 'M'].includes(durumKodu)) {
-      gunlukNetSaat = 7.5;
-      gunlukNetAciklama = '7.5s Ücretli İzin';
     } else if (durumKodu === 'UI' || durumKodu === 'D') {
       gunlukNetSaat = 0;
       gunlukNetAciklama = '0.0s (Ücretsiz İzin / Devamsız)';
