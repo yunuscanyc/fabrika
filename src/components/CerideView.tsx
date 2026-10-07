@@ -284,6 +284,37 @@ export const CerideView: React.FC<CerideViewProps> = ({
     setFormSaat(getTurkiyeSaatStr());
   };
 
+  // Ustabaşı Görsün Hızlı Toggle
+  const [togglingCerideId, setTogglingCerideId] = useState<number | null>(null);
+  const handleToggleCerideUstabasi = async (item: CerideKaydi) => {
+    if (userRole === 'ustabasi') return;
+    setTogglingCerideId(item.Id);
+    try {
+      const nextVal = !item.UstabasiGorsun;
+      const res = await fetch(`/api/ceride/${item.Id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': encodeURIComponent(userRole),
+          'x-user-name': toSafeHeader(currentUserName)
+        },
+        body: JSON.stringify({
+          ...item,
+          UstabasiGorsun: nextVal
+        })
+      });
+      if (!res.ok) {
+        throw new Error('Ustabaşı görünürlüğü güncellenemedi.');
+      }
+      const updated = await res.json().catch(() => null);
+      setCerideList(prev => prev.map(c => c.Id === item.Id ? { ...c, ...(updated || {}), UstabasiGorsun: nextVal } : c));
+    } catch (err: any) {
+      alert(err.message || 'Hata oluştu.');
+    } finally {
+      setTogglingCerideId(null);
+    }
+  };
+
   // Fotoğraf & Belge Seçimi (Resimler sıkıştırılır, diğer dosyalar doğrudan yüklenir)
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -408,7 +439,16 @@ export const CerideView: React.FC<CerideViewProps> = ({
         throw new Error(errText || 'Kayıt işlemi başarısız.');
       }
 
+      const savedData = await res.json().catch(() => null);
       setModalOpen(false);
+      setCerideList(prev => {
+        if (editingItem && savedData) {
+          return prev.map(c => c.Id === editingItem.Id ? { ...c, ...savedData, UstabasiGorsun: formUstabasiGorsun } : c);
+        } else if (!editingItem && savedData) {
+          return [savedData, ...prev];
+        }
+        return prev;
+      });
       fetchCeride(tarihFilter);
     } catch (err: any) {
       alert('Hata: ' + (err.message || 'İşlem gerçekleştirilemedi.'));
@@ -972,6 +1012,25 @@ export const CerideView: React.FC<CerideViewProps> = ({
                                 <span title="Veritabanına tam kayıt zamanı (Türkiye Saati)">
                                   İşlenme: {item.IslenmeTarihi || `${item.Tarih} ${item.Saat}`}
                                 </span>
+                                <span>•</span>
+                                <button
+                                  type="button"
+                                  disabled={userRole === 'ustabasi' || togglingCerideId === item.Id}
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    if (userRole === 'ustabasi') return;
+                                    await handleToggleCerideUstabasi(item);
+                                  }}
+                                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold transition-all ${
+                                    item.UstabasiGorsun
+                                      ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700 hover:bg-amber-200'
+                                      : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-200'
+                                  }`}
+                                  title={userRole === 'admin' ? 'Tıklayarak Ustabaşı görünürlüğünü açıp kapatabilirsiniz' : 'Ustabaşı görünürlüğü'}
+                                >
+                                  <span>🔨</span>
+                                  <span>{item.UstabasiGorsun ? 'Ustabaşı da Görür' : 'Sadece Yönetici'}</span>
+                                </button>
                               </div>
                             </div>
                           </div>

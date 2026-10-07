@@ -869,6 +869,32 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                           <span>{belgeSayisi} Dosya / Görsel</span>
                         </span>
                       )}
+
+                      {/* Ustabaşı Görsün Rozet ve Toggle */}
+                      <button
+                        type="button"
+                        disabled={userRole === 'ustabasi'}
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (userRole === 'ustabasi' || !onUpdateHatirlatici) return;
+                          try {
+                            await onUpdateHatirlatici(h.Id, {
+                              UstabasiGorsun: !h.UstabasiGorsun
+                            });
+                          } catch (err: any) {
+                            alert(err?.message || 'Güncelleme yapılamadı.');
+                          }
+                        }}
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition-all shadow-2xs ${
+                          h.UstabasiGorsun
+                            ? 'bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200'
+                            : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200'
+                        }`}
+                        title={userRole === 'admin' ? 'Tıklayarak Ustabaşı görünürlüğünü açıp kapatabilirsiniz' : 'Ustabaşı görünürlüğü'}
+                      >
+                        <span>🔨</span>
+                        <span>{h.UstabasiGorsun ? 'Ustabaşı Görür' : 'Sadece Yönetici'}</span>
+                      </button>
                     </div>
 
                     <h3

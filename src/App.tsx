@@ -1034,6 +1034,7 @@ export default function App() {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
+          'x-user-role': encodeURIComponent(userRole),
           'x-user-name': toSafeHeader(currentUserName)
         },
         body: JSON.stringify({
@@ -1126,6 +1127,7 @@ export default function App() {
         method: 'PUT',
         headers: { 
           'Content-Type': 'application/json',
+          'x-user-role': encodeURIComponent(userRole),
           'x-user-name': toSafeHeader(currentUserName)
         },
         body: JSON.stringify({
@@ -1144,12 +1146,17 @@ export default function App() {
         throw new Error(`Sunucu Hatası (${res.status}): ${txt || res.statusText}`);
       }
       const guncellenen = await res.json();
+      const finalItem = {
+        ...fields,
+        ...guncellenen,
+        UstabasiGorsun: fields.UstabasiGorsun !== undefined ? Boolean(fields.UstabasiGorsun) : Boolean(guncellenen?.UstabasiGorsun)
+      };
       setHatirlaticilar(prev =>
-        prev.map(h => (h.Id === id ? guncellenen : h))
+        prev.map(h => (h.Id === id ? { ...h, ...finalItem } : h))
       );
       fetch('/api/ozet').then(r => r.json()).then(setOzet);
       yukleAjandaBildirimleri();
-      return guncellenen;
+      return finalItem;
     } catch (err: any) {
       if (err.name === 'AbortError') {
         throw new Error('Güncelleme işlemi zaman aşımına uğradı. Lütfen internet bağlantınızı kontrol edip tekrar deneyin.');

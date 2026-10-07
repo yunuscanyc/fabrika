@@ -764,8 +764,14 @@ function normalizeHatirlatici(row: any) {
   const directName = String(getProp(row, 'dosyaadi', 'dosya_adi', 'filename') || 'foto.png');
   const directSize = String(getProp(row, 'dosyaboyutu', 'dosya_boyutu', 'filesize') || '0 KB');
 
+  const rawHId = Number(getProp(row, 'Id', 'id', 'GorevId', 'gorevid', 'HatirlaticiId', 'hatirlaticiid'));
+  const dbHUstabasi = getProp(row, 'UstabasiGorsun', 'ustabasigorsun', 'ustabasi_gorsun');
+  const hUstabasi = dbHUstabasi !== undefined && dbHUstabasi !== null 
+    ? Boolean(dbHUstabasi) 
+    : Boolean(ustabasiStore?.hatirlaticilar?.[rawHId] ?? false);
+
   return {
-    Id: Number(getProp(row, 'Id', 'id', 'GorevId', 'gorevid', 'HatirlaticiId', 'hatirlaticiid')),
+    Id: rawHId,
     Baslik: String(getProp(row, 'Baslik', 'baslik', 'ad') || ''),
     Aciklama: String(getProp(row, 'Aciklama', 'aciklama', 'DetayNot', 'detaynot') || ''),
     Tarih: formatDate(getProp(row, 'Tarih', 'tarih', 'SonTarih', 'sontarih')) || getBugunStr(),
@@ -775,7 +781,7 @@ function normalizeHatirlatici(row: any) {
     SorumluPersonelId: getProp(row, 'SorumluPersonelId', 'sorumlupersonelid') ? Number(getProp(row, 'SorumluPersonelId', 'sorumlupersonelid')) : null,
     Belgeler: Array.isArray(row.Belgeler) ? row.Belgeler : [],
     FotoSayisi: Array.isArray(row.Belgeler) ? row.Belgeler.length : Number(row.FotoSayisi || 0),
-    UstabasiGorsun: Boolean(getProp(row, 'UstabasiGorsun', 'ustabasigorsun', 'ustabasi_gorsun') ?? false),
+    UstabasiGorsun: hUstabasi,
     OlusturanKisi: String(getProp(row, 'OlusturanKisi', 'olusturankisi', 'olusturan_kisi', 'YapanKisi', 'yapankisi') || ''),
     _directPhoto: directPhotoContent,
     _directPhotoName: directName,
@@ -796,9 +802,15 @@ function normalizeCeride(row: any) {
 
   const rawId = getProp(row, 'Id', 'id', 'CerideId', 'cerideid');
   const numId = Number(rawId);
+  const cerideId = isNaN(numId) ? Date.now() : numId;
+
+  const dbCUstabasi = getProp(row, 'UstabasiGorsun', 'ustabasigorsun', 'ustabasi_gorsun');
+  const cUstabasi = dbCUstabasi !== undefined && dbCUstabasi !== null
+    ? Boolean(dbCUstabasi)
+    : Boolean(ustabasiStore?.ceride?.[cerideId] ?? false);
 
   return {
-    Id: isNaN(numId) ? Date.now() : numId,
+    Id: cerideId,
     Olay: String(getProp(row, 'Olay', 'olay', 'tanim', 'aciklama', 'baslik') || ''),
     Tarih: String(formatDate(getProp(row, 'Tarih', 'tarih')) || getProp(row, 'Tarih', 'tarih') || getTurkiyeTarihStr()),
     Saat: String(getProp(row, 'Saat', 'saat') || getTurkiyeSaatStr()),
@@ -811,7 +823,7 @@ function normalizeCeride(row: any) {
     Fotograflar: fotolar,
     FotoSayisi: Number(getProp(row, 'FotoSayisi', 'fotosayisi', 'foto_sayisi')) || fotolar.length,
     OtomatikMi: Boolean(getProp(row, 'OtomatikMi', 'otomatikmi', 'otomatik_mi') ?? false),
-    UstabasiGorsun: Boolean(getProp(row, 'UstabasiGorsun', 'ustabasigorsun', 'ustabasi_gorsun') ?? false)
+    UstabasiGorsun: cUstabasi
   };
 }
 
@@ -1238,8 +1250,23 @@ async function saveHatirlaticiToDb(id: number | null, data: any, isNew: boolean)
     setIfColExists(['Kategori'], data.Kategori || 'Gorev');
     setIfColExists(['OnemDerecesi', 'Oncelik'], data.OnemDerecesi || 'Normal');
     setIfColExists(['SorumluPersonelId'], data.SorumluPersonelId ? Number(data.SorumluPersonelId) : null);
-    setIfColExists(['UstabasiGorsun', 'ustabasigorsun', 'ustabasi_gorsun'], Boolean(data.UstabasiGorsun));
-    setIfColExists(['OlusturanKisi', 'olusturankisi', 'olusturan_kisi', 'YapanKisi', 'yapankisi'], data.OlusturanKisi || data.YapanKisi || '');
+    let ustCol = mapCol(['UstabasiGorsun', 'ustabasigorsun', 'ustabasi_gorsun']);
+    if (!ustCol && isDbConnected && detectedTables.hatirlaticilar) {
+      try {
+        await pool.query(`ALTER TABLE ${detectedTables.hatirlaticilar} ADD COLUMN IF NOT EXISTS "UstabasiGorsun" BOOLEAN DEFAULT false`);
+        ustCol = 'UstabasiGorsun';
+      } catch (e) {}
+    }
+    if (ustCol) rowData[ustCol] = Boolean(data.UstabasiGorsun);
+
+    let olCol = mapCol(['OlusturanKisi', 'olusturankisi', 'olusturan_kisi', 'YapanKisi', 'yapankisi']);
+    if (!olCol && isDbConnected && detectedTables.hatirlaticilar) {
+      try {
+        await pool.query(`ALTER TABLE ${detectedTables.hatirlaticilar} ADD COLUMN IF NOT EXISTS "OlusturanKisi" VARCHAR(150) DEFAULT ''`);
+        olCol = 'OlusturanKisi';
+      } catch (e) {}
+    }
+    if (olCol) rowData[olCol] = data.OlusturanKisi || data.YapanKisi || '';
 
     // NOT NULL audit/date columns for database schema constraints
     setIfColExists(['GirisTarihi', 'giristarihi', 'giris_tarihi', 'GirisTarih'], data.GirisTarihi || data.Tarih || getBugunStr());
@@ -1265,7 +1292,15 @@ async function saveHatirlaticiToDb(id: number | null, data: any, isNew: boolean)
       RETURNING *;
     `;
     const res = await pool.query(query, keys.map(k => rowData[k]));
-    return normalizeHatirlatici(res.rows[0]);
+    const insNorm = normalizeHatirlatici(res.rows[0]);
+    if (data.UstabasiGorsun !== undefined) {
+      insNorm.UstabasiGorsun = Boolean(data.UstabasiGorsun);
+      if (insNorm.Id) {
+        ustabasiStore.hatirlaticilar[insNorm.Id] = Boolean(data.UstabasiGorsun);
+        saveUstabasiStore();
+      }
+    }
+    return insNorm;
   } else {
     // Kısmi Güncelleme (Partial Update): Sadece gönderilen alanları güncelle, boş bırakılanları ezme!
     if (data.Baslik !== undefined && data.Baslik !== null) {
@@ -1293,17 +1328,39 @@ async function saveHatirlaticiToDb(id: number | null, data: any, isNew: boolean)
       if (durumCol) rowData[durumCol] = data.TamamlandiMi ? 'Tamamlandı' : 'Bekliyor';
     }
     if (data.UstabasiGorsun !== undefined) {
-      setIfColExists(['UstabasiGorsun', 'ustabasigorsun', 'ustabasi_gorsun'], Boolean(data.UstabasiGorsun));
+      let ustCol = mapCol(['UstabasiGorsun', 'ustabasigorsun', 'ustabasi_gorsun']);
+      if (!ustCol && isDbConnected && detectedTables.hatirlaticilar) {
+        try {
+          await pool.query(`ALTER TABLE ${detectedTables.hatirlaticilar} ADD COLUMN IF NOT EXISTS "UstabasiGorsun" BOOLEAN DEFAULT false`);
+          ustCol = 'UstabasiGorsun';
+        } catch (e) {}
+      }
+      if (ustCol) rowData[ustCol] = Boolean(data.UstabasiGorsun);
+      if (id) {
+        ustabasiStore.hatirlaticilar[id] = Boolean(data.UstabasiGorsun);
+        saveUstabasiStore();
+      }
     }
     if (data.OlusturanKisi !== undefined) {
-      setIfColExists(['OlusturanKisi', 'olusturankisi', 'olusturan_kisi', 'YapanKisi', 'yapankisi'], data.OlusturanKisi);
+      let olCol = mapCol(['OlusturanKisi', 'olusturankisi', 'olusturan_kisi', 'YapanKisi', 'yapankisi']);
+      if (!olCol && isDbConnected && detectedTables.hatirlaticilar) {
+        try {
+          await pool.query(`ALTER TABLE ${detectedTables.hatirlaticilar} ADD COLUMN IF NOT EXISTS "OlusturanKisi" VARCHAR(150) DEFAULT ''`);
+          olCol = 'OlusturanKisi';
+        } catch (e) {}
+      }
+      if (olCol) rowData[olCol] = data.OlusturanKisi;
     }
 
     const keys = Object.keys(rowData);
     if (keys.length === 0) {
       // Değişecek alan yoksa mevcut kaydı döndür
       const curRes = await pool.query(`SELECT * FROM ${detectedTables.hatirlaticilar} WHERE "${idCol}" = $1`, [id]);
-      return curRes.rows[0] ? normalizeHatirlatici(curRes.rows[0]) : null;
+      const curItem = curRes.rows[0] ? normalizeHatirlatici(curRes.rows[0]) : null;
+      if (curItem && data.UstabasiGorsun !== undefined) {
+        curItem.UstabasiGorsun = Boolean(data.UstabasiGorsun);
+      }
+      return curItem;
     }
     const setClause = keys.map((k, i) => `"${k}" = $${i + 1}`).join(', ');
     const query = `
@@ -1314,7 +1371,11 @@ async function saveHatirlaticiToDb(id: number | null, data: any, isNew: boolean)
     `;
     const res = await pool.query(query, [...keys.map(k => rowData[k]), id]);
     if (res.rows.length > 0) {
-      return normalizeHatirlatici(res.rows[0]);
+      const updatedItem = normalizeHatirlatici(res.rows[0]);
+      if (data.UstabasiGorsun !== undefined) {
+        updatedItem.UstabasiGorsun = Boolean(data.UstabasiGorsun);
+      }
+      return updatedItem;
     }
     return null;
   }
@@ -2993,8 +3054,26 @@ async function checkDbConnection() {
         if (!hasCol('IslenmeTarihi') && !hasCol('islenmetarihi')) {
           await pool.query(`ALTER TABLE ${detectedTables.ceride} ADD COLUMN IF NOT EXISTS "IslenmeTarihi" VARCHAR(50)`);
         }
+        if (!hasCol('UstabasiGorsun') && !hasCol('ustabasigorsun') && !hasCol('ustabasi_gorsun')) {
+          await pool.query(`ALTER TABLE ${detectedTables.ceride} ADD COLUMN IF NOT EXISTS "UstabasiGorsun" BOOLEAN DEFAULT false`);
+        }
       } catch (e: any) {
         console.log('[DB-MIGRATE] Ceride kolon kontrolü:', e.message);
+      }
+    }
+
+    if (detectedTables.hatirlaticilar) {
+      try {
+        const hCols = await getTableColumns(detectedTables.hatirlaticilar);
+        const hasHCol = (name: string) => hCols.some(c => c.toLowerCase() === name.toLowerCase());
+        if (!hasHCol('UstabasiGorsun') && !hasHCol('ustabasigorsun') && !hasHCol('ustabasi_gorsun')) {
+          await pool.query(`ALTER TABLE ${detectedTables.hatirlaticilar} ADD COLUMN IF NOT EXISTS "UstabasiGorsun" BOOLEAN DEFAULT false`);
+        }
+        if (!hasHCol('OlusturanKisi') && !hasHCol('olusturankisi') && !hasHCol('olusturan_kisi')) {
+          await pool.query(`ALTER TABLE ${detectedTables.hatirlaticilar} ADD COLUMN IF NOT EXISTS "OlusturanKisi" VARCHAR(150) DEFAULT ''`);
+        }
+      } catch (hErr: any) {
+        console.log('[DB-MIGRATE] Hatirlaticilar kolon kontrolü:', hErr.message);
       }
     }
 
@@ -3614,6 +3693,45 @@ let memMakineler: any[] = [];
 // Ceride (Şantiye & İşletme Günlüğü) Bellek & Disk
 // ==========================================
 const CERIDE_FILE = path.join(DATA_DIR, 'mem_ceride.json');
+const USTABASI_SETTINGS_FILE = path.join(DATA_DIR, 'ustabasi_visibility_settings.json');
+
+interface UstabasiVisibilityStore {
+  hatirlaticilar: Record<number, boolean>;
+  ceride: Record<number, boolean>;
+}
+
+let ustabasiStore: UstabasiVisibilityStore = {
+  hatirlaticilar: {},
+  ceride: {}
+};
+
+function loadUstabasiStore() {
+  try {
+    ensureDataDir();
+    if (fs.existsSync(USTABASI_SETTINGS_FILE)) {
+      const data = JSON.parse(fs.readFileSync(USTABASI_SETTINGS_FILE, 'utf-8'));
+      if (data && typeof data === 'object') {
+        ustabasiStore = {
+          hatirlaticilar: data.hatirlaticilar || {},
+          ceride: data.ceride || {}
+        };
+      }
+    }
+  } catch (e: any) {
+    console.error('[LOAD USTABASI SETTINGS ERROR]', e.message);
+  }
+}
+
+function saveUstabasiStore() {
+  try {
+    ensureDataDir();
+    fs.writeFileSync(USTABASI_SETTINGS_FILE, JSON.stringify(ustabasiStore, null, 2), 'utf-8');
+  } catch (e: any) {
+    console.error('[SAVE USTABASI SETTINGS ERROR]', e.message);
+  }
+}
+
+loadUstabasiStore();
 
 function getTurkiyeTarihStr(dateObj?: Date): string {
   try {
@@ -3809,8 +3927,14 @@ async function recordCerideEvent(eventData: {
       const otoCol = mapCol(['OtomatikMi', 'otomatikmi', 'otomatik_mi']);
       if (otoCol) rowData[otoCol] = newRecord.OtomatikMi;
 
-      const ustabasiCol = mapCol(['UstabasiGorsun', 'ustabasigorsun', 'ustabasi_gorsun']);
-      if (ustabasiCol) rowData[ustabasiCol] = newRecord.UstabasiGorsun;
+      let ustabasiCol = mapCol(['UstabasiGorsun', 'ustabasigorsun', 'ustabasi_gorsun']);
+      if (!ustabasiCol && isDbConnected && detectedTables.ceride) {
+        try {
+          await pool.query(`ALTER TABLE ${detectedTables.ceride} ADD COLUMN IF NOT EXISTS "UstabasiGorsun" BOOLEAN DEFAULT false`);
+          ustabasiCol = 'UstabasiGorsun';
+        } catch (e) {}
+      }
+      if (ustabasiCol) rowData[ustabasiCol] = Boolean(newRecord.UstabasiGorsun);
 
       const keys = Object.keys(rowData);
       if (keys.length > 0) {
@@ -3829,6 +3953,11 @@ async function recordCerideEvent(eventData: {
     } catch (e: any) {
       console.error('[DB SAVE CERIDE ERROR]', e.message);
     }
+  }
+
+  if (newRecord.Id) {
+    ustabasiStore.ceride[newRecord.Id] = Boolean(newRecord.UstabasiGorsun);
+    saveUstabasiStore();
   }
 
   // Kullanıcı Talebi: "Sadece manuel ceride girildiğinde bildirim göndersin"
@@ -7226,6 +7355,11 @@ app.put('/api/hatirlaticilar/:id', async (req, res) => {
             updated.Belgeler = req.body.Belgeler;
             updated.FotoSayisi = req.body.Belgeler.length;
           }
+          if (patchData.UstabasiGorsun !== undefined) {
+            updated.UstabasiGorsun = Boolean(patchData.UstabasiGorsun);
+            ustabasiStore.hatirlaticilar[id] = Boolean(patchData.UstabasiGorsun);
+            saveUstabasiStore();
+          }
           const idx = memHatirlaticilar.findIndex(h => h.Id === id);
           if (idx !== -1) {
             memHatirlaticilar[idx] = { ...memHatirlaticilar[idx], ...updated };
@@ -7260,6 +7394,11 @@ app.put('/api/hatirlaticilar/:id', async (req, res) => {
         Belgeler: newBelgeler,
         FotoSayisi: newBelgeler.length 
       } as any;
+      if (patchData.UstabasiGorsun !== undefined) {
+        memHatirlaticilar[index].UstabasiGorsun = Boolean(patchData.UstabasiGorsun);
+        ustabasiStore.hatirlaticilar[id] = Boolean(patchData.UstabasiGorsun);
+        saveUstabasiStore();
+      }
       saveMemHatirlaticilar();
 
       // Bildirim kaydet
@@ -11209,8 +11348,8 @@ app.get('/api/ceride', async (req, res) => {
   try {
     const aralik = String(req.query.aralik || 'bugun').toLowerCase();
     const spesifikTarih = req.query.tarih ? String(req.query.tarih).trim() : null;
-    const userRole = String(req.headers['x-user-role'] || req.query.role || '').toLowerCase();
-    const userName = String(req.headers['x-user-name'] || req.query.user || '').trim();
+    const userRole = decodeURIComponent(String(req.headers['x-user-role'] || req.query.role || '')).toLowerCase();
+    const userName = parseSafeUserName(req.headers['x-user-name'] || req.query.user || (userRole === 'ustabasi' ? 'Ustabaşı' : 'Yönetici'));
     const isUstabasi = userRole === 'ustabasi' || userName.toLowerCase().includes('ustabaşı') || userName.toLowerCase().includes('ustabasi');
 
     const bugunStr = getTurkiyeTarihStr();
@@ -11422,6 +11561,11 @@ app.put('/api/ceride/:id', async (req, res) => {
     }
     saveMemCeride();
 
+    if (id) {
+      ustabasiStore.ceride[id] = Boolean(updated.UstabasiGorsun);
+      saveUstabasiStore();
+    }
+
     if (isDbConnected && detectedTables.ceride) {
       try {
         const cols = await getTableColumns(detectedTables.ceride);
@@ -11459,8 +11603,16 @@ app.put('/api/ceride/:id', async (req, res) => {
         const fotoSayCol = mapCol(['FotoSayisi', 'fotosayisi', 'foto_sayisi']);
         if (fotoSayCol) rowData[fotoSayCol] = updated.FotoSayisi || 0;
 
-        const ustabasiCol = mapCol(['UstabasiGorsun', 'ustabasigorsun', 'ustabasi_gorsun']);
-        if (ustabasiCol) rowData[ustabasiCol] = updated.UstabasiGorsun;
+        let ustabasiCol = mapCol(['UstabasiGorsun', 'ustabasigorsun', 'ustabasi_gorsun']);
+        if (!ustabasiCol && isDbConnected && detectedTables.ceride) {
+          try {
+            await pool.query(`ALTER TABLE ${detectedTables.ceride} ADD COLUMN IF NOT EXISTS "UstabasiGorsun" BOOLEAN DEFAULT false`);
+            ustabasiCol = 'UstabasiGorsun';
+          } catch (e) {}
+        }
+        if (ustabasiCol && updated.UstabasiGorsun !== undefined) {
+          rowData[ustabasiCol] = Boolean(updated.UstabasiGorsun);
+        }
 
         const setClauses: string[] = [];
         const values: any[] = [];
