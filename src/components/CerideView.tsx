@@ -1012,25 +1012,28 @@ export const CerideView: React.FC<CerideViewProps> = ({
                                 <span title="Veritabanına tam kayıt zamanı (Türkiye Saati)">
                                   İşlenme: {item.IslenmeTarihi || `${item.Tarih} ${item.Saat}`}
                                 </span>
-                                <span>•</span>
-                                <button
-                                  type="button"
-                                  disabled={userRole === 'ustabasi' || togglingCerideId === item.Id}
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    if (userRole === 'ustabasi') return;
-                                    await handleToggleCerideUstabasi(item);
-                                  }}
-                                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold transition-all ${
-                                    item.UstabasiGorsun
-                                      ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700 hover:bg-amber-200'
-                                      : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-200'
-                                  }`}
-                                  title={userRole === 'admin' ? 'Tıklayarak Ustabaşı görünürlüğünü açıp kapatabilirsiniz' : 'Ustabaşı görünürlüğü'}
-                                >
-                                  <span>🔨</span>
-                                  <span>{item.UstabasiGorsun ? 'Ustabaşı da Görür' : 'Sadece Yönetici'}</span>
-                                </button>
+                                {userRole !== 'ustabasi' && (
+                                  <>
+                                    <span>•</span>
+                                    <button
+                                      type="button"
+                                      disabled={togglingCerideId === item.Id}
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        await handleToggleCerideUstabasi(item);
+                                      }}
+                                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold transition-all ${
+                                        item.UstabasiGorsun
+                                          ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700 hover:bg-amber-200'
+                                          : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-200'
+                                      }`}
+                                      title="Tıklayarak Ustabaşı görünürlüğünü açıp kapatabilirsiniz"
+                                    >
+                                      <span>🔨</span>
+                                      <span>{item.UstabasiGorsun ? 'Ustabaşı da Görür' : 'Sadece Yönetici'}</span>
+                                    </button>
+                                  </>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -1278,27 +1281,29 @@ export const CerideView: React.FC<CerideViewProps> = ({
                     )}
                   </div>
 
-                  {/* Ustabaşı Görsün Toggle */}
-                  <div className="flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">🔨</span>
-                      <div>
-                        <label htmlFor="cerideUstabasiGorsun" className="font-bold text-amber-900 dark:text-amber-200 text-xs sm:text-sm cursor-pointer">
-                          Ustabaşı da Görsün
-                        </label>
-                        <p className="text-[11px] text-amber-700 dark:text-amber-300">
-                          Etkinleştirilirse bu ceride kaydı Ustabaşı PIN girişi yapıldığında görünür olur.
-                        </p>
+                  {/* Ustabaşı Görsün Toggle (Yalnızca Yönetici Görür) */}
+                  {userRole !== 'ustabasi' && (
+                    <div className="flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">🔨</span>
+                        <div>
+                          <label htmlFor="cerideUstabasiGorsun" className="font-bold text-amber-900 dark:text-amber-200 text-xs sm:text-sm cursor-pointer">
+                            Ustabaşı da Görsün
+                          </label>
+                          <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                            Etkinleştirilirse bu ceride kaydı Ustabaşı PIN girişi yapıldığında görünür olur.
+                          </p>
+                        </div>
                       </div>
+                      <input
+                        id="cerideUstabasiGorsun"
+                        type="checkbox"
+                        checked={formUstabasiGorsun}
+                        onChange={(e) => setFormUstabasiGorsun(e.target.checked)}
+                        className="w-5 h-5 accent-amber-600 rounded cursor-pointer"
+                      />
                     </div>
-                    <input
-                      id="cerideUstabasiGorsun"
-                      type="checkbox"
-                      checked={formUstabasiGorsun}
-                      onChange={(e) => setFormUstabasiGorsun(e.target.checked)}
-                      className="w-5 h-5 accent-amber-600 rounded cursor-pointer"
-                    />
-                  </div>
+                  )}
 
                   {/* Detay & Notlar - Geniş Alan */}
                   <div className="flex-1 flex flex-col pt-1">

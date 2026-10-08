@@ -648,7 +648,6 @@ export interface RuhsatKaydi {
   SorumluKisi?: string;
   Aciklama?: string;
   Durum: 'Gecerli' | 'Yaklasiyor' | 'SuresiDoldu' | 'Yenilendi';
-  UstabasiGorsun?: boolean;
   FotoSayisi?: number;
   Belgeler?: any[];
   KayitTarihi?: string;

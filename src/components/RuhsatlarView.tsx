@@ -170,11 +170,6 @@ export const RuhsatlarView: React.FC<RuhsatlarViewProps> = ({
   // Filtrelenmiş Ruhsat Listesi
   const filtrelenmisRuhsatlar = useMemo(() => {
     return ruhsatlar.filter(r => {
-      // Ustabaşı Modu Filtresi: Ustabaşı sadece UstabasiGorsun === true olanları görür
-      if (userRole === 'ustabasi' && !r.UstabasiGorsun) {
-        return false;
-      }
-
       // Metin Arama
       const arama = aramaMetni.toLowerCase().trim();
       const matchText = !arama || 
@@ -446,13 +441,6 @@ export const RuhsatlarView: React.FC<RuhsatlarViewProps> = ({
                     <span className="text-[11px] font-black px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                       {ruhsat.Kategori}
                     </span>
-
-                    {/* Ustabaşı Görebilir Badge */}
-                    {ruhsat.UstabasiGorsun && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 flex items-center gap-1" title="Ustabaşı PIN girişi ile görülebilir">
-                        🔨 Ustabaşı
-                      </span>
-                    )}
                   </div>
 
                   {/* Belge Adı ve Kurum */}
@@ -675,7 +663,6 @@ export const RuhsatlarView: React.FC<RuhsatlarViewProps> = ({
                     UyariSuresiGun: Number(form.uyariSuresi.value) || 30,
                     SorumluKisi: form.sorumluKisi.value,
                     Aciklama: form.aciklama.value,
-                    UstabasiGorsun: form.ustabasiGorsun.checked,
                     Belgeler: yeniBelgeler
                   });
                   setEkleModalAcik(false);
@@ -781,27 +768,6 @@ export const RuhsatlarView: React.FC<RuhsatlarViewProps> = ({
                   rows={3}
                   placeholder="Yenileme harcı, ölçüm istasyonu, ilgili mevzuat veya özel notlar..."
                   className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs sm:text-sm"
-                />
-              </div>
-
-              {/* USTABAŞI DA GÖRSÜN CHECKBOX */}
-              <div className="flex items-center justify-between p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl">
-                <div className="flex items-center gap-2">
-                  <span className="text-base">🔨</span>
-                  <div>
-                    <label htmlFor="ekleUstabasiGorsun" className="font-bold text-amber-900 dark:text-amber-200 text-xs sm:text-sm cursor-pointer">
-                      Ustabaşı da Görsün
-                    </label>
-                    <p className="text-[11px] text-amber-700 dark:text-amber-300">
-                      İşaretlenirse bu ruhsat kaydı Ustabaşı PIN girişi yapıldığında da görüntülenebilir.
-                    </p>
-                  </div>
-                </div>
-                <input
-                  id="ekleUstabasiGorsun"
-                  type="checkbox"
-                  name="ustabasiGorsun"
-                  className="w-5 h-5 accent-amber-600 rounded cursor-pointer"
                 />
               </div>
 
@@ -964,7 +930,6 @@ export const RuhsatlarView: React.FC<RuhsatlarViewProps> = ({
                     UyariSuresiGun: Number(form.uyariSuresi.value) || 30,
                     SorumluKisi: form.sorumluKisi.value,
                     Aciklama: form.aciklama.value,
-                    UstabasiGorsun: form.ustabasiGorsun.checked,
                     Belgeler: duzenleModalKayit.Belgeler || []
                   });
                   setDuzenleModalKayit(null);
@@ -1066,28 +1031,6 @@ export const RuhsatlarView: React.FC<RuhsatlarViewProps> = ({
                   rows={3}
                   defaultValue={duzenleModalKayit.Aciklama || ''}
                   className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs sm:text-sm"
-                />
-              </div>
-
-              {/* USTABAŞI DA GÖRSÜN CHECKBOX */}
-              <div className="flex items-center justify-between p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl">
-                <div className="flex items-center gap-2">
-                  <span className="text-base">🔨</span>
-                  <div>
-                    <label htmlFor="duzenleUstabasiGorsun" className="font-bold text-amber-900 dark:text-amber-200 text-xs sm:text-sm cursor-pointer">
-                      Ustabaşı da Görsün
-                    </label>
-                    <p className="text-[11px] text-amber-700 dark:text-amber-300">
-                      Etkinleştirilirse bu ruhsat kaydı Ustabaşı PIN girişi yapıldığında görünür olur.
-                    </p>
-                  </div>
-                </div>
-                <input
-                  id="duzenleUstabasiGorsun"
-                  type="checkbox"
-                  name="ustabasiGorsun"
-                  defaultChecked={Boolean(duzenleModalKayit.UstabasiGorsun)}
-                  className="w-5 h-5 accent-amber-600 rounded cursor-pointer"
                 />
               </div>
 

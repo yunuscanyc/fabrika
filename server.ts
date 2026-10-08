@@ -853,7 +853,6 @@ function normalizeRuhsat(row: any) {
     SorumluKisi: String(getProp(row, 'SorumluKisi', 'sorumlukisi', 'sorumlu') || ''),
     Aciklama: String(getProp(row, 'Aciklama', 'aciklama', 'notlar') || ''),
     Durum: String(getProp(row, 'Durum', 'durum') || 'Gecerli'),
-    UstabasiGorsun: Boolean(getProp(row, 'UstabasiGorsun', 'ustabasigorsun', 'ustabasi_gorsun') ?? false),
     FotoSayisi: Number(getProp(row, 'FotoSayisi', 'fotosayisi')) || belgeler.length,
     Belgeler: belgeler,
     KayitTarihi: String(getProp(row, 'KayitTarihi', 'kayittarihi') || getBugunStr()),
@@ -2229,6 +2228,34 @@ async function checkDbConnection() {
         detectedTables.hatirlaticiBelgeler = '"HatirlaticiBelgeleri"';
       } catch (createErr: any) {
         console.error('[DB] "HatirlaticiBelgeleri" tablosu otomatik oluşturulamadı:', createErr.message);
+      }
+    }
+
+    if (!detectedTables.ruhsatlar) {
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS "Ruhsatlar" (
+            "Id" SERIAL PRIMARY KEY,
+            "BelgeAdi" VARCHAR(255) NOT NULL,
+            "Kategori" VARCHAR(100) NOT NULL,
+            "KurumMakam" VARCHAR(255),
+            "RuhsatNo" VARCHAR(100),
+            "BaslangicTarihi" VARCHAR(50),
+            "BitisTarihi" VARCHAR(50) NOT NULL,
+            "UyariSuresiGun" INTEGER DEFAULT 30,
+            "SorumluKisi" VARCHAR(255),
+            "Aciklama" TEXT,
+            "Durum" VARCHAR(50) DEFAULT 'Gecerli',
+            "Belgeler" JSONB DEFAULT '[]'::jsonb,
+            "FotoSayisi" INTEGER DEFAULT 0,
+            "KayitTarihi" VARCHAR(50),
+            "SonYenilemeTarihi" VARCHAR(50)
+          )
+        `);
+        console.log('[DB] "Ruhsatlar" tablosu doğrulandı/oluşturuldu.');
+        detectedTables.ruhsatlar = '"Ruhsatlar"';
+      } catch (createErr: any) {
+        console.error('[DB] "Ruhsatlar" tablosu otomatik oluşturulamadı:', createErr.message);
       }
     }
 
@@ -11716,70 +11743,18 @@ app.delete('/api/ceride/:id', async (req, res) => {
 });
 
 // ============================================================================
-// MEMORY STORAGE FOR RUHSATLAR & PERİYODİK İZİNLER
+// MEMORY STORAGE FOR RUHSATLAR & PERİYODİK İZİNLER (NO DUMMY SEED)
 // ============================================================================
 const RUHSATLAR_FILE = path.join(DATA_DIR, 'mem_ruhsatlar.json');
 
-let memRuhsatlar: any[] = [
-  {
-    Id: 1,
-    BelgeAdi: 'Ses & Gürültü Emisyon İzni',
-    Kategori: 'Çevre & Ses',
-    KurumMakam: 'İl Çevre, Şehircilik ve İklim Değişikliği Mülk.',
-    RuhsatNo: 'ÇVR-2025-8821',
-    BaslangicTarihi: '2025-01-15',
-    BitisTarihi: (() => { const d = new Date(); d.setDate(d.getDate() + 25); return d.toISOString().split('T')[0]; })(),
-    UyariSuresiGun: 30,
-    SorumluKisi: 'İSG & Çevre Birimi',
-    Aciklama: 'Fabrika imalat alanı ses ve gürültü seviyesi mutad izin belgesi.',
-    Durum: 'Yaklasiyor',
-    UstabasiGorsun: true,
-    Belgeler: [],
-    FotoSayisi: 0,
-    KayitTarihi: '2025-01-15'
-  },
-  {
-    Id: 2,
-    BelgeAdi: 'Cila & Boyahane Baca Duman Ruhsatı',
-    Kategori: 'Duman & Baca',
-    KurumMakam: 'Büyükşehir Belediyesi Çevre Koruma Dşk.',
-    RuhsatNo: 'BC-2025-4102',
-    BaslangicTarihi: '2025-02-01',
-    BitisTarihi: (() => { const d = new Date(); d.setDate(d.getDate() + 18); return d.toISOString().split('T')[0]; })(),
-    UyariSuresiGun: 30,
-    SorumluKisi: 'Fabrika Müdürü',
-    Aciklama: 'Mobilya cila ve lake spray filtre bacası duman ve filtre uygunluk belgesi.',
-    Durum: 'Yaklasiyor',
-    UstabasiGorsun: true,
-    Belgeler: [],
-    FotoSayisi: 0,
-    KayitTarihi: '2025-02-01'
-  },
-  {
-    Id: 3,
-    BelgeAdi: 'İşyeri Açma ve Çalışma Ruhsatı',
-    Kategori: 'İşyeri & Belediye',
-    KurumMakam: 'İlçe Belediyesi Ruhsat ve Denetim Md.',
-    RuhsatNo: 'RUH-2020-0012',
-    BaslangicTarihi: '2020-05-10',
-    BitisTarihi: '2028-05-10',
-    UyariSuresiGun: 30,
-    SorumluKisi: 'İdari İşler',
-    Aciklama: 'Süresiz genel işyeri çalıştırma ve imalathane ruhsatı.',
-    Durum: 'Gecerli',
-    UstabasiGorsun: false,
-    Belgeler: [],
-    FotoSayisi: 0,
-    KayitTarihi: '2020-05-10'
-  }
-];
+let memRuhsatlar: any[] = [];
 
 function loadMemRuhsatlar() {
   try {
     if (fs.existsSync(RUHSATLAR_FILE)) {
       const data = fs.readFileSync(RUHSATLAR_FILE, 'utf8');
       const list = JSON.parse(data);
-      if (Array.isArray(list) && list.length > 0) {
+      if (Array.isArray(list)) {
         memRuhsatlar = list;
       }
     }
@@ -11809,14 +11784,15 @@ app.get('/api/ruhsatlar', async (req, res) => {
     const userRole = String(req.headers['x-user-role'] || req.query.role || '').toLowerCase();
     const isUstabasi = userRole === 'ustabasi';
 
+    if (isUstabasi) {
+      // Ustabaşının ruhsat modülüyle ilgisi yoktur
+      return res.json([]);
+    }
+
     if (isDbConnected && detectedTables.ruhsatlar) {
       try {
         const idCol = 'Id';
-        let whereSql = '';
-        if (isUstabasi) {
-          whereSql = 'WHERE "UstabasiGorsun" = true';
-        }
-        const dbRes = await pool.query(`SELECT * FROM ${detectedTables.ruhsatlar} ${whereSql} ORDER BY "${idCol}" DESC`);
+        const dbRes = await pool.query(`SELECT * FROM ${detectedTables.ruhsatlar} ORDER BY "${idCol}" DESC`);
         const list = dbRes.rows.map(normalizeRuhsat);
         return res.json(list);
       } catch (err: any) {
@@ -11825,9 +11801,6 @@ app.get('/api/ruhsatlar', async (req, res) => {
     }
 
     let list = memRuhsatlar.map(normalizeRuhsat);
-    if (isUstabasi) {
-      list = list.filter(r => Boolean(r.UstabasiGorsun));
-    }
     res.json(list);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -11836,6 +11809,11 @@ app.get('/api/ruhsatlar', async (req, res) => {
 
 app.post('/api/ruhsatlar', async (req, res) => {
   try {
+    const userRole = String(req.headers['x-user-role'] || req.query.role || '').toLowerCase();
+    if (userRole === 'ustabasi') {
+      return res.status(403).json({ error: 'Ustabaşının ruhsat ekleme yetkisi yoktur.' });
+    }
+
     const body = req.body || {};
     const newItem = normalizeRuhsat({
       ...body,
@@ -11847,8 +11825,8 @@ app.post('/api/ruhsatlar', async (req, res) => {
         const belgelerJson = JSON.stringify(newItem.Belgeler || []);
         const sql = `
           INSERT INTO ${detectedTables.ruhsatlar} 
-          ("BelgeAdi", "Kategori", "KurumMakam", "RuhsatNo", "BaslangicTarihi", "BitisTarihi", "UyariSuresiGun", "SorumluKisi", "Aciklama", "Durum", "UstabasiGorsun", "Belgeler", "FotoSayisi", "KayitTarihi")
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          ("BelgeAdi", "Kategori", "KurumMakam", "RuhsatNo", "BaslangicTarihi", "BitisTarihi", "UyariSuresiGun", "SorumluKisi", "Aciklama", "Durum", "Belgeler", "FotoSayisi", "KayitTarihi")
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
           RETURNING *
         `;
         const insRes = await pool.query(sql, [
@@ -11862,7 +11840,6 @@ app.post('/api/ruhsatlar', async (req, res) => {
           newItem.SorumluKisi,
           newItem.Aciklama,
           newItem.Durum,
-          newItem.UstabasiGorsun,
           belgelerJson,
           newItem.FotoSayisi,
           newItem.KayitTarihi
@@ -11886,6 +11863,11 @@ app.post('/api/ruhsatlar', async (req, res) => {
 
 app.put('/api/ruhsatlar/:id', async (req, res) => {
   try {
+    const userRole = String(req.headers['x-user-role'] || req.query.role || '').toLowerCase();
+    if (userRole === 'ustabasi') {
+      return res.status(403).json({ error: 'Ustabaşının ruhsat düzenleme yetkisi yoktur.' });
+    }
+
     const id = Number(req.params.id);
     const body = req.body || {};
 
@@ -11899,8 +11881,8 @@ app.put('/api/ruhsatlar/:id', async (req, res) => {
           UPDATE ${detectedTables.ruhsatlar}
           SET "BelgeAdi" = $1, "Kategori" = $2, "KurumMakam" = $3, "RuhsatNo" = $4,
               "BaslangicTarihi" = $5, "BitisTarihi" = $6, "UyariSuresiGun" = $7,
-              "SorumluKisi" = $8, "Aciklama" = $9, "UstabasiGorsun" = $10, "Belgeler" = $11, "FotoSayisi" = $12
-          WHERE "${idCol}" = $13
+              "SorumluKisi" = $8, "Aciklama" = $9, "Belgeler" = $10, "FotoSayisi" = $11
+          WHERE "${idCol}" = $12
           RETURNING *
         `;
         const dbRes = await pool.query(sql, [
@@ -11913,7 +11895,6 @@ app.put('/api/ruhsatlar/:id', async (req, res) => {
           Number(body.UyariSuresiGun) || 30,
           body.SorumluKisi,
           body.Aciklama,
-          Boolean(body.UstabasiGorsun),
           belgelerJson,
           (body.Belgeler || []).length,
           id

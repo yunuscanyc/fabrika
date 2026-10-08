@@ -870,31 +870,32 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                         </span>
                       )}
 
-                      {/* Ustabaşı Görsün Rozet ve Toggle */}
-                      <button
-                        type="button"
-                        disabled={userRole === 'ustabasi'}
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          if (userRole === 'ustabasi' || !onUpdateHatirlatici) return;
-                          try {
-                            await onUpdateHatirlatici(h.Id, {
-                              UstabasiGorsun: !h.UstabasiGorsun
-                            });
-                          } catch (err: any) {
-                            alert(err?.message || 'Güncelleme yapılamadı.');
-                          }
-                        }}
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition-all shadow-2xs ${
-                          h.UstabasiGorsun
-                            ? 'bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200'
-                            : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200'
-                        }`}
-                        title={userRole === 'admin' ? 'Tıklayarak Ustabaşı görünürlüğünü açıp kapatabilirsiniz' : 'Ustabaşı görünürlüğü'}
-                      >
-                        <span>🔨</span>
-                        <span>{h.UstabasiGorsun ? 'Ustabaşı Görür' : 'Sadece Yönetici'}</span>
-                      </button>
+                      {/* Ustabaşı Görsün Rozet ve Toggle (Yalnızca Yönetici Görür) */}
+                      {userRole !== 'ustabasi' && (
+                        <button
+                          type="button"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (!onUpdateHatirlatici) return;
+                            try {
+                              await onUpdateHatirlatici(h.Id, {
+                                UstabasiGorsun: !h.UstabasiGorsun
+                              });
+                            } catch (err: any) {
+                              alert(err?.message || 'Güncelleme yapılamadı.');
+                            }
+                          }}
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition-all shadow-2xs ${
+                            h.UstabasiGorsun
+                              ? 'bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200'
+                              : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200'
+                          }`}
+                          title="Tıklayarak Ustabaşı görünürlüğünü açıp kapatabilirsiniz"
+                        >
+                          <span>🔨</span>
+                          <span>{h.UstabasiGorsun ? 'Ustabaşı Görür' : 'Sadece Yönetici'}</span>
+                        </button>
+                      )}
                     </div>
 
                     <h3
@@ -1053,27 +1054,29 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                     </select>
                   </div>
 
-                  {/* USTABAŞI DA GÖRSÜN CHECKBOX */}
-                  <div className="flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">🔨</span>
-                      <div>
-                        <label htmlFor="editUstabasiGorsunCheck" className="font-bold text-amber-900 dark:text-amber-200 text-xs sm:text-sm cursor-pointer">
-                          Ustabaşı da Görsün
-                        </label>
-                        <p className="text-[11px] text-amber-700 dark:text-amber-300">
-                          İşaretlenirse bu ajanda notu Ustabaşı PIN girişi yapıldığında görünür olur.
-                        </p>
+                  {/* USTABAŞI DA GÖRSÜN CHECKBOX (Yalnızca Yönetici Görür) */}
+                  {userRole !== 'ustabasi' && (
+                    <div className="flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">🔨</span>
+                        <div>
+                          <label htmlFor="editUstabasiGorsunCheck" className="font-bold text-amber-900 dark:text-amber-200 text-xs sm:text-sm cursor-pointer">
+                            Ustabaşı da Görsün
+                          </label>
+                          <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                            İşaretlenirse bu ajanda notu Ustabaşı PIN girişi yapıldığında görünür olur.
+                          </p>
+                        </div>
                       </div>
+                      <input
+                        id="editUstabasiGorsunCheck"
+                        type="checkbox"
+                        checked={editUstabasiGorsun}
+                        onChange={(e) => setEditUstabasiGorsun(e.target.checked)}
+                        className="w-5 h-5 accent-amber-600 rounded cursor-pointer"
+                      />
                     </div>
-                    <input
-                      id="editUstabasiGorsunCheck"
-                      type="checkbox"
-                      checked={editUstabasiGorsun}
-                      onChange={(e) => setEditUstabasiGorsun(e.target.checked)}
-                      className="w-5 h-5 accent-amber-600 rounded cursor-pointer"
-                    />
-                  </div>
+                  )}
 
                   <div className="flex-1 flex flex-col pt-1">
                     <div className="flex items-center justify-between mb-1">
@@ -1411,26 +1414,28 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                     </select>
                   </div>
 
-                  {/* USTABAŞI DA GÖRSÜN CHECKBOX */}
-                  <div className="flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-xl">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">🔨</span>
-                      <div>
-                        <label htmlFor="addUstabasiGorsunCheck" className="font-bold text-amber-900 text-xs sm:text-sm cursor-pointer">
-                          Ustabaşı da Görsün
-                        </label>
-                        <p className="text-[11px] text-amber-700">
-                          İşaretlenirse bu ajanda notu Ustabaşı PIN girişi yapıldığında görünür olur.
-                        </p>
+                  {/* USTABAŞI DA GÖRSÜN CHECKBOX (Yalnızca Yönetici Görür) */}
+                  {userRole !== 'ustabasi' && (
+                    <div className="flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">🔨</span>
+                        <div>
+                          <label htmlFor="addUstabasiGorsunCheck" className="font-bold text-amber-900 text-xs sm:text-sm cursor-pointer">
+                            Ustabaşı da Görsün
+                          </label>
+                          <p className="text-[11px] text-amber-700">
+                            İşaretlenirse bu ajanda notu Ustabaşı PIN girişi yapıldığında görünür olur.
+                          </p>
+                        </div>
                       </div>
+                      <input
+                        id="addUstabasiGorsunCheck"
+                        type="checkbox"
+                        name="ustabasiGorsun"
+                        className="w-5 h-5 accent-amber-600 rounded cursor-pointer"
+                      />
                     </div>
-                    <input
-                      id="addUstabasiGorsunCheck"
-                      type="checkbox"
-                      name="ustabasiGorsun"
-                      className="w-5 h-5 accent-amber-600 rounded cursor-pointer"
-                    />
-                  </div>
+                  )}
 
                   <div className="flex-1 flex flex-col pt-1">
                     <div className="flex items-center justify-between mb-1">
