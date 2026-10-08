@@ -811,9 +811,82 @@ export const SehirIciGorevlendirmeView: React.FC<SehirIciGorevlendirmeViewProps>
       {yazdirModalOpen && seciliGorev && createPortal(
         <div 
           onClick={(e) => { if (e.target === e.currentTarget) setYazdirModalOpen(false); }}
-          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md p-2 sm:p-6 flex items-center justify-center overflow-y-auto animate-in fade-in"
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md p-2 sm:p-6 flex items-center justify-center overflow-y-auto animate-in fade-in sehirici-print-overlay"
         >
-          <div className="bg-slate-950 border border-slate-800 rounded-2xl w-full max-w-4xl max-h-[96vh] flex flex-col shadow-2xl overflow-hidden">
+          <style dangerouslySetInnerHTML={{ __html: `
+            @media print {
+              @page {
+                size: A4 portrait;
+                margin: 0;
+              }
+              html, body {
+                background-color: white !important;
+                color: black !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 100% !important;
+                height: auto !important;
+                min-height: 0 !important;
+                overflow: visible !important;
+              }
+              #root {
+                display: none !important;
+              }
+              .sehirici-print-overlay {
+                position: static !important;
+                display: block !important;
+                width: 100% !important;
+                height: auto !important;
+                min-height: 0 !important;
+                background: white !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                border: none !important;
+                box-shadow: none !important;
+                overflow: visible !important;
+              }
+              .sehirici-modal-wrapper {
+                position: static !important;
+                display: block !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                border: none !important;
+                box-shadow: none !important;
+                background: white !important;
+                border-radius: 0 !important;
+                overflow: visible !important;
+                max-height: none !important;
+                margin: 0 !important;
+                padding: 0 !important;
+              }
+              .sehirici-preview-container {
+                position: static !important;
+                display: block !important;
+                background: white !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                overflow: visible !important;
+              }
+              .sehirici-print-content {
+                position: static !important;
+                display: block !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                min-height: 0 !important;
+                background: white !important;
+                color: black !important;
+                padding: 10mm 14mm !important;
+                margin: 0 !important;
+                border: none !important;
+                box-shadow: none !important;
+                border-radius: 0 !important;
+              }
+              .no-print, .no-print * {
+                display: none !important;
+              }
+            }
+          `}} />
+          <div className="bg-slate-950 border border-slate-800 rounded-2xl w-full max-w-4xl max-h-[96vh] flex flex-col shadow-2xl overflow-hidden sehirici-modal-wrapper">
             {/* Yazdırma Kontrol Barı */}
             <div className="p-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between no-print shrink-0">
               <div className="flex items-center gap-2">
@@ -840,10 +913,10 @@ export const SehirIciGorevlendirmeView: React.FC<SehirIciGorevlendirmeViewProps>
             </div>
 
             {/* A4 Kağıt Önizleme Alanı */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-slate-800/60 flex justify-center">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-slate-800/60 flex justify-center sehirici-preview-container">
               <div 
                 id="printArea"
-                className="bg-white text-slate-900 p-8 sm:p-10 shadow-2xl rounded-sm w-full max-w-[210mm] min-h-[297mm] text-xs font-sans leading-normal flex flex-col justify-between print:p-6 print:shadow-none print:w-full print:m-0"
+                className="bg-white text-slate-900 p-8 sm:p-10 shadow-2xl rounded-sm w-full max-w-[210mm] min-h-[297mm] text-xs font-sans leading-normal flex flex-col justify-between sehirici-print-content print:p-6 print:shadow-none print:w-full print:m-0"
                 style={{ fontFamily: 'Arial, sans-serif' }}
               >
                 <div>
@@ -973,13 +1046,13 @@ export const SehirIciGorevlendirmeView: React.FC<SehirIciGorevlendirmeViewProps>
                   </div>
                 </div>
 
-                {/* 5. İMZA VE ONAY ALANI */}
+                {/* 5. İMZA VE ONAY ALANI (Yalnızca Görevlendirme Yapan ve Görevlendirme Yapılan) */}
                 <div className="pt-2">
-                  <div className="grid grid-cols-3 gap-3 border-t-2 border-slate-900 pt-3 text-[10px] text-center">
+                  <div className="grid grid-cols-2 gap-8 border-t-2 border-slate-900 pt-3 text-[10px] text-center">
                     <div className="space-y-12">
                       <div>
-                        <strong>GÖREVLENDİREN AMİR</strong>
-                        <p className="text-[9px] text-slate-600">{seciliGorev.GorevlendirenAmir || 'Montaj Şefi'}</p>
+                        <strong className="block text-[11px] text-slate-900">GÖREVLENDİRME YAPAN (AMİR)</strong>
+                        <p className="text-[9px] text-slate-600 mt-0.5">{seciliGorev.GorevlendirenAmir || 'Montaj Şefi / Yetkili'}</p>
                       </div>
                       <div className="border-t border-slate-400 pt-1 text-[9px] text-slate-500">
                         İmza / Kaşe
@@ -988,21 +1061,11 @@ export const SehirIciGorevlendirmeView: React.FC<SehirIciGorevlendirmeViewProps>
 
                     <div className="space-y-12">
                       <div>
-                        <strong>GÖREVLİ PERSONEL</strong>
-                        <p className="text-[9px] text-slate-600">{seciliGorev.PersonelAdiSoyadi}</p>
+                        <strong className="block text-[11px] text-slate-900">GÖREVLENDİRME YAPILAN (PERSONEL)</strong>
+                        <p className="text-[9px] text-slate-600 mt-0.5">{seciliGorev.PersonelAdiSoyadi}</p>
                       </div>
                       <div className="border-t border-slate-400 pt-1 text-[9px] text-slate-500">
                         İmza (Tebellüğ Eden)
-                      </div>
-                    </div>
-
-                    <div className="space-y-12">
-                      <div>
-                        <strong>MÜŞTERİ / ŞANTİYE TESLİM</strong>
-                        <p className="text-[9px] text-slate-600">İşin Teslim Alındığına Dair</p>
-                      </div>
-                      <div className="border-t border-slate-400 pt-1 text-[9px] text-slate-500">
-                        Müşteri Yetkilisi İmza / Kaşe
                       </div>
                     </div>
                   </div>
