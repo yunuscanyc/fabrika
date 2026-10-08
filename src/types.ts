@@ -602,6 +602,47 @@ export interface SehirDisiGorevlendirme {
   Durum: 'Aktif' | 'Tamamlandı' | 'İptal';
 }
 
+export interface SehirIciGorevlendirme {
+  GorevId: string;
+  DokumanNo: string; // örn. "GFR-2026-001"
+  Tarih: string; // YYYY-MM-DD
+
+  // 1. PERSONEL VE GÖREV BİLGİLERİ
+  PersonelId?: number | null;
+  PersonelAdiSoyadi: string;
+  TcKimlikNo?: string;
+  SicilNo?: string;
+  UnvaniDepartmani?: string;
+  IletisimTelefonu?: string;
+  GorevlendirenAmir?: string;
+  GorevTarihi: string; // YYYY-MM-DD
+  GorevSaati?: string; // HH:mm veya "09:00 - 18:00"
+
+  // 2. MONTAJ VE MÜŞTERİ LOKASYON BİLGİLERİ
+  ProjeId?: number | null;
+  MusteriFirmaAdi: string;
+  MontajAdresi: string;
+  MusteriYetkilisiIletisim?: string;
+  YapilacakIsinTanimi: string;
+
+  // 3. EKİPMAN, ARAÇ VE İSG BİLGİLENDİRMESİ
+  KullanilanSirketAraciPlakasi?: string;
+  CikisKm?: string | number;
+  DonusKm?: string | number;
+  TahsisEdilenEkipmanlar?: string; // Tahsis Edilen Ekipmanlar / Araç Gereç
+  AvansMasrafLimiti?: string | number; // TL
+  IsgBeyanKabul: boolean; // İş Sağlığı ve Güvenliği Beyanı onayı
+
+  // 4. ONAY VE İMZA BİLGİLERİ
+  AmirAdiSoyadi?: string;
+  AmirUnvani?: string;
+  IsciAdiSoyadi?: string;
+  IsciTcNo?: string;
+
+  OlusturmaTarihi: string;
+  Durum: 'Aktif' | 'Tamamlandı' | 'İptal';
+}
+
 export interface CerideFotograf {
   Id?: string | number;
   DosyaAdi: string;

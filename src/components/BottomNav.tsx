@@ -49,20 +49,20 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   // Az kullanılan veya ikincil modüller ("Diğer" listesi)
   const digerModuller = [
     {
+      id: 'siparisler' as TabType,
+      label: 'Siparişler & Sevkiyat',
+      sublabel: 'Gelen siparişler, sevk durumu ve teslimat',
+      icon: ShoppingCart,
+      badge: badgeCounts.siparis,
+      color: 'text-blue-400 bg-blue-500/10 border-blue-500/20'
+    },
+    {
       id: 'ruhsatlar' as TabType,
       label: 'Ruhsatlar & İzinler',
       sublabel: 'Ruhsat takibi, muayene ve çevre izinleri',
       icon: ShieldCheck,
       badge: badgeCounts.ruhsatlar,
       color: 'text-amber-400 bg-amber-500/10 border-amber-500/20'
-    },
-    {
-      id: 'personel' as TabType,
-      label: 'Personel & İK',
-      sublabel: 'Çalışan kayıtları, puantaj ve izinler',
-      icon: Users,
-      badge: badgeCounts.personel,
-      color: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20'
     },
     {
       id: 'projeler' as TabType,
@@ -249,7 +249,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         </div>
       )}
 
-      {/* Tek Sıra Sabit Mobil Alt Bar (5 Buton: Panel, Sipariş, Ceride, Ajanda, Diğer) */}
+      {/* Tek Sıra Sabit Mobil Alt Bar (5 Buton: Panel, Personel/İK, Ceride, Ajanda, Diğer) */}
       <div 
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur border-t border-slate-800 px-1.5 py-1 shadow-2xl safe-area-bottom"
         style={{
@@ -273,23 +273,23 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             <span className="text-[10px] tracking-tight">Panel</span>
           </button>
 
-          {/* 2. Sipariş */}
+          {/* 2. Personel & İK */}
           <button
             onClick={() => {
               setDigerMenuAcik(false);
-              setActiveTab('siparisler');
+              setActiveTab('personel');
             }}
             className={`relative flex flex-col items-center justify-center py-1.5 rounded-xl transition-all ${
-              activeTab === 'siparisler'
-                ? 'text-blue-400 font-bold bg-blue-950/60 ring-1 ring-blue-500/30'
+              activeTab === 'personel'
+                ? 'text-indigo-400 font-bold bg-indigo-950/60 ring-1 ring-indigo-500/30'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <ShoppingCart className="w-4 h-4 mb-0.5" />
-            <span className="text-[10px] tracking-tight">Sipariş</span>
-            {Boolean(badgeCounts.siparis && badgeCounts.siparis > 0) && (
-              <span className="absolute top-0.5 right-2 w-3.5 h-3.5 rounded-full bg-amber-500 text-white text-[8px] font-bold flex items-center justify-center animate-bounce">
-                {badgeCounts.siparis}
+            <Users className="w-4 h-4 mb-0.5" />
+            <span className="text-[10px] tracking-tight">İK</span>
+            {Boolean(badgeCounts.personel && badgeCounts.personel > 0) && (
+              <span className="absolute top-0.5 right-2 w-3.5 h-3.5 rounded-full bg-indigo-500 text-white text-[8px] font-bold flex items-center justify-center">
+                {badgeCounts.personel}
               </span>
             )}
           </button>
@@ -354,7 +354,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           >
             <MoreHorizontal className="w-4 h-4 mb-0.5" />
             <span className="text-[10px] tracking-tight">
-              {isDigerActive && activeDigerModule ? (activeDigerModule.id === 'ruhsatlar' ? 'Ruhsat' : activeDigerModule.id === 'personel' ? 'İK' : activeDigerModule.id === 'projeler' ? 'Proje' : activeDigerModule.id === 'makineler' ? 'Makine' : 'Araç') : 'Diğer'}
+              {isDigerActive && activeDigerModule ? (activeDigerModule.id === 'siparisler' ? 'Sipariş' : activeDigerModule.id === 'ruhsatlar' ? 'Ruhsat' : activeDigerModule.id === 'projeler' ? 'Proje' : activeDigerModule.id === 'makineler' ? 'Makine' : 'Araç') : 'Diğer'}
             </span>
             {Boolean(digerToplamBadge > 0) && (
               <span className="absolute top-0.5 right-2 w-3.5 h-3.5 rounded-full bg-red-600 text-white text-[8px] font-bold flex items-center justify-center animate-pulse">
