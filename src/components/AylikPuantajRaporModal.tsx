@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Personel, GunlukPuantaj } from '../types';
 import { FileSpreadsheet, Printer, X, Download, Plus, Minus, Calendar, Clock } from 'lucide-react';
@@ -283,6 +283,50 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
   const [rejim, setRejim] = useState<'5gun' | '6gun'>(calismaRejimi);
   const [cariHesapTuru, setCariHesapTuru] = useState<'buguneKadar' | 'tumAy'>('buguneKadar');
 
+  // Anlık Aylık Net Ücret ve Ödenen/Avans Simülasyonu (Frontend-only, DB'ye kaydedilmez, çıktıda yer almaz)
+  const [netUcretler, setNetUcretler] = useState<Record<number, string>>({});
+  const [avanslar, setAvanslar] = useState<Record<number, string>>({});
+
+  // Float koruması (Sadece numerik rakamlar ve tek bir nokta/virgül)
+  const handleNumericInput = (
+    setter: React.Dispatch<React.SetStateAction<Record<number, string>>>,
+    personelId: number,
+    rawVal: string
+  ) => {
+    let clean = rawVal.replace(/[^0-9.,]/g, '');
+    const firstSepIndex = clean.search(/[.,]/);
+    if (firstSepIndex !== -1) {
+      const sepChar = clean[firstSepIndex];
+      const before = clean.slice(0, firstSepIndex);
+      const after = clean.slice(firstSepIndex + 1).replace(/[.,]/g, '');
+      clean = before + sepChar + after;
+    }
+
+    setter(prev => ({
+      ...prev,
+      [personelId]: clean
+    }));
+  };
+
+  const parseNum = (val?: string): number => {
+    if (!val) return 0;
+    const normalized = val.replace(',', '.');
+    const parsed = parseFloat(normalized);
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
+  const formatTL = (tutar: number): string => {
+    return tutar.toLocaleString('tr-TR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }) + ' ₺';
+  };
+
+  const simulasyonTemizle = () => {
+    setNetUcretler({});
+    setAvanslar({});
+  };
+
   const bugun = new Date();
   const bugunYil = bugun.getFullYear();
   const bugunAy = bugun.getMonth() + 1;
@@ -528,6 +572,39 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
       netSaat: 0
     });
   }, [icmalListesi]);
+
+  // Frontend simülasyon toplamları
+  const { toplamNetUcretSim, toplamAvansSim, toplamNetAlacakSim, herhangiGirisVarMi } = useMemo(() => {
+    let totUcret = 0;
+    let totAvans = 0;
+    let totAlacak = 0;
+    let hasAny = false;
+
+    icmalListesi.forEach(item => {
+      const uStr = netUcretler[item.personelId];
+      const aStr = avanslar[item.personelId];
+      const u = parseNum(uStr);
+      const a = parseNum(aStr);
+
+      if ((uStr !== undefined && uStr !== '') || (aStr !== undefined && aStr !== '')) {
+        hasAny = true;
+      }
+
+      if (u > 0 || a > 0) {
+        totUcret += u;
+        totAvans += a;
+        // Formül: (Net Ücret / 225) * Net Saat - Ödenen/Avans
+        totAlacak += ((u / 225) * item.netSaat) - a;
+      }
+    });
+
+    return {
+      toplamNetUcretSim: totUcret,
+      toplamAvansSim: totAvans,
+      toplamNetAlacakSim: totAlacak,
+      herhangiGirisVarMi: hasAny
+    };
+  }, [icmalListesi, netUcretler, avanslar]);
 
   const handleCsvExport = () => {
     const ayAdi = aylar.find(a => a.no === seciliAy)?.ad || '';
@@ -901,7 +978,7 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
 
       <div 
         onClick={(e) => e.stopPropagation()}
-        className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-5xl overflow-hidden shadow-2xl my-6 print:my-0 print-modal-content"
+        className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-7xl overflow-hidden shadow-2xl my-6 print:my-0 print-modal-content"
       >
         {/* Üst Bar (Yazdırmada Gizlenir) */}
         <div className="px-6 py-4 bg-slate-950 border-b border-slate-800 flex flex-wrap justify-between items-center gap-3 print:hidden">
@@ -1010,7 +1087,32 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
           </div>
           <div className="flex items-center gap-3 font-mono text-xs">
             <span className="text-slate-400">Genel Net Saat: <strong className="text-emerald-300 font-bold">{genelToplam.netSaat.toFixed(1)} s</strong></span>
+            {herhangiGirisVarMi && (
+              <span className="text-slate-400 border-l border-slate-700 pl-3">
+                Toplam Net Alacak: <strong className={`font-bold ${toplamNetAlacakSim >= 0 ? 'text-emerald-300' : 'text-rose-400'}`}>{formatTL(toplamNetAlacakSim)}</strong>
+              </span>
+            )}
           </div>
+        </div>
+
+        {/* Anlık Frontend Ücret & Net Alacak Simülasyonu Bilgi Şeridi (Yalnızca Ekranda, Çıktıda Yok) */}
+        <div className="px-6 py-2 bg-slate-900/90 border-b border-slate-800/60 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400 print:hidden">
+          <div className="flex items-center gap-2">
+            <span className="text-amber-400 text-xs">💡</span>
+            <span>
+              <strong>Anlık Net Alacak Simülatörü:</strong> Personel satırında <em>Aylık Net Ücret</em> ve <em>Ödenen / Avans</em> girildiğinde formül: <code className="bg-slate-950 px-1 py-0.5 rounded text-amber-300 border border-slate-800">(Net Ücret / 225) × Net Saat - Avans</code> olarak anlık hesaplanır. Veritabanını etkilemez, çıktıda yer almaz.
+            </span>
+          </div>
+          {herhangiGirisVarMi && (
+            <button
+              type="button"
+              onClick={simulasyonTemizle}
+              className="text-[11px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 border border-slate-700 transition cursor-pointer"
+              title="Girilen tüm net ücret ve avans kutularını temizle"
+            >
+              Girişleri Temizle
+            </button>
+          )}
         </div>
 
         {/* Antet (Yalnızca Yazdırmada Görünür) */}
@@ -1043,13 +1145,26 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
                 <th className="py-2.5 px-2 text-center font-bold text-emerald-300 print:py-1.5 print:px-1 print:text-black">%100 Mesai</th>
                 <th className="py-2.5 px-2 text-center font-bold text-rose-400 print:py-1.5 print:px-1 print:text-black">Eksik Saat</th>
                 <th className="py-2.5 px-2 text-center font-black text-emerald-300 bg-emerald-950/40 print:py-1.5 print:px-1 print:text-black print:bg-slate-200" title="Net Hakediş Saati: Normal Saat + (%50 Mesai × 1.5) + (%100 Mesai × 2) - Eksik Mesai">Net Saat</th>
+                {/* Frontend-only Maaş & Net Alacak Kolonları (Print'te Gizli) */}
+                <th className="py-2.5 px-2 text-center font-bold text-amber-300 bg-slate-900/60 border-l border-slate-800 print:hidden min-w-[110px]" title="Aylık Net Maaş / Ücret (Elle girilir, kaydedilmez)">
+                  Aylık Net Ücret
+                </th>
+                <th className="py-2.5 px-2 text-center font-bold text-rose-300 bg-slate-900/60 print:hidden min-w-[110px]" title="Ödenen / Avans / Ara Ödeme (Elle girilir, kaydedilmez)">
+                  Ödenen / Avans
+                </th>
+                <th className="py-2.5 px-2 text-center font-black text-emerald-300 bg-emerald-950/60 print:hidden min-w-[120px]" title="Formül: (Net Ücret / 225) × Net Saat - Ödenen/Avans">
+                  Net Alacak
+                </th>
                 <th className="py-2.5 px-4 text-center border-l border-slate-800 print:py-1.5 print:px-3 print:border-l print:border-black">İmza</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 print:divide-y-0">
               {icmalListesi.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="py-4 text-center text-slate-500 italic">
+                  <td colSpan={16} className="py-4 text-center text-slate-500 italic print:hidden">
+                    Kayıtlı aktif personel bulunamadı.
+                  </td>
+                  <td colSpan={13} className="py-4 text-center text-slate-500 italic hidden print:table-cell">
                     Kayıtlı aktif personel bulunamadı.
                   </td>
                 </tr>
@@ -1058,6 +1173,18 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
                   const isAcik = acikPersonelId === item.personelId;
                   const ayAdi = aylar.find(a => a.no === seciliAy)?.ad || '';
                   const gunlerDetay = isAcik ? getPersonelAyGunleri(item.rawPersonel, seciliYil, seciliAy, puantajlar, rejim, bugunIso) : [];
+
+                  // Anlık Frontend Net Ücret ve Net Alacak Hesaplaması
+                  const uStr = netUcretler[item.personelId];
+                  const aStr = avanslar[item.personelId];
+                  const kisiNetUcret = parseNum(uStr);
+                  const kisiAvans = parseNum(aStr);
+                  const hasUcretGirisi = uStr !== undefined && uStr !== '';
+                  const hasAvansGirisi = aStr !== undefined && aStr !== '';
+                  // Formül: (Net Ücret / 225) * Net Saat - Ödenen/Avans
+                  const netAlacak = (hasUcretGirisi || hasAvansGirisi)
+                    ? ((kisiNetUcret / 225) * item.netSaat) - kisiAvans
+                    : 0;
 
                   return (
                     <React.Fragment key={item.personelId}>
@@ -1099,6 +1226,51 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
                         <td className="py-2 px-2 text-center font-mono font-black text-emerald-300 bg-emerald-950/40 print:text-black print:bg-transparent" title={`Net Saat: ${item.normalSaat.toFixed(1)}s (Normal) + (${item.toplamFazlaMesai} × 1.5) + (${item.toplamTatilMesai} × 2) - ${item.toplamEksikSaat.toFixed(1)}s (Eksik)`}>
                           {item.netSaat.toFixed(1)}
                         </td>
+
+                        {/* 1. TextBox: Aylık Net Ücret (Elle girilir, DB'ye kaydedilmez, print:hidden) */}
+                        <td className="py-1.5 px-2 text-center border-l border-slate-800/80 bg-slate-900/30 print:hidden">
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={netUcretler[item.personelId] ?? ''}
+                            onChange={(e) => handleNumericInput(setNetUcretler, item.personelId, e.target.value)}
+                            placeholder="0.00"
+                            className="w-24 px-2 py-1 bg-slate-950 border border-slate-700/80 hover:border-amber-500/60 focus:border-amber-400 focus:ring-1 focus:ring-amber-400/40 rounded-lg text-right font-mono text-xs text-amber-300 placeholder-slate-600 focus:outline-none transition shadow-inner"
+                            title={`${item.adSoyad} için aylık net ücret (Maaş)`}
+                          />
+                        </td>
+
+                        {/* 2. TextBox: Ödenen / Avans (Elle girilir, DB'ye kaydedilmez, print:hidden) */}
+                        <td className="py-1.5 px-2 text-center bg-slate-900/30 print:hidden">
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={avanslar[item.personelId] ?? ''}
+                            onChange={(e) => handleNumericInput(setAvanslar, item.personelId, e.target.value)}
+                            placeholder="0.00"
+                            className="w-24 px-2 py-1 bg-slate-950 border border-slate-700/80 hover:border-rose-500/60 focus:border-rose-400 focus:ring-1 focus:ring-rose-400/40 rounded-lg text-right font-mono text-xs text-rose-300 placeholder-slate-600 focus:outline-none transition shadow-inner"
+                            title={`${item.adSoyad} için ödenen avans / ara ödeme`}
+                          />
+                        </td>
+
+                        {/* 3. Kolon: Net Alacak (Frontend anlık hesaplama: (Net Ücret / 225) * Net Saat - Ödenen/Avans, print:hidden) */}
+                        <td className="py-1.5 px-2 text-right font-mono print:hidden">
+                          {(hasUcretGirisi || hasAvansGirisi) ? (
+                            <span
+                              className={`px-2 py-1 rounded-lg text-xs font-bold inline-block border ${
+                                netAlacak >= 0
+                                  ? 'bg-emerald-950/60 text-emerald-300 border-emerald-500/30'
+                                  : 'bg-rose-950/60 text-rose-300 border-rose-500/30'
+                              }`}
+                              title={`Hesaplama Detayı: (${kisiNetUcret} / 225) × ${item.netSaat.toFixed(1)}s - ${kisiAvans} = ${netAlacak.toFixed(2)} ₺`}
+                            >
+                              {formatTL(netAlacak)}
+                            </span>
+                          ) : (
+                            <span className="text-slate-600 text-xs px-2 py-1">0,00 ₺</span>
+                          )}
+                        </td>
+
                         <td className="py-2 px-4 text-center border-l border-slate-800 print:border-l print:border-black print:py-1 print:px-3 min-w-[70px]">
                           <div className="w-16 border-b border-slate-700 print:border-black h-4 mx-auto"></div>
                         </td>
@@ -1107,7 +1279,7 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
                       {/* Tıklanınca Altalta Açılan Günlük Puantaj Detay Satırı */}
                       {isAcik && (
                         <tr className="bg-slate-950/90 border-y-2 border-blue-500/40 print:hidden animate-in fade-in duration-150">
-                          <td colSpan={13} className="p-3 sm:p-4">
+                          <td colSpan={16} className="p-3 sm:p-4">
                             <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-2xl space-y-3">
                               {/* Başlık ve Ay Özeti */}
                               <div className="px-4 py-3 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
@@ -1141,6 +1313,15 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
                                         <span>Eksik Saat: <strong className="text-rose-400 font-mono">{item.toplamEksikSaat.toFixed(1)}s</strong></span>
                                       )}
                                       <span className="border-l border-slate-700 pl-3">Net: <strong className="text-emerald-300 font-mono">{item.netSaat.toFixed(1)} Saat</strong></span>
+                                      {hasUcretGirisi && (
+                                        <span className="border-l border-slate-700 pl-3">Aylık Ücret: <strong className="text-amber-300 font-mono">{formatTL(kisiNetUcret)}</strong></span>
+                                      )}
+                                      {hasAvansGirisi && (
+                                        <span>Avans: <strong className="text-rose-300 font-mono">{formatTL(kisiAvans)}</strong></span>
+                                      )}
+                                      {(hasUcretGirisi || hasAvansGirisi) && (
+                                        <span>Net Alacak: <strong className={`font-mono font-bold ${netAlacak >= 0 ? 'text-emerald-300' : 'text-rose-400'}`}>{formatTL(netAlacak)}</strong></span>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
@@ -1276,6 +1457,16 @@ export const AylikPuantajRaporModal: React.FC<AylikPuantajRaporModalProps> = ({
                 <td className="py-3 px-2 text-center font-mono font-bold text-rose-400 print:text-black">{genelToplam.toplamEksikSaat > 0 ? genelToplam.toplamEksikSaat.toFixed(1) : '-'}</td>
                 <td className="py-3 px-2 text-center font-mono font-black text-emerald-300 bg-emerald-950/80 border-r border-emerald-500/40 print:text-black print:bg-slate-200">
                   {genelToplam.netSaat.toFixed(1)}
+                </td>
+                {/* Frontend-only Maaş & Net Alacak Toplamları (Print'te Gizli) */}
+                <td className="py-3 px-2 text-right font-mono font-bold text-amber-300 bg-slate-900/60 print:hidden">
+                  {toplamNetUcretSim > 0 ? formatTL(toplamNetUcretSim) : '-'}
+                </td>
+                <td className="py-3 px-2 text-right font-mono font-bold text-rose-300 bg-slate-900/60 print:hidden">
+                  {toplamAvansSim > 0 ? formatTL(toplamAvansSim) : '-'}
+                </td>
+                <td className="py-3 px-2 text-right font-mono font-black text-emerald-300 bg-emerald-950/80 border-r border-emerald-500/40 print:hidden">
+                  {herhangiGirisVarMi ? formatTL(toplamNetAlacakSim) : '-'}
                 </td>
                 <td className="py-3 px-4 text-center border-l border-slate-800 print:border-l print:border-black text-[10px] text-slate-400 print:text-black font-normal">
                   Genel İcmal
