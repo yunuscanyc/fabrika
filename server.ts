@@ -96,6 +96,7 @@ let detectedTables: {
   malzemeSiparisBelgeler?: string;
   malzemeKatalog?: string;
   sehirDisiGorevler?: string;
+  sehirIciGorevler?: string;
   ceride?: string;
   ruhsatlar?: string;
 } = {};
@@ -2188,6 +2189,7 @@ async function checkDbConnection() {
       malzemeSiparisBelgeler: matchTable(['MalzemeSiparisBelgeleri', 'malzeme_siparis_belgeleri', 'SiparisBelgeleri', 'siparis_belgeleri']),
       malzemeKatalog: matchTable(['MalzemeKatalog', 'malzeme_katalog', 'MalzemeKatalogu', 'malzeme_katalogu', 'MalzemeKataloglari']),
       sehirDisiGorevler: matchTable(['SehirDisiGorevler', 'sehir_disi_gorevler', 'SehirDisiGorevlendirme', 'sehir_disi_gorevlendirme']),
+      sehirIciGorevler: matchTable(['SehirIciGorevler', 'sehir_ici_gorevler', 'SehirIciGorevlendirme', 'sehir_ici_gorevlendirme']),
       ceride: matchTable(['Ceride', 'ceride', 'Cerideler', 'cerideler', 'SantiyeCeridesi', 'santiye_ceridesi', 'GunlukVukuat', 'gunluk_vukuat', 'FaaliyetDefteri', 'faaliyet_defteri']),
       ruhsatlar: matchTable(['Ruhsatlar', 'ruhsatlar', 'PeriyodikIzinler', 'periyodik_izinler', 'RuhsatVeIzinler', 'ruhsat_ve_izinler'])
     };
@@ -3024,6 +3026,48 @@ async function checkDbConnection() {
         detectedTables.sehirDisiGorevler = '"SehirDisiGorevler"';
       } catch (createErr: any) {
         console.error('[DB] "SehirDisiGorevler" tablosu oluşturulamadı:', createErr.message);
+      }
+    }
+
+    if (!detectedTables.sehirIciGorevler) {
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS "SehirIciGorevler" (
+            "GorevId" VARCHAR(100) PRIMARY KEY,
+            "DokumanNo" VARCHAR(100) NOT NULL,
+            "Tarih" VARCHAR(50) NOT NULL,
+            "PersonelId" INT,
+            "PersonelAdiSoyadi" VARCHAR(255) NOT NULL,
+            "TcKimlikNo" VARCHAR(50),
+            "SicilNo" VARCHAR(50),
+            "UnvaniDepartmani" VARCHAR(255),
+            "IletisimTelefonu" VARCHAR(50),
+            "GorevlendirenAmir" VARCHAR(255),
+            "GorevTarihi" VARCHAR(50) NOT NULL,
+            "GorevSaati" VARCHAR(100),
+            "ProjeId" INT,
+            "MusteriFirmaAdi" VARCHAR(255) NOT NULL,
+            "MontajAdresi" TEXT NOT NULL,
+            "MusteriYetkilisiIletisim" VARCHAR(255),
+            "YapilacakIsinTanimi" TEXT NOT NULL,
+            "KullanilanSirketAraciPlakasi" VARCHAR(100),
+            "CikisKm" VARCHAR(50),
+            "DonusKm" VARCHAR(50),
+            "TahsisEdilenEkipmanlar" TEXT,
+            "AvansMasrafLimiti" NUMERIC DEFAULT 0,
+            "IsgBeyanKabul" BOOLEAN DEFAULT true,
+            "AmirAdiSoyadi" VARCHAR(255),
+            "AmirUnvani" VARCHAR(255),
+            "IsciAdiSoyadi" VARCHAR(255),
+            "IsciTcNo" VARCHAR(50),
+            "OlusturmaTarihi" VARCHAR(50) NOT NULL,
+            "Durum" VARCHAR(50) DEFAULT 'Aktif'
+          )
+        `);
+        console.log('[DB] "SehirIciGorevler" tablosu hazırlandı.');
+        detectedTables.sehirIciGorevler = '"SehirIciGorevler"';
+      } catch (createErr: any) {
+        console.error('[DB] "SehirIciGorevler" tablosu oluşturulamadı:', createErr.message);
       }
     }
 
@@ -4678,6 +4722,7 @@ app.get('/api/backup/export', async (req, res) => {
       SaglikRaporlari: memSaglikRaporlari || [],
       KkdZimmetler: memKkdZimmetler || [],
       SehirDisiGorevler: memSehirDisiGorevler || [],
+      SehirIciGorevler: memSehirIciGorevler || [],
       NotificationSettings: [memNotificationSettings || {}]
     };
 
@@ -11369,6 +11414,374 @@ app.delete('/api/sehir-disi-gorevler/:id', async (req, res) => {
 });
 
 // ==========================================
+
+// =========================================================================
+// ŞEHİR İÇİ GÖREVLENDİRME & MONTAJ FORMU (GFR) APİLERİ
+// =========================================================================
+const SEHIR_ICI_GOREV_FILE = path.join(DATA_DIR, 'mem_sehir_ici_gorevler.json');
+
+let memSehirIciGorevler: any[] = [];
+
+function saveMemSehirIciGorevler() {
+  try {
+    ensureDataDir();
+    fs.writeFileSync(SEHIR_ICI_GOREV_FILE, JSON.stringify(memSehirIciGorevler, null, 2), 'utf-8');
+  } catch (e: any) {
+    console.error('[SAVE SEHIR ICI GOREVLER FILE ERROR]', e.message);
+  }
+}
+
+function loadMemSehirIciGorevler(): any[] | null {
+  try {
+    if (fs.existsSync(SEHIR_ICI_GOREV_FILE)) {
+      const raw = fs.readFileSync(SEHIR_ICI_GOREV_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    }
+  } catch (e: any) {
+    console.error('[LOAD SEHIR ICI GOREVLER FILE ERROR]', e.message);
+  }
+  return null;
+}
+
+const loadedSehirIciGorevler = loadMemSehirIciGorevler();
+if (loadedSehirIciGorevler) {
+  memSehirIciGorevler = loadedSehirIciGorevler;
+}
+
+function normalizeSehirIciGorev(row: any) {
+  return {
+    GorevId: String(getProp(row, 'GorevId', 'gorevid', 'id', 'Id')),
+    DokumanNo: String(getProp(row, 'DokumanNo', 'dokumanno', 'dokuman_no') || ''),
+    Tarih: formatDate(getProp(row, 'Tarih', 'tarih')) || getBugunStr(),
+    PersonelId: getProp(row, 'PersonelId', 'personelid') ? Number(getProp(row, 'PersonelId', 'personelid')) : null,
+    PersonelAdiSoyadi: String(getProp(row, 'PersonelAdiSoyadi', 'personeladisoyadi') || ''),
+    TcKimlikNo: String(getProp(row, 'TcKimlikNo', 'tckimlikno') || ''),
+    SicilNo: String(getProp(row, 'SicilNo', 'sicilno') || ''),
+    UnvaniDepartmani: String(getProp(row, 'UnvaniDepartmani', 'unvanidepartmani') || ''),
+    IletisimTelefonu: String(getProp(row, 'IletisimTelefonu', 'iletisimtelefonu') || ''),
+    GorevlendirenAmir: String(getProp(row, 'GorevlendirenAmir', 'gorevlendirenamir') || ''),
+    GorevTarihi: formatDate(getProp(row, 'GorevTarihi', 'gorevtarihi')) || getBugunStr(),
+    GorevSaati: String(getProp(row, 'GorevSaati', 'gorevsaati') || '08:30 - 18:00'),
+    ProjeId: getProp(row, 'ProjeId', 'projeid') ? Number(getProp(row, 'ProjeId', 'projeid')) : null,
+    MusteriFirmaAdi: String(getProp(row, 'MusteriFirmaAdi', 'musterifirmaadi') || ''),
+    MontajAdresi: String(getProp(row, 'MontajAdresi', 'montajadresi') || ''),
+    MusteriYetkilisiIletisim: String(getProp(row, 'MusteriYetkilisiIletisim', 'musteriyetkilisiiletisim') || ''),
+    YapilacakIsinTanimi: String(getProp(row, 'YapilacakIsinTanimi', 'yapilacakisintanimi') || ''),
+    KullanilanSirketAraciPlakasi: String(getProp(row, 'KullanilanSirketAraciPlakasi', 'kullanilansirketaraciplakasi') || ''),
+    CikisKm: getProp(row, 'CikisKm', 'cikiskm') !== undefined ? String(getProp(row, 'CikisKm', 'cikiskm')) : '',
+    DonusKm: getProp(row, 'DonusKm', 'donuskm') !== undefined ? String(getProp(row, 'DonusKm', 'donuskm')) : '',
+    TahsisEdilenEkipmanlar: String(getProp(row, 'TahsisEdilenEkipmanlar', 'tahsisedilenekipmanlar') || ''),
+    AvansMasrafLimiti: Number(getProp(row, 'AvansMasrafLimiti', 'avansmasraflimiti') || 0),
+    IsgBeyanKabul: Boolean(getProp(row, 'IsgBeyanKabul', 'isgbeyankabul') ?? true),
+    AmirAdiSoyadi: String(getProp(row, 'AmirAdiSoyadi', 'amiradisoyadi') || ''),
+    AmirUnvani: String(getProp(row, 'AmirUnvani', 'amirunvani') || ''),
+    IsciAdiSoyadi: String(getProp(row, 'IsciAdiSoyadi', 'isciadisoyadi') || ''),
+    IsciTcNo: String(getProp(row, 'IsciTcNo', 'iscitcno') || ''),
+    OlusturmaTarihi: formatDate(getProp(row, 'OlusturmaTarihi', 'olusturmatarihi')) || getBugunStr(),
+    Durum: String(getProp(row, 'Durum', 'durum') || 'Aktif')
+  };
+}
+
+// Tüm şehir içi görevler
+app.get('/api/sehir-ici-gorevler', async (req, res) => {
+  try {
+    let list = [...memSehirIciGorevler];
+
+    if (isDbConnected && detectedTables.sehirIciGorevler) {
+      try {
+        const dbRes = await pool.query(`SELECT * FROM ${detectedTables.sehirIciGorevler} ORDER BY "OlusturmaTarihi" DESC NULLS LAST, "GorevId" DESC`);
+        list = dbRes.rows.map(r => normalizeSehirIciGorev(r));
+      } catch (dbErr: any) {
+        console.error('[DB SEHIR ICI GOREV GET ERROR]', dbErr.message);
+        recordDbError('GET /api/sehir-ici-gorevler', dbErr);
+      }
+    }
+
+    return res.json(list);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Yeni şehir içi görev ekle
+app.post('/api/sehir-ici-gorevler', async (req, res) => {
+  try {
+    const {
+      GorevId, DokumanNo, Tarih, PersonelId, PersonelAdiSoyadi, TcKimlikNo, SicilNo,
+      UnvaniDepartmani, IletisimTelefonu, GorevlendirenAmir, GorevTarihi, GorevSaati,
+      ProjeId, MusteriFirmaAdi, MontajAdresi, MusteriYetkilisiIletisim, YapilacakIsinTanimi,
+      KullanilanSirketAraciPlakasi, CikisKm, DonusKm, TahsisEdilenEkipmanlar, AvansMasrafLimiti,
+      IsgBeyanKabul, AmirAdiSoyadi, AmirUnvani, IsciAdiSoyadi, IsciTcNo, OlusturmaTarihi, Durum
+    } = req.body;
+
+    const gId = GorevId || `GFR-${Date.now()}`;
+    const safeProjeId = parseSafeInt(ProjeId, null);
+    const safePersonelId = parseSafeInt(PersonelId, null);
+    const safeAvans = parseSafeFloat(AvansMasrafLimiti, 0);
+
+    const yeniGorev = {
+      GorevId: String(gId),
+      DokumanNo: DokumanNo ? String(DokumanNo) : `GFR-2026-00${memSehirIciGorevler.length + 1}`,
+      Tarih: Tarih ? String(Tarih) : getBugunStr(),
+      PersonelId: safePersonelId,
+      PersonelAdiSoyadi: PersonelAdiSoyadi ? String(PersonelAdiSoyadi).trim() : '',
+      TcKimlikNo: TcKimlikNo ? String(TcKimlikNo).trim() : '',
+      SicilNo: SicilNo ? String(SicilNo).trim() : '',
+      UnvaniDepartmani: UnvaniDepartmani ? String(UnvaniDepartmani).trim() : '',
+      IletisimTelefonu: IletisimTelefonu ? String(IletisimTelefonu).trim() : '',
+      GorevlendirenAmir: GorevlendirenAmir ? String(GorevlendirenAmir).trim() : '',
+      GorevTarihi: GorevTarihi ? String(GorevTarihi) : getBugunStr(),
+      GorevSaati: GorevSaati ? String(GorevSaati).trim() : '08:30 - 18:00',
+      ProjeId: safeProjeId,
+      MusteriFirmaAdi: MusteriFirmaAdi ? String(MusteriFirmaAdi).trim() : '',
+      MontajAdresi: MontajAdresi ? String(MontajAdresi).trim() : '',
+      MusteriYetkilisiIletisim: MusteriYetkilisiIletisim ? String(MusteriYetkilisiIletisim).trim() : '',
+      YapilacakIsinTanimi: YapilacakIsinTanimi ? String(YapilacakIsinTanimi).trim() : '',
+      KullanilanSirketAraciPlakasi: KullanilanSirketAraciPlakasi ? String(KullanilanSirketAraciPlakasi).trim() : '',
+      CikisKm: CikisKm !== undefined && CikisKm !== null ? String(CikisKm) : '',
+      DonusKm: DonusKm !== undefined && DonusKm !== null ? String(DonusKm) : '',
+      TahsisEdilenEkipmanlar: TahsisEdilenEkipmanlar ? String(TahsisEdilenEkipmanlar).trim() : '',
+      AvansMasrafLimiti: safeAvans,
+      IsgBeyanKabul: IsgBeyanKabul !== false,
+      AmirAdiSoyadi: AmirAdiSoyadi ? String(AmirAdiSoyadi).trim() : '',
+      AmirUnvani: AmirUnvani ? String(AmirUnvani).trim() : '',
+      IsciAdiSoyadi: IsciAdiSoyadi ? String(IsciAdiSoyadi).trim() : (PersonelAdiSoyadi ? String(PersonelAdiSoyadi).trim() : ''),
+      IsciTcNo: IsciTcNo ? String(IsciTcNo).trim() : (TcKimlikNo ? String(TcKimlikNo).trim() : ''),
+      OlusturmaTarihi: OlusturmaTarihi ? String(OlusturmaTarihi) : getBugunStr(),
+      Durum: Durum ? String(Durum) : 'Aktif'
+    };
+
+    memSehirIciGorevler.unshift(yeniGorev);
+    saveMemSehirIciGorevler();
+
+    if (isDbConnected && detectedTables.sehirIciGorevler) {
+      try {
+        await pool.query(`
+          INSERT INTO ${detectedTables.sehirIciGorevler} (
+            "GorevId", "DokumanNo", "Tarih", "PersonelId", "PersonelAdiSoyadi", "TcKimlikNo", "SicilNo",
+            "UnvaniDepartmani", "IletisimTelefonu", "GorevlendirenAmir", "GorevTarihi", "GorevSaati",
+            "ProjeId", "MusteriFirmaAdi", "MontajAdresi", "MusteriYetkilisiIletisim", "YapilacakIsinTanimi",
+            "KullanilanSirketAraciPlakasi", "CikisKm", "DonusKm", "TahsisEdilenEkipmanlar", "AvansMasrafLimiti",
+            "IsgBeyanKabul", "AmirAdiSoyadi", "AmirUnvani", "IsciAdiSoyadi", "IsciTcNo", "OlusturmaTarihi", "Durum"
+          ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22,
+            $23, $24, $25, $26, $27, $28, $29
+          )
+          ON CONFLICT ("GorevId") DO UPDATE SET
+            "DokumanNo" = EXCLUDED."DokumanNo",
+            "Tarih" = EXCLUDED."Tarih",
+            "PersonelId" = EXCLUDED."PersonelId",
+            "PersonelAdiSoyadi" = EXCLUDED."PersonelAdiSoyadi",
+            "TcKimlikNo" = EXCLUDED."TcKimlikNo",
+            "SicilNo" = EXCLUDED."SicilNo",
+            "UnvaniDepartmani" = EXCLUDED."UnvaniDepartmani",
+            "IletisimTelefonu" = EXCLUDED."IletisimTelefonu",
+            "GorevlendirenAmir" = EXCLUDED."GorevlendirenAmir",
+            "GorevTarihi" = EXCLUDED."GorevTarihi",
+            "GorevSaati" = EXCLUDED."GorevSaati",
+            "ProjeId" = EXCLUDED."ProjeId",
+            "MusteriFirmaAdi" = EXCLUDED."MusteriFirmaAdi",
+            "MontajAdresi" = EXCLUDED."MontajAdresi",
+            "MusteriYetkilisiIletisim" = EXCLUDED."MusteriYetkilisiIletisim",
+            "YapilacakIsinTanimi" = EXCLUDED."YapilacakIsinTanimi",
+            "KullanilanSirketAraciPlakasi" = EXCLUDED."KullanilanSirketAraciPlakasi",
+            "CikisKm" = EXCLUDED."CikisKm",
+            "DonusKm" = EXCLUDED."DonusKm",
+            "TahsisEdilenEkipmanlar" = EXCLUDED."TahsisEdilenEkipmanlar",
+            "AvansMasrafLimiti" = EXCLUDED."AvansMasrafLimiti",
+            "IsgBeyanKabul" = EXCLUDED."IsgBeyanKabul",
+            "AmirAdiSoyadi" = EXCLUDED."AmirAdiSoyadi",
+            "AmirUnvani" = EXCLUDED."AmirUnvani",
+            "IsciAdiSoyadi" = EXCLUDED."IsciAdiSoyadi",
+            "IsciTcNo" = EXCLUDED."IsciTcNo",
+            "Durum" = EXCLUDED."Durum"
+        `, [
+          yeniGorev.GorevId, yeniGorev.DokumanNo, yeniGorev.Tarih, yeniGorev.PersonelId, yeniGorev.PersonelAdiSoyadi,
+          yeniGorev.TcKimlikNo, yeniGorev.SicilNo, yeniGorev.UnvaniDepartmani, yeniGorev.IletisimTelefonu,
+          yeniGorev.GorevlendirenAmir, yeniGorev.GorevTarihi, yeniGorev.GorevSaati, yeniGorev.ProjeId,
+          yeniGorev.MusteriFirmaAdi, yeniGorev.MontajAdresi, yeniGorev.MusteriYetkilisiIletisim, yeniGorev.YapilacakIsinTanimi,
+          yeniGorev.KullanilanSirketAraciPlakasi, yeniGorev.CikisKm, yeniGorev.DonusKm, yeniGorev.TahsisEdilenEkipmanlar,
+          yeniGorev.AvansMasrafLimiti, yeniGorev.IsgBeyanKabul, yeniGorev.AmirAdiSoyadi, yeniGorev.AmirUnvani,
+          yeniGorev.IsciAdiSoyadi, yeniGorev.IsciTcNo, yeniGorev.OlusturmaTarihi, yeniGorev.Durum
+        ]);
+      } catch (dbErr: any) {
+        console.error('[DB SEHIR ICI GOREV INSERT ERROR]', dbErr.message);
+        recordDbError('POST /api/sehir-ici-gorevler', dbErr);
+        return res.status(500).json({
+          success: false,
+          error: dbErr.message,
+          detail: dbErr.detail || dbErr.hint || dbErr.message
+        });
+      }
+    }
+
+    return res.json({ success: true, item: yeniGorev });
+  } catch (err: any) {
+    recordDbError('POST /api/sehir-ici-gorevler (SERVER)', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Şehir içi görev güncelle
+app.put('/api/sehir-ici-gorevler/:id', async (req, res) => {
+  try {
+    const rawId = req.params.id;
+    const body = req.body;
+
+    const idx = memSehirIciGorevler.findIndex(g => String(g.GorevId) === String(rawId));
+    let updatedItem: any;
+    if (idx !== -1) {
+      memSehirIciGorevler[idx] = { ...memSehirIciGorevler[idx], ...body, GorevId: String(rawId) };
+      updatedItem = memSehirIciGorevler[idx];
+    } else {
+      updatedItem = { ...body, GorevId: String(rawId) };
+      memSehirIciGorevler.unshift(updatedItem);
+    }
+    saveMemSehirIciGorevler();
+
+    if (isDbConnected && detectedTables.sehirIciGorevler) {
+      try {
+        const updateFields: string[] = [];
+        const params: any[] = [];
+        let i = 1;
+
+        const allowed = [
+          'DokumanNo', 'Tarih', 'PersonelId', 'PersonelAdiSoyadi', 'TcKimlikNo', 'SicilNo',
+          'UnvaniDepartmani', 'IletisimTelefonu', 'GorevlendirenAmir', 'GorevTarihi', 'GorevSaati',
+          'ProjeId', 'MusteriFirmaAdi', 'MontajAdresi', 'MusteriYetkilisiIletisim', 'YapilacakIsinTanimi',
+          'KullanilanSirketAraciPlakasi', 'CikisKm', 'DonusKm', 'TahsisEdilenEkipmanlar', 'AvansMasrafLimiti',
+          'IsgBeyanKabul', 'AmirAdiSoyadi', 'AmirUnvani', 'IsciAdiSoyadi', 'IsciTcNo', 'Durum'
+        ];
+
+        for (const key of allowed) {
+          if (body[key] !== undefined) {
+            updateFields.push(`"${key}" = ${i++}`);
+            if (key === 'PersonelId' || key === 'ProjeId') {
+              params.push(parseSafeInt(body[key], null));
+            } else if (key === 'AvansMasrafLimiti') {
+              params.push(parseSafeFloat(body[key], 0));
+            } else {
+              params.push(body[key]);
+            }
+          }
+        }
+
+        let didUpdate = false;
+        if (updateFields.length > 0) {
+          params.push(rawId);
+          const updateRes = await pool.query(`
+            UPDATE ${detectedTables.sehirIciGorevler}
+            SET ${updateFields.join(', ')}
+            WHERE "GorevId" = $${i}
+          `, params);
+          if (updateRes.rowCount && updateRes.rowCount > 0) {
+            didUpdate = true;
+          }
+        }
+
+        if (!didUpdate) {
+          await pool.query(`
+            INSERT INTO ${detectedTables.sehirIciGorevler} (
+              "GorevId", "DokumanNo", "Tarih", "PersonelId", "PersonelAdiSoyadi", "TcKimlikNo", "SicilNo",
+              "UnvaniDepartmani", "IletisimTelefonu", "GorevlendirenAmir", "GorevTarihi", "GorevSaati",
+              "ProjeId", "MusteriFirmaAdi", "MontajAdresi", "MusteriYetkilisiIletisim", "YapilacakIsinTanimi",
+              "KullanilanSirketAraciPlakasi", "CikisKm", "DonusKm", "TahsisEdilenEkipmanlar", "AvansMasrafLimiti",
+              "IsgBeyanKabul", "AmirAdiSoyadi", "AmirUnvani", "IsciAdiSoyadi", "IsciTcNo", "OlusturmaTarihi", "Durum"
+            ) VALUES (
+              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22,
+              $23, $24, $25, $26, $27, $28, $29
+            )
+            ON CONFLICT ("GorevId") DO UPDATE SET
+              "DokumanNo" = EXCLUDED."DokumanNo",
+              "Tarih" = EXCLUDED."Tarih",
+              "PersonelId" = EXCLUDED."PersonelId",
+              "PersonelAdiSoyadi" = EXCLUDED."PersonelAdiSoyadi",
+              "TcKimlikNo" = EXCLUDED."TcKimlikNo",
+              "SicilNo" = EXCLUDED."SicilNo",
+              "UnvaniDepartmani" = EXCLUDED."UnvaniDepartmani",
+              "IletisimTelefonu" = EXCLUDED."IletisimTelefonu",
+              "GorevlendirenAmir" = EXCLUDED."GorevlendirenAmir",
+              "GorevTarihi" = EXCLUDED."GorevTarihi",
+              "GorevSaati" = EXCLUDED."GorevSaati",
+              "ProjeId" = EXCLUDED."ProjeId",
+              "MusteriFirmaAdi" = EXCLUDED."MusteriFirmaAdi",
+              "MontajAdresi" = EXCLUDED."MontajAdresi",
+              "MusteriYetkilisiIletisim" = EXCLUDED."MusteriYetkilisiIletisim",
+              "YapilacakIsinTanimi" = EXCLUDED."YapilacakIsinTanimi",
+              "KullanilanSirketAraciPlakasi" = EXCLUDED."KullanilanSirketAraciPlakasi",
+              "CikisKm" = EXCLUDED."CikisKm",
+              "DonusKm" = EXCLUDED."DonusKm",
+              "TahsisEdilenEkipmanlar" = EXCLUDED."TahsisEdilenEkipmanlar",
+              "AvansMasrafLimiti" = EXCLUDED."AvansMasrafLimiti",
+              "IsgBeyanKabul" = EXCLUDED."IsgBeyanKabul",
+              "AmirAdiSoyadi" = EXCLUDED."AmirAdiSoyadi",
+              "AmirUnvani" = EXCLUDED."AmirUnvani",
+              "IsciAdiSoyadi" = EXCLUDED."IsciAdiSoyadi",
+              "IsciTcNo" = EXCLUDED."IsciTcNo",
+              "Durum" = EXCLUDED."Durum"
+          `, [
+            String(rawId), body.DokumanNo || `GFR-2026-001`, body.Tarih || getBugunStr(),
+            parseSafeInt(body.PersonelId, null), body.PersonelAdiSoyadi || '', body.TcKimlikNo || '',
+            body.SicilNo || '', body.UnvaniDepartmani || '', body.IletisimTelefonu || '',
+            body.GorevlendirenAmir || '', body.GorevTarihi || getBugunStr(), body.GorevSaati || '08:30 - 18:00',
+            parseSafeInt(body.ProjeId, null), body.MusteriFirmaAdi || '', body.MontajAdresi || '',
+            body.MusteriYetkilisiIletisim || '', body.YapilacakIsinTanimi || '',
+            body.KullanilanSirketAraciPlakasi || '', body.CikisKm !== undefined ? String(body.CikisKm) : '',
+            body.DonusKm !== undefined ? String(body.DonusKm) : '', body.TahsisEdilenEkipmanlar || '',
+            parseSafeFloat(body.AvansMasrafLimiti, 0), body.IsgBeyanKabul !== false,
+            body.AmirAdiSoyadi || '', body.AmirUnvani || '', body.IsciAdiSoyadi || '',
+            body.IsciTcNo || '', body.OlusturmaTarihi || getBugunStr(), body.Durum || 'Aktif'
+          ]);
+        }
+      } catch (dbErr: any) {
+        console.error('[DB SEHIR ICI GOREV UPDATE ERROR]', dbErr.message);
+        recordDbError(`PUT /api/sehir-ici-gorevler/${rawId}`, dbErr);
+        return res.status(500).json({
+          success: false,
+          error: dbErr.message,
+          detail: dbErr.detail || dbErr.hint || dbErr.message
+        });
+      }
+    }
+
+    return res.json({ success: true, message: 'Şehir içi görevlendirme formu kaydedildi.', item: updatedItem });
+  } catch (err: any) {
+    recordDbError(`PUT /api/sehir-ici-gorevler/${req.params.id} (SERVER)`, err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Şehir içi görev sil
+app.delete('/api/sehir-ici-gorevler/:id', async (req, res) => {
+  try {
+    const rawId = req.params.id;
+    memSehirIciGorevler = memSehirIciGorevler.filter(g => String(g.GorevId) !== String(rawId));
+    saveMemSehirIciGorevler();
+
+    if (isDbConnected && detectedTables.sehirIciGorevler) {
+      try {
+        await pool.query(`DELETE FROM ${detectedTables.sehirIciGorevler} WHERE "GorevId" = $1`, [rawId]);
+      } catch (dbErr: any) {
+        console.error('[DB SEHIR ICI GOREV DELETE ERROR]', dbErr.message);
+        recordDbError(`DELETE /api/sehir-ici-gorevler/${rawId}`, dbErr);
+        return res.status(500).json({
+          success: false,
+          error: dbErr.message,
+          detail: dbErr.detail || dbErr.hint || dbErr.message
+        });
+      }
+    }
+
+    return res.json({ success: true, message: 'Şehir içi görevlendirme formu silindi.' });
+  } catch (err: any) {
+    recordDbError(`DELETE /api/sehir-ici-gorevler/${req.params.id} (SERVER)`, err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Ceride (Şantiye & İşletme Günlüğü) API Uçları
 // ==========================================
 app.get('/api/ceride', async (req, res) => {

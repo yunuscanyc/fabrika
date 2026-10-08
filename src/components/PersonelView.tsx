@@ -84,7 +84,11 @@ export const PersonelView: React.FC<PersonelViewProps> = ({
   const handleEvrakSecildi = async (evrakTipi: EvrakTipi) => {
     if (!seciliEvrakPersonel) return;
 
-    if (evrakTipi === 'kismi_sozlesme') {
+    if (evrakTipi === 'sehir_ici_gorev') {
+      if (onNavigateAltSekme) {
+        onNavigateAltSekme('sehir_ici' as any, seciliEvrakPersonel.PersonelId);
+      }
+    } else if (evrakTipi === 'kismi_sozlesme') {
       setSozlesmeSeciliPersonel(seciliEvrakPersonel);
       setSozlesmeModalAcik(true);
     } else if (evrakTipi === 'kvkk') {

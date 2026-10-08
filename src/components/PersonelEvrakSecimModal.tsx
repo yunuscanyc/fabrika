@@ -16,7 +16,7 @@ import {
   FileCheck
 } from 'lucide-react';
 
-export type EvrakTipi = 'kismi_sozlesme' | 'kvkk' | 'kkd_zimmet' | 'izin_formu' | 'ozluk_formu';
+export type EvrakTipi = 'kismi_sozlesme' | 'kvkk' | 'kkd_zimmet' | 'izin_formu' | 'sehir_ici_gorev' | 'ozluk_formu';
 
 interface PersonelEvrakSecimModalProps {
   isOpen: boolean;
@@ -45,6 +45,15 @@ export const PersonelEvrakSecimModal: React.FC<PersonelEvrakSecimModalProps> = (
   const gorev = (personel as any).Gorev || (personel as any).GorevVeyaUnvan || (personel as any).UzmanlikAlani || (personel as any).Departman || 'Personel';
 
   const evraklar = [
+    {
+      id: 'sehir_ici_gorev' as EvrakTipi,
+      baslik: 'Şehir İçi Görevlendirme & Montaj Formu (GFR)',
+      aciklama: 'Müşteri montajı, şantiye servisi, araç plakası ve el aletleri tahsisi ile resmi matbu görevlendirme çıktısı.',
+      mevzuat: '🏙️ Görev Formu Aç',
+      ikon: Building2,
+      renk: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30 hover:border-cyan-500 hover:bg-cyan-500/30',
+      badgeRenk: 'bg-cyan-950/80 text-cyan-300 border-cyan-800'
+    },
     {
       id: 'kismi_sozlesme' as EvrakTipi,
       baslik: 'Kısmi Süreli (Part-Time) İş Sözleşmesi',

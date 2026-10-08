@@ -7,7 +7,8 @@ import { SantiyeMontajView } from './SantiyeMontajView';
 import { IsgView } from './IsgView';
 import { YevmiyeciView } from './YevmiyeciView';
 import { SehirDisiGorevlendirmeView } from './SehirDisiGorevlendirmeView';
-import { Users, Calendar, Clock, ShieldCheck, Briefcase, HardHat, Send, BookOpen } from 'lucide-react';
+import { SehirIciGorevlendirmeView } from './SehirIciGorevlendirmeView';
+import { Users, Calendar, Clock, ShieldCheck, Briefcase, HardHat, Send, BookOpen, Building2 } from 'lucide-react';
 
 interface PersonelHubViewProps {
   personeller: Personel[];
@@ -16,7 +17,7 @@ interface PersonelHubViewProps {
   departmanlar: Departman[];
   gorevler: Gorev[];
   onRefresh: () => void;
-  initialAltSekme?: 'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci' | 'gorevlendirme';
+  initialAltSekme?: 'liste' | 'sehir_ici' | 'gorevlendirme' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci';
   initialPersonelId?: number;
   initialIsgSekme?: 'kkd' | 'saglik' | 'egitim';
   initialYeniIzinModalAcik?: boolean;
@@ -36,7 +37,7 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
   initialYeniIzinModalAcik,
   onNavigateTab,
 }) => {
-  const [altSekme, setAltSekme] = useState<'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci' | 'gorevlendirme'>(initialAltSekme);
+  const [altSekme, setAltSekme] = useState<'liste' | 'sehir_ici' | 'gorevlendirme' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci'>(initialAltSekme);
   const [hubPersonelId, setHubPersonelId] = useState<number | undefined>(initialPersonelId);
   const [hubIsgSekme, setHubIsgSekme] = useState<'kkd' | 'saglik' | 'egitim' | undefined>(initialIsgSekme);
   const [hubIzinModalAcik, setHubIzinModalAcik] = useState<boolean>(Boolean(initialYeniIzinModalAcik));
@@ -66,7 +67,7 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
   }, [initialYeniIzinModalAcik]);
 
   const handleNavigateAltSekme = (
-    subTab: 'liste' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci' | 'gorevlendirme',
+    subTab: 'liste' | 'sehir_ici' | 'gorevlendirme' | 'izin' | 'puantaj' | 'montaj' | 'isg' | 'yevmiyeci',
     personelId?: number,
     isgSekmeTarget?: 'kkd' | 'saglik' | 'egitim',
     yeniIzinModalAcik?: boolean
@@ -98,6 +99,18 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
           >
             <Users className="w-4 h-4" />
             Personel Listesi ({personeller.filter(p => p.DurumAktifMi).length})
+          </button>
+
+          <button
+            onClick={() => setAltSekme('sehir_ici')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
+              altSekme === 'sehir_ici'
+                ? 'bg-cyan-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Building2 className="w-4 h-4" />
+            🏙️ Şehir İçi Görev
           </button>
 
           <button
@@ -200,6 +213,14 @@ export const PersonelHubView: React.FC<PersonelHubViewProps> = ({
           onRefresh={onRefresh}
           onNavigateTab={onNavigateTab}
           onNavigateAltSekme={handleNavigateAltSekme}
+        />
+      )}
+
+      {altSekme === 'sehir_ici' && (
+        <SehirIciGorevlendirmeView
+          personeller={personeller}
+          projeler={projeler}
+          initialPersonelId={hubPersonelId}
         />
       )}
 
