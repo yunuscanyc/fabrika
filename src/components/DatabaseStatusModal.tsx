@@ -3,6 +3,7 @@ import {
   Database, RefreshCw, CheckCircle2, AlertTriangle, X, Table, 
   Download, Upload, ShieldCheck, FileJson, Loader2, HardDrive, Check, Sparkles, AlertOctagon, Terminal
 } from 'lucide-react';
+import { guvenliDosyaIndir } from '../utils/downloadUtils';
 
 export interface DbStatusData {
   connected: boolean;
@@ -63,21 +64,18 @@ export const DatabaseStatusModal: React.FC<DatabaseStatusModalProps> = ({
   };
 
   // TEK TUŞLA YEDEK İNDİR
-  const handleDownloadBackup = (fullMedia = false) => {
+  const handleDownloadBackup = async (fullMedia = false) => {
     try {
       setDownloadingBackup(true);
-      const link = document.createElement('a');
-      link.href = fullMedia ? '/api/backup/export' : '/api/backup/export?noPhotos=true';
+      const url = fullMedia ? '/api/backup/export' : '/api/backup/export?noPhotos=true';
       const dateStr = new Date().toISOString().slice(0, 10);
-      link.download = fullMedia 
-        ? `rende_veritabani_tam_yedek_${dateStr}.json`
-        : `rende_veritabani_hizli_veri_yedeği_${dateStr}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setTimeout(() => setDownloadingBackup(false), 2500);
+      const fileName = fullMedia 
+        ? `rende_veritabani_tam_arsiv_${dateStr}.json`
+        : `rende_veritabani_hizli_veri_yedegi_${dateStr}.json`;
+      await guvenliDosyaIndir(url, fileName);
     } catch (err: any) {
       alert('Yedek indirme hatası: ' + err.message);
+    } finally {
       setDownloadingBackup(false);
     }
   };

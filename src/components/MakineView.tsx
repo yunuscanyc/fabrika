@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { MakineBakimModal } from './MakineBakimModal';
 import { PersonelCombobox } from './PersonelCombobox';
+import { guvenliDosyaIndir } from '../utils/downloadUtils';
 
 export function formatTrDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '-';
@@ -1042,15 +1043,15 @@ export const MakineView: React.FC<MakineViewProps> = ({ makineler, personeller =
                 {lightboxDosya.DosyaAdi} {lightboxDosya.DosyaBoyutu ? `(${lightboxDosya.DosyaBoyutu})` : ''}
               </span>
               <div className="flex items-center gap-2">
-                <a
-                  href={lightboxDosya.DosyaIcerigi || lightboxDosya.base64}
-                  download={lightboxDosya.DosyaAdi}
-                  className="p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-xl transition-all flex items-center gap-1 text-xs font-semibold"
+                <button
+                  type="button"
+                  onClick={() => guvenliDosyaIndir(lightboxDosya.DosyaIcerigi || lightboxDosya.base64, lightboxDosya.DosyaAdi)}
+                  className="p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-xl transition-all flex items-center gap-1 text-xs font-semibold cursor-pointer"
                   title="Belgeyi / Görseli İndir"
                 >
                   <Download className="w-4 h-4" />
                   <span>İndir</span>
-                </a>
+                </button>
                 <button
                   onClick={() => setLightboxDosya(null)}
                   className="p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-xl transition-all"
@@ -1072,14 +1073,14 @@ export const MakineView: React.FC<MakineViewProps> = ({ makineler, personeller =
                 <div className="text-center p-8 text-white space-y-3">
                   <FileText className="w-16 h-16 text-amber-400 mx-auto" />
                   <p className="font-semibold text-sm">{lightboxDosya.DosyaAdi}</p>
-                  <a
-                    href={lightboxDosya.DosyaIcerigi}
-                    download={lightboxDosya.DosyaAdi}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow transition"
+                  <button
+                    type="button"
+                    onClick={() => guvenliDosyaIndir(lightboxDosya.DosyaIcerigi, lightboxDosya.DosyaAdi)}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow transition cursor-pointer"
                   >
                     <Download className="w-4 h-4" />
                     Belgeyi İndir ve Görüntüle
-                  </a>
+                  </button>
                 </div>
               )}
             </div>

@@ -23,6 +23,7 @@ import {
   Paperclip
 } from 'lucide-react';
 import { KkdZimmetTutanakModal } from './KkdZimmetTutanakModal';
+import { guvenliDosyaIndir } from '../utils/downloadUtils';
 import { formatTarihTR, tarihAyEkle, getBugunIso, tarihFarkiGun } from '../utils/dateUtils';
 
 interface IsgViewProps {
@@ -2176,14 +2177,14 @@ export const IsgView: React.FC<IsgViewProps> = ({
                 </h3>
               </div>
               <div className="flex items-center gap-2">
-                <a
-                  href={lightboxDosya.DosyaIcerigi}
-                  download={lightboxDosya.DosyaAdi}
-                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                <button
+                  type="button"
+                  onClick={() => guvenliDosyaIndir(lightboxDosya.DosyaIcerigi, lightboxDosya.DosyaAdi)}
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
                   title="Dosyayı İndir"
                 >
                   <Download className="w-4 h-4" />
-                </a>
+                </button>
                 <button
                   type="button"
                   onClick={() => setLightboxDosya(null)}
@@ -2217,14 +2218,14 @@ export const IsgView: React.FC<IsgViewProps> = ({
                     <p className="text-sm text-slate-300 font-semibold">{lightboxDosya.DosyaAdi}</p>
                     <p className="text-xs text-slate-500 mt-1">Bu belge formatı tarayıcıda doğrudan görüntülenemiyor.</p>
                   </div>
-                  <a
-                    href={lightboxDosya.DosyaIcerigi}
-                    download={lightboxDosya.DosyaAdi}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition shadow-lg"
+                  <button
+                    type="button"
+                    onClick={() => guvenliDosyaIndir(lightboxDosya.DosyaIcerigi, lightboxDosya.DosyaAdi)}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition shadow-lg cursor-pointer"
                   >
                     <Download className="w-4 h-4" />
                     <span>Belgeyi İndir</span>
-                  </a>
+                  </button>
                 </div>
               )}
             </div>

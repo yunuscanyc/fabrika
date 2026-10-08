@@ -3,6 +3,7 @@ import { Makine, Personel } from '../types';
 import { Wrench, Calendar, Clock, DollarSign, X, Paperclip, Upload, FileText, Image as ImageIcon, Eye, Download, Camera } from 'lucide-react';
 import { PersonelCombobox } from './PersonelCombobox';
 import { CameraCaptureModal } from './CameraCaptureModal';
+import { guvenliDosyaIndir } from '../utils/downloadUtils';
 
 interface MakineBakimModalProps {
   isOpen: boolean;
@@ -370,14 +371,14 @@ export const MakineBakimModal: React.FC<MakineBakimModalProps> = ({
                 <span className="text-xs font-bold text-white truncate">{lightboxBelge.DosyaAdi}</span>
               </div>
               <div className="flex items-center gap-2">
-                <a
-                  href={lightboxBelge.DosyaIcerigi}
-                  download={lightboxBelge.DosyaAdi}
-                  className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
+                <button
+                  type="button"
+                  onClick={() => guvenliDosyaIndir(lightboxBelge.DosyaIcerigi, lightboxBelge.DosyaAdi)}
+                  className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
                   title="İndir"
                 >
                   <Download className="w-4 h-4" />
-                </a>
+                </button>
                 <button
                   type="button"
                   onClick={() => setLightboxBelge(null)}
@@ -406,14 +407,14 @@ export const MakineBakimModal: React.FC<MakineBakimModalProps> = ({
                 <div className="text-center py-8 space-y-3">
                   <FileText className="w-12 h-12 text-slate-600 mx-auto" />
                   <p className="text-xs text-slate-300">{lightboxBelge.DosyaAdi}</p>
-                  <a
-                    href={lightboxBelge.DosyaIcerigi}
-                    download={lightboxBelge.DosyaAdi}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold"
+                  <button
+                    type="button"
+                    onClick={() => guvenliDosyaIndir(lightboxBelge.DosyaIcerigi, lightboxBelge.DosyaAdi)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold cursor-pointer"
                   >
                     <Download className="w-3.5 h-3.5" />
                     <span>İndir</span>
-                  </a>
+                  </button>
                 </div>
               )}
             </div>

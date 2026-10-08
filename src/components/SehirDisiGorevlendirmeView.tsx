@@ -977,7 +977,7 @@ export const SehirDisiGorevlendirmeView: React.FC<SehirDisiGorevlendirmeViewProp
             {/* ANTET & BAŞLIK */}
             <div className="flex justify-between items-start border-b-2 border-black pb-3">
               <div>
-                <h1 className="text-xl font-black tracking-tight">RENDE AHŞAP &amp; MOBİLYA A.Ş.</h1>
+                <h1 className="text-xl font-black tracking-tight">RENDE İNŞAAT MOBİLYA TURİZM SAN. VE TİC. A.Ş.</h1>
                 <p className="text-xs text-slate-600 font-bold">İnsan Kaynakları &amp; Şantiye Yönetim Direktörlüğü</p>
               </div>
               <div className="text-right text-xs">

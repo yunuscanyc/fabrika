@@ -924,7 +924,7 @@ export const SehirIciGorevlendirmeView: React.FC<SehirIciGorevlendirmeViewProps>
                   <div className="border-b-2 border-slate-900 pb-4 mb-4 flex items-center justify-between">
                     <div>
                       <h1 className="text-lg sm:text-xl font-black uppercase tracking-tight text-slate-900">
-                        RENDE AHŞAP &amp; TASARIM SAN. TİC. LTD. ŞTİ.
+                        RENDE İNŞAAT MOBİLYA TURİZM SAN. VE TİC. A.Ş.
                       </h1>
                       <h2 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-cyan-900 mt-0.5">
                         ŞEHİR İÇİ GÖREVLENDİRME &amp; MONTAJ / SERVİS FORMU

@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { RuhsatKaydi, RuhsatKategori } from '../types';
 import { formatTarihTR, getBugunIso } from '../utils/dateUtils';
 import { getFileInfo } from './HatirlaticilarView';
+import { guvenliDosyaIndir } from '../utils/downloadUtils';
 import { 
   FileCheck, 
   Plus, 
@@ -1113,14 +1114,17 @@ export const RuhsatlarView: React.FC<RuhsatlarViewProps> = ({
                 <div className="text-center space-y-3">
                   <Paperclip className="w-12 h-12 text-slate-500 mx-auto" />
                   <p className="text-sm font-semibold">{activeDocViewer.name}</p>
-                  <a
-                    href={getFileInfo(activeDocViewer.file).content}
-                    download={activeDocViewer.name}
-                    className="px-4 py-2 bg-amber-500 text-slate-950 font-bold rounded-xl text-xs inline-flex items-center gap-2"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const fileContent = getFileInfo(activeDocViewer.file).content;
+                      guvenliDosyaIndir(fileContent, activeDocViewer.name);
+                    }}
+                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs inline-flex items-center gap-2 cursor-pointer transition shadow-sm"
                   >
                     <Download className="w-4 h-4" />
                     Dosyayı İndir
-                  </a>
+                  </button>
                 </div>
               )}
             </div>

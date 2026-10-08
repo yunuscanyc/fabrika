@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Hatirlatici, AjandaBildirimi } from '../types';
 import { formatTarihTR } from '../utils/dateUtils';
+import { guvenliDosyaIndir } from '../utils/downloadUtils';
 import { 
   Bell, 
   Plus, 
@@ -1768,15 +1769,15 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                   )}
 
                   {dataUrl && (
-                    <a
-                      href={dataUrl}
-                      download={fileName}
+                    <button
+                      type="button"
+                      onClick={() => guvenliDosyaIndir(dataUrl, fileName)}
                       className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all flex items-center gap-1.5 text-xs font-bold shadow-sm cursor-pointer"
-                      title="Dosyayı İndir"
+                      title="Dosyayı Güvenle İndir"
                     >
                       <Download className="w-3.5 h-3.5" />
                       <span className="hidden sm:inline">İndir</span>
-                    </a>
+                    </button>
                   )}
 
                   {dataUrl && (
@@ -1863,14 +1864,14 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                     </div>
                     <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2.5">
                       {dataUrl && (
-                        <a
-                          href={dataUrl}
-                          download={fileName}
+                        <button
+                          type="button"
+                          onClick={() => guvenliDosyaIndir(dataUrl, fileName)}
                           className="w-full sm:w-auto px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm cursor-pointer"
                         >
                           <Download className="w-4 h-4" />
                           <span>Dosyayı İndir</span>
-                        </a>
+                        </button>
                       )}
                       {dataUrl && (
                         <button

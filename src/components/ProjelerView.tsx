@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Proje, ProjeAsama, Yevmiyeci, YevmiyeCalismaKaydi, Personel, ProjePersonel } from '../types';
+import { guvenliDosyaIndir } from '../utils/downloadUtils';
 import { 
   FolderGit2, 
   Plus, 
@@ -1306,14 +1307,14 @@ export const ProjelerView: React.FC<ProjelerViewProps> = ({
                                     </button>
                                   )}
                                   {dosya.base64 && (
-                                    <a
-                                      href={dosya.base64}
-                                      download={dosya.ad}
-                                      className="p-1 rounded text-blue-600 hover:bg-blue-50 transition-colors"
+                                    <button
+                                      type="button"
+                                      onClick={() => guvenliDosyaIndir(dosya.base64, dosya.ad)}
+                                      className="p-1 rounded text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
                                       title="Dosyayı İndir"
                                     >
                                       <Download className="w-3.5 h-3.5" />
-                                    </a>
+                                    </button>
                                   )}
                                   <button
                                     type="button"
@@ -2065,14 +2066,14 @@ export const ProjelerView: React.FC<ProjelerViewProps> = ({
                     Bu dosya formatı tarayıcıda doğrudan önizleme için uygun olmayabilir. Dosyayı cihazınıza indirerek görüntüleyebilirsiniz.
                   </p>
                   {onizlemeDosya.base64 && (
-                    <a
-                      href={onizlemeDosya.base64}
-                      download={onizlemeDosya.ad}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+                    <button
+                      type="button"
+                      onClick={() => guvenliDosyaIndir(onizlemeDosya.base64, onizlemeDosya.ad)}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
                     >
                       <Download className="w-3.5 h-3.5" />
                       <span>Belgeyi İndir</span>
-                    </a>
+                    </button>
                   )}
                 </div>
               )}
@@ -2080,14 +2081,14 @@ export const ProjelerView: React.FC<ProjelerViewProps> = ({
 
             <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-2 mt-4 shrink-0">
               {onizlemeDosya.base64 && (
-                <a
-                  href={onizlemeDosya.base64}
-                  download={onizlemeDosya.ad}
-                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-1.5"
+                <button
+                  type="button"
+                  onClick={() => guvenliDosyaIndir(onizlemeDosya.base64, onizlemeDosya.ad)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>İndir</span>
-                </a>
+                </button>
               )}
               <button
                 type="button"

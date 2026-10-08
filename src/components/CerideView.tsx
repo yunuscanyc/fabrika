@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import { CerideKaydi, CerideFotograf, Proje } from '../types';
 import { CameraCaptureModal } from './CameraCaptureModal';
+import { guvenliDosyaIndir } from '../utils/downloadUtils';
 
 const isImageFile = (fileName: string) => {
   const ext = (fileName || '').split('.').pop()?.toLowerCase();
@@ -1094,12 +1095,12 @@ export const CerideView: React.FC<CerideViewProps> = ({
                                   // PDF, Word, Excel, TXT, etc. File download card
                                   const fileInfo = getFileIconAndColor(f.DosyaAdi);
                                   return (
-                                    <a
+                                    <button
+                                      type="button"
                                       key={f.Id || fIdx}
-                                      href={f.DosyaIcerigi}
-                                      download={f.DosyaAdi}
+                                      onClick={() => guvenliDosyaIndir(f.DosyaIcerigi, f.DosyaAdi)}
                                       className={`flex flex-col items-center justify-center p-2 text-center border rounded-lg gap-1.5 shrink-0 w-20 h-20 sm:w-24 sm:h-24 hover:ring-2 hover:ring-amber-500 transition shadow-2xs cursor-pointer ${fileInfo.bg}`}
-                                      title={`${f.DosyaAdi} dosyasını indir (${f.DosyaBoyutu || ''})`}
+                                      title={`${f.DosyaAdi} dosyasını güvenle indir (${f.DosyaBoyutu || ''})`}
                                     >
                                       <FileText className="w-5 h-5 sm:w-6 h-6" />
                                       <span className="text-[9px] font-bold truncate max-w-full leading-tight text-slate-700 dark:text-slate-300 px-1">
@@ -1108,7 +1109,7 @@ export const CerideView: React.FC<CerideViewProps> = ({
                                       <span className="text-[8px] uppercase font-extrabold tracking-wider bg-black/10 dark:bg-white/10 px-1 py-0.5 rounded-full">
                                         {fileInfo.label}
                                       </span>
-                                    </a>
+                                    </button>
                                   );
                                 }
                               })}
@@ -1509,14 +1510,19 @@ export const CerideView: React.FC<CerideViewProps> = ({
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <a
-                  href={lightboxData.images[lightboxData.index]?.DosyaIcerigi}
-                  download={lightboxData.images[lightboxData.index]?.DosyaAdi || 'ceride_foto.jpg'}
-                  className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition"
+                <button
+                  type="button"
+                  onClick={() => {
+                    const currentImg = lightboxData.images[lightboxData.index];
+                    if (currentImg?.DosyaIcerigi) {
+                      guvenliDosyaIndir(currentImg.DosyaIcerigi, currentImg.DosyaAdi || 'ceride_foto.jpg');
+                    }
+                  }}
+                  className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition cursor-pointer"
                   title="Fotoğrafı İndir"
                 >
                   <Download className="w-4 h-4" />
-                </a>
+                </button>
                 <button
                   onClick={() => setLightboxData(null)}
                   className="p-1.5 bg-slate-800 hover:bg-red-600 text-slate-200 rounded-lg text-xs transition cursor-pointer"

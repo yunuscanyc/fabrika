@@ -4678,7 +4678,7 @@ app.get('/api/backup/export', async (req, res) => {
             FROM information_schema.tables 
             WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
           `),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Table list timeout')), 4000))
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Table list query timeout')), 30000))
         ]);
         
         await Promise.all(
@@ -4687,7 +4687,7 @@ app.get('/api/backup/export', async (req, res) => {
             try {
               const dataRes = await Promise.race<any>([
                 pool.query(`SELECT * FROM "${tbl}"`),
-                new Promise((_, reject) => setTimeout(() => reject(new Error(`Table ${tbl} query timeout`)), 4000))
+                new Promise((_, reject) => setTimeout(() => reject(new Error(`Table ${tbl} query timeout`)), 30000))
               ]);
               tablesData[tbl] = dataRes.rows;
               tableCounts[tbl] = dataRes.rows.length;
@@ -4740,21 +4740,18 @@ app.get('/api/backup/export', async (req, res) => {
 
     const isNoPhotos = req.query.noPhotos === 'true' || req.query.dataOnly === 'true';
 
-    const cleanDataForExport = (obj: any) => {
-      if (!isNoPhotos) return obj;
-      return JSON.parse(JSON.stringify(obj, (key, value) => {
-        if (typeof value === 'string' && (value.startsWith('data:image/') || value.startsWith('data:application/pdf'))) {
-          return '[MEDYA_HARIC]';
+    // Bellek tasarruflu tek geçişli replacer (JSON.parse(JSON.stringify) yerine tek adımda çalışır)
+    const exportReplacer = isNoPhotos
+      ? (key: string, value: any) => {
+          if (typeof value === 'string' && (value.startsWith('data:image/') || value.startsWith('data:application/pdf'))) {
+            return '[MEDYA_HARIC]';
+          }
+          if (key.toLowerCase() === 'fotograflar' && Array.isArray(value)) {
+            return [];
+          }
+          return value;
         }
-        if (key.toLowerCase() === 'fotograflar' && Array.isArray(value)) {
-          return [];
-        }
-        return value;
-      }));
-    };
-
-    const finalTables = cleanDataForExport(tablesData);
-    const finalMemory = cleanDataForExport(memoryStores);
+      : undefined;
 
     const backupPayload = {
       version: '2.0.0',
@@ -4769,25 +4766,21 @@ app.get('/api/backup/export', async (req, res) => {
       },
       tableCounts,
       totalRecords,
-      tables: finalTables,
-      memoryStores: finalMemory
+      tables: tablesData,
+      memoryStores: memoryStores
     };
 
-    const jsonString = JSON.stringify(backupPayload);
+    const jsonString = JSON.stringify(backupPayload, exportReplacer);
     const fileNameDate = trTarih.replace(/\./g, '-') + '_' + trSaat.replace(/:/g, '-');
-    const fileName = `rende_veritabani_yedek_${fileNameDate}.json`;
+    const fileName = isNoPhotos 
+      ? `rende_veritabani_hizli_yedek_${fileNameDate}.json`
+      : `rende_veritabani_tam_arsiv_${fileNameDate}.json`;
 
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
 
-    const acceptEncoding = (req.headers['accept-encoding'] || '').toString();
-    if (acceptEncoding.includes('gzip')) {
-      const compressedBuffer = zlib.gzipSync(Buffer.from(jsonString), { level: 6 });
-      res.setHeader('Content-Encoding', 'gzip');
-      res.setHeader('Content-Length', compressedBuffer.length);
-      return res.send(compressedBuffer);
-    }
-
+    // Dosyayı doğrudan güvenli şekilde gönder
     return res.send(jsonString);
   } catch (err: any) {
     console.error('[BACKUP EXPORT FATAL ERROR]', err);
