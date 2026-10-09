@@ -4,6 +4,7 @@ import { Wrench, Calendar, Clock, DollarSign, X, Paperclip, Upload, FileText, Im
 import { PersonelCombobox } from './PersonelCombobox';
 import { CameraCaptureModal } from './CameraCaptureModal';
 import { guvenliDosyaIndir } from '../utils/downloadUtils';
+import { FileLightboxModal } from './FileLightboxModal';
 import { extractImagesFromClipboard, readImagesFromClipboardApi } from '../utils/clipboardUtils';
 
 interface MakineBakimModalProps {
@@ -399,71 +400,10 @@ export const MakineBakimModal: React.FC<MakineBakimModalProps> = ({
       </div>
 
       {/* Bakım Belgesi Lightbox Önizleme */}
-      {lightboxBelge && (
-        <div 
-          className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
-          onClick={() => setLightboxBelge(null)}
-        >
-          <div 
-            className="relative max-w-3xl w-full max-h-[85vh] bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="p-3.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-2 min-w-0">
-                <FileText className="w-4 h-4 text-amber-400 shrink-0" />
-                <span className="text-xs font-bold text-white truncate">{lightboxBelge.DosyaAdi}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => guvenliDosyaIndir(lightboxBelge.DosyaIcerigi, lightboxBelge.DosyaAdi)}
-                  className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
-                  title="İndir"
-                >
-                  <Download className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLightboxBelge(null)}
-                  className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white"
-                  title="Kapat"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-            <div className="p-4 overflow-auto flex-1 flex items-center justify-center bg-slate-950/50 min-h-[250px]">
-              {lightboxBelge.DosyaIcerigi && (lightboxBelge.DosyaIcerigi.startsWith('data:image') || lightboxBelge.DosyaAdi.match(/\.(jpg|jpeg|png|webp|gif)$/i)) ? (
-                <img
-                  src={lightboxBelge.DosyaIcerigi}
-                  alt={lightboxBelge.DosyaAdi}
-                  referrerPolicy="no-referrer"
-                  className="max-h-[70vh] w-auto object-contain rounded-lg shadow-lg"
-                />
-              ) : lightboxBelge.DosyaIcerigi && (lightboxBelge.DosyaIcerigi.startsWith('data:application/pdf') || lightboxBelge.DosyaAdi.match(/\.pdf$/i)) ? (
-                <iframe
-                  src={lightboxBelge.DosyaIcerigi}
-                  title={lightboxBelge.DosyaAdi}
-                  className="w-full h-[65vh] rounded-lg border border-slate-800 bg-white"
-                />
-              ) : (
-                <div className="text-center py-8 space-y-3">
-                  <FileText className="w-12 h-12 text-slate-600 mx-auto" />
-                  <p className="text-xs text-slate-300">{lightboxBelge.DosyaAdi}</p>
-                  <button
-                    type="button"
-                    onClick={() => guvenliDosyaIndir(lightboxBelge.DosyaIcerigi, lightboxBelge.DosyaAdi)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold cursor-pointer"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>İndir</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <FileLightboxModal
+        dosya={lightboxBelge}
+        onClose={() => setLightboxBelge(null)}
+      />
       {/* CANLI KAMERA FOTOĞRAF ÇEKME MODALI */}
       <CameraCaptureModal
         isOpen={showCameraModal}

@@ -26,6 +26,7 @@ import {
 import { extractImagesFromClipboard, readImagesFromClipboardApi } from '../utils/clipboardUtils';
 import { KkdZimmetTutanakModal } from './KkdZimmetTutanakModal';
 import { guvenliDosyaIndir } from '../utils/downloadUtils';
+import { FileLightboxModal } from './FileLightboxModal';
 import { formatTarihTR, tarihAyEkle, getBugunIso, tarihFarkiGun } from '../utils/dateUtils';
 
 interface IsgViewProps {
@@ -2241,79 +2242,10 @@ export const IsgView: React.FC<IsgViewProps> = ({
       {/* ========================================================================= */}
       {/* BELGE & SERTİFİKA CANLI LIGHTBOX ÖNİZLEME MODALI */}
       {/* ========================================================================= */}
-      {lightboxDosya && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
-          onClick={() => setLightboxDosya(null)}
-        >
-          <div 
-            className="relative max-w-4xl w-full max-h-[90vh] bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col"
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="p-4 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <FileText className="w-5 h-5 text-amber-400 shrink-0" />
-                <h3 className="text-sm font-bold text-white truncate">
-                  {lightboxDosya.DosyaAdi}
-                </h3>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => guvenliDosyaIndir(lightboxDosya.DosyaIcerigi, lightboxDosya.DosyaAdi)}
-                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
-                  title="Dosyayı İndir"
-                >
-                  <Download className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLightboxDosya(null)}
-                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition"
-                  title="Kapat"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Content Preview */}
-            <div className="p-4 overflow-auto flex-1 flex items-center justify-center bg-slate-950/50 min-h-[350px]">
-              {lightboxDosya.DosyaIcerigi.startsWith('data:image') || lightboxDosya.DosyaAdi.match(/\.(jpg|jpeg|png|webp|gif)$/i) ? (
-                <img
-                  src={lightboxDosya.DosyaIcerigi}
-                  alt={lightboxDosya.DosyaAdi}
-                  referrerPolicy="no-referrer"
-                  className="max-h-[75vh] w-auto object-contain rounded-lg shadow-lg"
-                />
-              ) : lightboxDosya.DosyaIcerigi.startsWith('data:application/pdf') || lightboxDosya.DosyaAdi.match(/\.pdf$/i) ? (
-                <iframe
-                  src={lightboxDosya.DosyaIcerigi}
-                  title={lightboxDosya.DosyaAdi}
-                  className="w-full h-[70vh] rounded-lg border border-slate-800 bg-white"
-                />
-              ) : (
-                <div className="text-center py-12 space-y-4">
-                  <FileText className="w-16 h-16 text-slate-600 mx-auto" />
-                  <div>
-                    <p className="text-sm text-slate-300 font-semibold">{lightboxDosya.DosyaAdi}</p>
-                    <p className="text-xs text-slate-500 mt-1">Bu belge formatı tarayıcıda doğrudan görüntülenemiyor.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => guvenliDosyaIndir(lightboxDosya.DosyaIcerigi, lightboxDosya.DosyaAdi)}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition shadow-lg cursor-pointer"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Belgeyi İndir</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <FileLightboxModal
+        dosya={lightboxDosya}
+        onClose={() => setLightboxDosya(null)}
+      />
     </div>
   );
 };

@@ -24,6 +24,7 @@ import {
 import { MakineBakimModal } from './MakineBakimModal';
 import { PersonelCombobox } from './PersonelCombobox';
 import { guvenliDosyaIndir } from '../utils/downloadUtils';
+import { FileLightboxModal } from './FileLightboxModal';
 
 export function formatTrDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '-';
@@ -1034,59 +1035,10 @@ export const MakineView: React.FC<MakineViewProps> = ({ makineler, personeller =
       />
 
       {/* LIGHTBOX MODALI */}
-      {lightboxDosya && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
-          <div className="relative max-w-4xl w-full bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border border-slate-800 flex flex-col">
-            <div className="flex items-center justify-between p-4 bg-slate-950/40 text-white shrink-0">
-              <span className="text-xs font-bold truncate max-w-[60%] flex items-center gap-2">
-                <ImageIcon className="w-4 h-4 text-amber-400" />
-                {lightboxDosya.DosyaAdi} {lightboxDosya.DosyaBoyutu ? `(${lightboxDosya.DosyaBoyutu})` : ''}
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => guvenliDosyaIndir(lightboxDosya.DosyaIcerigi || lightboxDosya.base64, lightboxDosya.DosyaAdi)}
-                  className="p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-xl transition-all flex items-center gap-1 text-xs font-semibold cursor-pointer"
-                  title="Belgeyi / Görseli İndir"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>İndir</span>
-                </button>
-                <button
-                  onClick={() => setLightboxDosya(null)}
-                  className="p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-xl transition-all"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            <div className="flex-1 flex items-center justify-center p-6 bg-slate-950 min-h-[50vh] max-h-[75vh]">
-              {lightboxDosya.DosyaIcerigi && (lightboxDosya.DosyaIcerigi.startsWith('data:image') || lightboxDosya.DosyaAdi.match(/\.(jpg|jpeg|png|webp|gif)$/i)) ? (
-                <img
-                  src={lightboxDosya.DosyaIcerigi || lightboxDosya.base64}
-                  alt={lightboxDosya.DosyaAdi}
-                  referrerPolicy="no-referrer"
-                  className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-xl"
-                />
-              ) : (
-                <div className="text-center p-8 text-white space-y-3">
-                  <FileText className="w-16 h-16 text-amber-400 mx-auto" />
-                  <p className="font-semibold text-sm">{lightboxDosya.DosyaAdi}</p>
-                  <button
-                    type="button"
-                    onClick={() => guvenliDosyaIndir(lightboxDosya.DosyaIcerigi, lightboxDosya.DosyaAdi)}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow transition cursor-pointer"
-                  >
-                    <Download className="w-4 h-4" />
-                    Belgeyi İndir ve Görüntüle
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <FileLightboxModal
+        dosya={lightboxDosya}
+        onClose={() => setLightboxDosya(null)}
+      />
     </div>
   );
 };
