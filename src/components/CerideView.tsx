@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { CerideKaydi, CerideFotograf, Proje } from '../types';
 import { CameraCaptureModal } from './CameraCaptureModal';
+import { FileLightboxModal } from './FileLightboxModal';
 import { guvenliDosyaIndir } from '../utils/downloadUtils';
 import { extractImagesFromClipboard, readImagesFromClipboardApi } from '../utils/clipboardUtils';
 
@@ -1549,87 +1550,14 @@ export const CerideView: React.FC<CerideViewProps> = ({
         </div>
       )}
 
-      {/* Fotoğraf Tam Ekran Lightbox / Görüntüleyici */}
+      {/* Fotoğraf Tam Ekran Lightbox / Görüntüleyici (Zoom, Pan, Rotate, vb.) */}
       {lightboxData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-md animate-in fade-in duration-150">
-          <div className="relative max-w-4xl w-full max-h-[95vh] flex flex-col items-center">
-            {/* Üst Başlık ve Kapat Butonu */}
-            <div className="w-full flex items-center justify-between text-white pb-3 border-b border-slate-800">
-              <div className="flex items-center gap-2 min-w-0">
-                <Camera className="w-4 h-4 text-rose-400 shrink-0" />
-                <span className="text-xs sm:text-sm font-bold truncate">{lightboxData.title}</span>
-                <span className="text-xs text-slate-400 shrink-0">
-                  ({lightboxData.index + 1} / {lightboxData.images.length})
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const currentImg = lightboxData.images[lightboxData.index];
-                    if (currentImg?.DosyaIcerigi) {
-                      guvenliDosyaIndir(currentImg.DosyaIcerigi, currentImg.DosyaAdi || 'ceride_foto.jpg');
-                    }
-                  }}
-                  className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition cursor-pointer"
-                  title="Fotoğrafı İndir"
-                >
-                  <Download className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setLightboxData(null)}
-                  className="p-1.5 bg-slate-800 hover:bg-red-600 text-slate-200 rounded-lg text-xs transition cursor-pointer"
-                  title="Kapat"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Büyük Resim */}
-            <div className="relative w-full flex items-center justify-center my-4 overflow-hidden max-h-[75vh]">
-              <img
-                src={lightboxData.images[lightboxData.index]?.DosyaIcerigi}
-                alt={lightboxData.images[lightboxData.index]?.DosyaAdi || 'Ceride Fotoğrafı'}
-                className="max-h-[75vh] max-w-full object-contain rounded-xl shadow-2xl"
-              />
-
-              {/* Önceki / Sonraki Butonları */}
-              {lightboxData.images.length > 1 && (
-                <>
-                  <button
-                    onClick={() => setLightboxData(prev => prev ? {
-                      ...prev,
-                      index: (prev.index - 1 + prev.images.length) % prev.images.length
-                    } : null)}
-                    className="absolute left-2 p-2 rounded-full bg-slate-900/80 hover:bg-amber-600 text-white transition shadow-lg"
-                  >
-                    <ChevronLeft className="w-6 h-6" />
-                  </button>
-                  <button
-                    onClick={() => setLightboxData(prev => prev ? {
-                      ...prev,
-                      index: (prev.index + 1) % prev.images.length
-                    } : null)}
-                    className="absolute right-2 p-2 rounded-full bg-slate-900/80 hover:bg-amber-600 text-white transition shadow-lg"
-                  >
-                    <ChevronRight className="w-6 h-6" />
-                  </button>
-                </>
-              )}
-            </div>
-
-            {/* Alt Dosya Bilgisi */}
-            <div className="text-center text-xs text-slate-400">
-              <span>{lightboxData.images[lightboxData.index]?.DosyaAdi}</span>
-              {lightboxData.images[lightboxData.index]?.DosyaBoyutu && (
-                <span className="ml-2 font-mono text-slate-500">
-                  • {lightboxData.images[lightboxData.index]?.DosyaBoyutu}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
+        <FileLightboxModal
+          dosyaListesi={lightboxData.images}
+          initialIndex={lightboxData.index}
+          title={lightboxData.title}
+          onClose={() => setLightboxData(null)}
+        />
       )}
       {/* CANLI KAMERA MODALI */}
       <CameraCaptureModal

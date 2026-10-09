@@ -10,43 +10,71 @@ import {
   FileSpreadsheet, 
   FileArchive, 
   File as FileIcon, 
-  Image as ImageIcon 
+  Image as ImageIcon,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { guvenliDosyaIndir } from '../utils/downloadUtils';
 
 interface FileLightboxModalProps {
-  dosya: any;
+  dosya?: any;
+  dosyaListesi?: any[];
+  initialIndex?: number;
+  title?: string;
   onClose: () => void;
 }
 
-export const FileLightboxModal: React.FC<FileLightboxModalProps> = ({ dosya, onClose }) => {
+export const FileLightboxModal: React.FC<FileLightboxModalProps> = ({ 
+  dosya, 
+  dosyaListesi, 
+  initialIndex = 0, 
+  title, 
+  onClose 
+}) => {
+  const [currentIndex, setCurrentIndex] = useState<number>(initialIndex);
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [rotation, setRotation] = useState<number>(0);
   const [panPosition, setPanPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  
+  // Pinch-to-zoom refs
+  const initialPinchDistanceRef = useRef<number | null>(null);
+  const initialZoomRef = useRef<number>(1);
+
+  const currentFile = dosyaListesi && dosyaListesi.length > 0 
+    ? dosyaListesi[currentIndex] 
+    : dosya;
+
+  useEffect(() => {
+    setCurrentIndex(initialIndex || 0);
+  }, [initialIndex, dosyaListesi]);
 
   useEffect(() => {
     setZoomLevel(1);
     setRotation(0);
     setPanPosition({ x: 0, y: 0 });
-  }, [dosya]);
+  }, [currentFile, currentIndex]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         onClose();
+      } else if (e.key === 'ArrowLeft' && dosyaListesi && dosyaListesi.length > 1) {
+        setCurrentIndex(prev => (prev - 1 + dosyaListesi.length) % dosyaListesi.length);
+      } else if (e.key === 'ArrowRight' && dosyaListesi && dosyaListesi.length > 1) {
+        setCurrentIndex(prev => (prev + 1) % dosyaListesi.length);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, [onClose, dosyaListesi]);
 
-  if (!dosya) return null;
+  if (!currentFile) return null;
 
-  const fileName = dosya.DosyaAdi || dosya.ad || dosya.name || 'dosya';
-  const fileContent = dosya.DosyaIcerigi || dosya.base64 || dosya.url || dosya.icerik || '';
-  const fileSize = dosya.DosyaBoyutu || dosya.boyut || '';
+  const fileName = currentFile.DosyaAdi || currentFile.ad || currentFile.name || 'dosya';
+  const fileContent = currentFile.DosyaIcerigi || currentFile.base64 || currentFile.url || currentFile.icerik || '';
+  const fileSize = currentFile.DosyaBoyutu || currentFile.boyut || '';
 
   const ext = fileName.split('.').pop()?.toLowerCase() || '';
   const isImage = 
@@ -86,22 +114,44 @@ export const FileLightboxModal: React.FC<FileLightboxModalProps> = ({ dosya, onC
 
   const handleMouseUp = () => setIsDragging(false);
 
-  // Touch Drag / Pan
+  // Touch Drag & Pinch-to-Zoom
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length !== 1) return;
-    setIsDragging(true);
-    dragStartRef.current = { x: e.touches[0].clientX - panPosition.x, y: e.touches[0].clientY - panPosition.y };
+    if (e.touches.length === 2) {
+      setIsDragging(false);
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      initialPinchDistanceRef.current = dist;
+      initialZoomRef.current = zoomLevel;
+    } else if (e.touches.length === 1) {
+      initialPinchDistanceRef.current = null;
+      setIsDragging(true);
+      dragStartRef.current = { x: e.touches[0].clientX - panPosition.x, y: e.touches[0].clientY - panPosition.y };
+    }
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isDragging || e.touches.length !== 1) return;
-    setPanPosition({
-      x: e.touches[0].clientX - dragStartRef.current.x,
-      y: e.touches[0].clientY - dragStartRef.current.y
-    });
+    if (e.touches.length === 2 && initialPinchDistanceRef.current !== null) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const scaleFactor = dist / initialPinchDistanceRef.current;
+      const newZoom = Math.min(Math.max(Number((initialZoomRef.current * scaleFactor).toFixed(2)), 0.5), 4.0);
+      setZoomLevel(newZoom);
+    } else if (e.touches.length === 1 && isDragging) {
+      setPanPosition({
+        x: e.touches[0].clientX - dragStartRef.current.x,
+        y: e.touches[0].clientY - dragStartRef.current.y
+      });
+    }
   };
 
-  const handleTouchEnd = () => setIsDragging(false);
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+    initialPinchDistanceRef.current = null;
+  };
 
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
@@ -213,11 +263,13 @@ export const FileLightboxModal: React.FC<FileLightboxModalProps> = ({ dosya, onC
                <ImageIcon className="w-4 h-4" />}
             </div>
             <div className="min-w-0">
-              <h4 className="text-xs sm:text-sm font-bold text-white truncate" title={fileName}>
-                {fileName}
+              <h4 className="text-xs sm:text-sm font-bold text-white truncate" title={title || fileName}>
+                {title ? `${title} — ${fileName}` : fileName}
               </h4>
               <p className="text-[10px] text-slate-400 truncate">
-                {fileSize ? `${fileSize} • ` : ''}{ext.toUpperCase()} Dosyası
+                {fileSize ? `${fileSize} • ` : ''}
+                {dosyaListesi && dosyaListesi.length > 1 ? `(${currentIndex + 1} / ${dosyaListesi.length}) • ` : ''}
+                {ext.toUpperCase()} Dosyası
               </p>
             </div>
           </div>
@@ -301,6 +353,7 @@ export const FileLightboxModal: React.FC<FileLightboxModalProps> = ({ dosya, onC
         {/* Content Scene */}
         <div 
           className="flex-1 bg-slate-950 p-2 sm:p-4 overflow-hidden flex items-center justify-center relative select-none cursor-grab active:cursor-grabbing"
+          style={{ touchAction: 'none' }}
           onMouseDown={isImage ? handleMouseDown : undefined}
           onMouseMove={isImage ? handleMouseMove : undefined}
           onMouseUp={isImage ? handleMouseUp : undefined}
@@ -379,13 +432,35 @@ export const FileLightboxModal: React.FC<FileLightboxModalProps> = ({ dosya, onC
               </div>
             </div>
           )}
+
+          {/* Gallery Prev / Next Buttons */}
+          {dosyaListesi && dosyaListesi.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={() => setCurrentIndex(prev => (prev - 1 + dosyaListesi.length) % dosyaListesi.length)}
+                className="absolute left-3 p-3 rounded-full bg-slate-900/80 hover:bg-amber-600 text-white transition shadow-xl border border-slate-700 cursor-pointer"
+                title="Önceki Fotoğraf"
+              >
+                <ChevronLeft className="w-6 h-6" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentIndex(prev => (prev + 1) % dosyaListesi.length)}
+                className="absolute right-3 p-3 rounded-full bg-slate-900/80 hover:bg-amber-600 text-white transition shadow-xl border border-slate-700 cursor-pointer"
+                title="Sonraki Fotoğraf"
+              >
+                <ChevronRight className="w-6 h-6" />
+              </button>
+            </>
+          )}
         </div>
 
         {/* Footer Tip Bar */}
         <div className="px-4 py-2 bg-slate-950 border-t border-slate-800/80 text-[11px] text-slate-400 flex flex-wrap items-center justify-between gap-2 shrink-0">
           <span className="flex items-center gap-1.5">
             <span className="font-semibold text-slate-300">İpucu:</span>
-            <span>Görseli mouse ile sürükleyerek (Pan) kaydırabilir, tekerlekle yakınlaştırabilir, <kbd className="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-[10px] text-slate-200 font-mono">ESC</kbd> veya dışarı tıklayarak kapatabilirsiniz.</span>
+            <span>Görseli parmakla sürükleyerek kaydırabilir, iki parmakla sıkıştırarak (Pinch-to-zoom) yakınlaştırabilir veya çift tıklayabilirsiniz.</span>
           </span>
           {isImage && (
             <div className="flex items-center gap-2 text-slate-400">
