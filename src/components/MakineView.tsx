@@ -276,7 +276,7 @@ export const MakineView: React.FC<MakineViewProps> = ({ makineler, personeller =
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-32 sm:pb-8">
       {/* Üst Başlık & Buton */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900 border border-slate-800 p-5 rounded-xl shadow-lg">
         <div>
@@ -811,7 +811,7 @@ export const MakineView: React.FC<MakineViewProps> = ({ makineler, personeller =
                                 <button
                                   key={docIdx}
                                   type="button"
-                                  onClick={() => setLightboxDosya(doc)}
+                                  onClick={() => setLightboxDosya({ ...doc, dosyaListesi: b.Belgeler, initialIndex: docIdx })}
                                   className="relative group h-10 min-w-10 max-w-20 px-0.5 rounded-lg overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center hover:border-amber-500 transition-all shadow-xs"
                                   title={`${doc.DosyaAdi} (${doc.DosyaBoyutu || ''})`}
                                 >
@@ -1037,6 +1037,8 @@ export const MakineView: React.FC<MakineViewProps> = ({ makineler, personeller =
       {/* LIGHTBOX MODALI */}
       <FileLightboxModal
         dosya={lightboxDosya}
+        dosyaListesi={lightboxDosya?.dosyaListesi}
+        initialIndex={lightboxDosya?.initialIndex}
         onClose={() => setLightboxDosya(null)}
       />
     </div>
