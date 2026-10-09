@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Proje, ProjeAsama, Yevmiyeci, YevmiyeCalismaKaydi, Personel, ProjePersonel } from '../types';
 import { guvenliDosyaIndir } from '../utils/downloadUtils';
+import { FileLightboxModal } from './FileLightboxModal';
 import { 
   FolderGit2, 
   Plus, 
@@ -2091,97 +2092,10 @@ export const ProjelerView: React.FC<ProjelerViewProps> = ({
       )}
 
       {/* BELGE ÖNİZLEME MODAL */}
-      {onizlemeDosya && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-md">
-          <div className="bg-white rounded-2xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[90vh]">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4 shrink-0">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-blue-50 text-blue-600">
-                  <FileText className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-slate-900 text-sm sm:text-base truncate max-w-md sm:max-w-xl" title={onizlemeDosya.ad}>
-                    {onizlemeDosya.ad}
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    {onizlemeDosya.boyut && <span>{onizlemeDosya.boyut}</span>}
-                    {onizlemeDosya.tarih && <span> • {onizlemeDosya.tarih}</span>}
-                  </p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setOnizlemeDosya(null)} 
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto bg-slate-50 rounded-xl p-4 flex items-center justify-center min-h-[40vh]">
-              {onizlemeDosya.base64 && (onizlemeDosya.base64.startsWith('data:image/') || /\.(png|jpe?g|gif|svg|webp|bmp)$/i.test(onizlemeDosya.ad || '')) ? (
-                <img 
-                  src={onizlemeDosya.base64} 
-                  alt={onizlemeDosya.ad} 
-                  className="max-w-full max-h-[60vh] object-contain rounded-lg shadow-sm"
-                  referrerPolicy="no-referrer"
-                />
-              ) : onizlemeDosya.base64 && (onizlemeDosya.base64.startsWith('data:application/pdf') || /\.(pdf)$/i.test(onizlemeDosya.ad || '')) ? (
-                <object
-                  data={onizlemeDosya.base64}
-                  type="application/pdf"
-                  className="w-full h-[60vh] rounded-lg border border-slate-200"
-                >
-                  <iframe 
-                    src={onizlemeDosya.base64} 
-                    className="w-full h-[60vh] rounded-lg border border-slate-200" 
-                    title={onizlemeDosya.ad}
-                  ></iframe>
-                </object>
-              ) : (
-                <div className="text-center p-6 space-y-3 max-w-sm">
-                  <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center mx-auto shadow-sm">
-                    <FileText className="w-8 h-8" />
-                  </div>
-                  <h4 className="font-bold text-slate-800 text-sm">Doğrudan Önizleme Desteklenmiyor</h4>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    Bu dosya formatı tarayıcıda doğrudan önizleme için uygun olmayabilir. Dosyayı cihazınıza indirerek görüntüleyebilirsiniz.
-                  </p>
-                  {onizlemeDosya.base64 && (
-                    <button
-                      type="button"
-                      onClick={() => guvenliDosyaIndir(onizlemeDosya.base64, onizlemeDosya.ad)}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>Belgeyi İndir</span>
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-2 mt-4 shrink-0">
-              {onizlemeDosya.base64 && (
-                <button
-                  type="button"
-                  onClick={() => guvenliDosyaIndir(onizlemeDosya.base64, onizlemeDosya.ad)}
-                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>İndir</span>
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setOnizlemeDosya(null)}
-                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-sm"
-              >
-                Kapat
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <FileLightboxModal
+        dosya={onizlemeDosya ? { DosyaAdi: onizlemeDosya.ad, DosyaIcerigi: onizlemeDosya.base64, DosyaBoyutu: onizlemeDosya.boyut } : null}
+        onClose={() => setOnizlemeDosya(null)}
+      />
     </div>
   );
 };

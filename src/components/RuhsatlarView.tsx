@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { extractImagesFromClipboard, readImagesFromClipboardApi } from '../utils/clipboardUtils';
 import { CameraCaptureModal } from './CameraCaptureModal';
+import { FileLightboxModal } from './FileLightboxModal';
 
 interface RuhsatlarViewProps {
   ruhsatlar: RuhsatKaydi[];
@@ -1318,39 +1319,10 @@ export const RuhsatlarView: React.FC<RuhsatlarViewProps> = ({
       )}
 
       {/* DOSYA İNCELEME MODALI */}
-      {activeDocViewer && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/80 backdrop-blur-md">
-          <div className="bg-slate-900 text-white rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col p-4 border border-slate-800 shadow-2xl">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h4 className="font-bold text-sm text-slate-200">{activeDocViewer.name}</h4>
-              <button onClick={() => setActiveDocViewer(null)} className="text-slate-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-auto p-4 flex items-center justify-center min-h-[300px]">
-              {getFileInfo(activeDocViewer.file).isImage ? (
-                <img src={getFileInfo(activeDocViewer.file).content} alt={activeDocViewer.name} className="max-h-[70vh] object-contain rounded-xl" />
-              ) : (
-                <div className="text-center space-y-3">
-                  <Paperclip className="w-12 h-12 text-slate-500 mx-auto" />
-                  <p className="text-sm font-semibold">{activeDocViewer.name}</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const fileContent = getFileInfo(activeDocViewer.file).content;
-                      guvenliDosyaIndir(fileContent, activeDocViewer.name);
-                    }}
-                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs inline-flex items-center gap-2 cursor-pointer transition shadow-sm"
-                  >
-                    <Download className="w-4 h-4" />
-                    Dosyayı İndir
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <FileLightboxModal
+        dosya={activeDocViewer ? { DosyaAdi: activeDocViewer.name, DosyaIcerigi: getFileInfo(activeDocViewer.file).content } : null}
+        onClose={() => setActiveDocViewer(null)}
+      />
       {/* CANLI KAMERA VE KIRPMA MODALI */}
       <CameraCaptureModal
         isOpen={ruhsatCameraTarget !== null}

@@ -13,6 +13,7 @@ import { SiparisYazdirModal } from './SiparisYazdirModal';
 import { UstabasiUyariModal } from './UstabasiUyariModal';
 import { MalzemeKatalogModal } from './MalzemeKatalogModal';
 import { CameraCaptureModal } from './CameraCaptureModal';
+import { FileLightboxModal } from './FileLightboxModal';
 
 interface SiparislerViewProps {
   userRole?: 'admin' | 'ustabasi';
@@ -94,6 +95,7 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
   const [satinalmaNot, setSatinalmaNot] = useState('');
   const [satinalmaKilitli, setSatinalmaKilitli] = useState(false);
   const [satinalmaKilitNotu, setSatinalmaKilitNotu] = useState('');
+  const [lightboxDosya, setLightboxDosya] = useState<any>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -1084,10 +1086,7 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
                             className="relative group border border-slate-200 rounded-lg overflow-hidden bg-slate-100 h-20 min-w-20 max-w-36 flex items-center justify-center cursor-pointer shadow-2xs hover:shadow transition-all p-0.5"
                             onClick={() => {
                               if (belge.DosyaIcerigi) {
-                                const w = window.open('');
-                                if (w) {
-                                  w.document.write(`<img src="${belge.DosyaIcerigi}" style="max-width:100%; height:auto;" />`);
-                                }
+                                setLightboxDosya(belge);
                               }
                             }}
                           >
@@ -2061,6 +2060,12 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
         isOpen={showCameraModal}
         onClose={() => setShowCameraModal(false)}
         onCapture={handleCameraCapture}
+      />
+
+      {/* DOSYA & FOTOĞRAF LİGHTBOX MODAL (ZOOM, PAN, ROTATE) */}
+      <FileLightboxModal
+        dosya={lightboxDosya}
+        onClose={() => setLightboxDosya(null)}
       />
     </div>
   );
