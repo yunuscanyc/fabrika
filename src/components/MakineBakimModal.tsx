@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Makine, Personel } from '../types';
-import { Wrench, Calendar, Clock, DollarSign, X, Paperclip, Upload, FileText, Image as ImageIcon, Eye, Download, Camera } from 'lucide-react';
+import { Wrench, Calendar, Clock, DollarSign, X, Paperclip, Upload, FileText, Image as ImageIcon, Eye, Download, Camera, ClipboardPaste } from 'lucide-react';
 import { PersonelCombobox } from './PersonelCombobox';
 import { CameraCaptureModal } from './CameraCaptureModal';
 import { guvenliDosyaIndir } from '../utils/downloadUtils';
+import { extractImagesFromClipboard, readImagesFromClipboardApi } from '../utils/clipboardUtils';
 
 interface MakineBakimModalProps {
   isOpen: boolean;
@@ -51,8 +52,7 @@ export const MakineBakimModal: React.FC<MakineBakimModalProps> = ({
     setShowCameraModal(false);
   };
 
-  const handleDosyaYukle = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
+  const processFiles = (files: FileList | File[]) => {
     if (!files) return;
 
     Array.from(files).forEach((file: any) => {
@@ -69,8 +69,28 @@ export const MakineBakimModal: React.FC<MakineBakimModalProps> = ({
       };
       reader.readAsDataURL(file);
     });
+  };
+
+  const handleDosyaYukle = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      processFiles(e.target.files);
+    }
     e.target.value = '';
   };
+
+  // Pano (Clipboard / Ekran Görüntüsü / Ctrl + V) ile Doğrudan Resim Yapıştırma
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const pastedFiles = extractImagesFromClipboard(e);
+      if (pastedFiles.length > 0) {
+        e.preventDefault();
+        processFiles(pastedFiles);
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, []);
 
   const dosyaSil = (index: number) => {
     setBelgeler(prev => prev.filter((_, i) => i !== index));
@@ -259,14 +279,34 @@ export const MakineBakimModal: React.FC<MakineBakimModalProps> = ({
                 <span className="text-[11px] text-slate-400 mt-0.5">
                   Değişen parça, servis tutanağı, fatura veya makine fotoğrafları (JPG, PNG, PDF)
                 </span>
-                <div className="flex items-center gap-2 mt-3">
+                <div className="flex items-center gap-2 mt-3 flex-wrap justify-center">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const files = await readImagesFromClipboardApi();
+                        if (files.length > 0) {
+                          processFiles(files);
+                        } else {
+                          alert('Panoda yapıştırılacak resim veya ekran görüntüsü bulunamadı. Lütfen önce resmi kopyalayın (Ctrl+C veya Win+Shift+S).');
+                        }
+                      } catch (err: any) {
+                        alert(err.message || 'Panodan resim okunamadı. Doğrudan Ctrl + V tuşlarına basarak yapıştırabilirsiniz.');
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs cursor-pointer"
+                    title="Ekran görüntüsünü veya kopyalanan resmi panodan yapıştır (Ctrl+V)"
+                  >
+                    <ClipboardPaste className="w-3.5 h-3.5" />
+                    <span>Panodan Yapıştır (Ctrl+V)</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => setShowCameraModal(true)}
                     className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs cursor-pointer"
                   >
                     <Camera className="w-3.5 h-3.5" />
-                    <span>📷 Kamera ile Çek</span>
+                    <span>📷 Kamera</span>
                   </button>
                   <label className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs cursor-pointer">
                     <Upload className="w-3.5 h-3.5" />
@@ -280,6 +320,9 @@ export const MakineBakimModal: React.FC<MakineBakimModalProps> = ({
                     />
                   </label>
                 </div>
+                <span className="text-[10px] text-slate-400 mt-2 block">
+                  💡 Ekran görüntüsü aldığınızda (Win+Shift+S / PrtSc) doğrudan bu ekranda <b>Ctrl + V</b> ile yapıştırabilirsiniz.
+                </span>
               </div>
 
               {belgeler.length > 0 ? (

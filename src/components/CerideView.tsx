@@ -33,11 +33,13 @@ import {
   ChevronLeft,
   ChevronRight,
   FileImage,
-  FileText
+  FileText,
+  ClipboardPaste
 } from 'lucide-react';
 import { CerideKaydi, CerideFotograf, Proje } from '../types';
 import { CameraCaptureModal } from './CameraCaptureModal';
 import { guvenliDosyaIndir } from '../utils/downloadUtils';
+import { extractImagesFromClipboard, readImagesFromClipboardApi } from '../utils/clipboardUtils';
 
 const isImageFile = (fileName: string) => {
   const ext = (fileName || '').split('.').pop()?.toLowerCase();
@@ -316,16 +318,16 @@ export const CerideView: React.FC<CerideViewProps> = ({
     }
   };
 
-  // Fotoğraf & Belge Seçimi (Resimler sıkıştırılır, diğer dosyalar doğrudan yüklenir)
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
+  // Fotoğraf & Belge İşleme (Resimler sıkıştırılır, diğer dosyalar doğrudan yüklenir)
+  const processFileList = async (files: FileList | File[]) => {
     if (!files || files.length === 0) return;
 
     setUploadingPhotos(true);
     try {
       const newPhotos: CerideFotograf[] = [];
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
+      const fileArr = Array.from(files);
+      for (let i = 0; i < fileArr.length; i++) {
+        const file = fileArr[i];
         
         if (file.type.startsWith('image/')) {
           const { dataUrl, sizeStr } = await compressImageFile(file);
@@ -368,6 +370,30 @@ export const CerideView: React.FC<CerideViewProps> = ({
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      await processFileList(e.target.files);
+    }
+  };
+
+  // Pano (Clipboard / Ekran Görüntüsü / Ctrl + V) ile Doğrudan Resim Yapıştırma
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      const pastedFiles = extractImagesFromClipboard(e);
+      if (pastedFiles.length > 0) {
+        e.preventDefault();
+        if (!modalOpen) {
+          setEditingItem(null);
+          setModalOpen(true);
+        }
+        await processFileList(pastedFiles);
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [modalOpen]);
 
   const handleRemovePhoto = (index: number) => {
     setFormFotograflar(prev => prev.filter((_, i) => i !== index));
@@ -1340,6 +1366,28 @@ export const CerideView: React.FC<CerideViewProps> = ({
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <button
                         type="button"
+                        onClick={async () => {
+                          try {
+                            const files = await readImagesFromClipboardApi();
+                            if (files.length > 0) {
+                              await processFileList(files);
+                            } else {
+                              alert('Panoda yapıştırılacak resim veya ekran görüntüsü bulunamadı. Lütfen önce resmi kopyalayın (Ctrl+C veya Win+Shift+S) ve ardından yapıştırın.');
+                            }
+                          } catch (err: any) {
+                            alert(err.message || 'Panodan resim okunamadı. Klavyenizden doğrudan Ctrl + V tuşlarına basarak yapıştırabilirsiniz.');
+                          }
+                        }}
+                        disabled={uploadingPhotos}
+                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+                        title="Ekran görüntüsünü veya kopyalanan resmi panodan yapıştır (Ctrl+V)"
+                      >
+                        <ClipboardPaste className="w-3.5 h-3.5" />
+                        <span>Panodan Yapıştır (Ctrl+V)</span>
+                      </button>
+
+                      <button
+                        type="button"
                         onClick={() => setShowCerideCameraModal(true)}
                         disabled={uploadingPhotos}
                         className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
@@ -1359,6 +1407,11 @@ export const CerideView: React.FC<CerideViewProps> = ({
                         <Upload className="w-3.5 h-3.5" />
                         <span>Dosya / Galeri</span>
                       </button>
+                    </div>
+
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-1">
+                      <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />
+                      <span>Ekran görüntüsü aldığınızda (Win+Shift+S veya PrtSc) doğrudan bu ekranda <b>Ctrl + V</b> tuşlarına basarak yapıştırabilirsiniz.</span>
                     </div>
 
                     {/* Kamera Doğrudan Çekim Inputu */}

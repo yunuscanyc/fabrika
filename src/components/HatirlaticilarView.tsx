@@ -34,8 +34,10 @@ import {
   FileCode,
   File as FileIcon,
   Maximize2,
-  Move
+  Move,
+  ClipboardPaste
 } from 'lucide-react';
+import { extractImagesFromClipboard, readImagesFromClipboardApi } from '../utils/clipboardUtils';
 
 interface HatirlaticilarViewProps {
   hatirlaticilar: Hatirlatici[];
@@ -608,8 +610,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
   });
 
   // Çoklu Dosya Yükleme (Fotoğraf, PDF, Word, Excel, vb.)
-  const handleDosyaYukle = async (e: React.ChangeEvent<HTMLInputElement>, isEditMode: boolean) => {
-    const files = e.target.files;
+  const processBelgeFiles = async (files: FileList | File[], isEditMode: boolean) => {
     if (!files || files.length === 0) return;
 
     setIsProcessingFiles(true);
@@ -651,9 +652,36 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
       console.error('Dosya yükleme hatası:', err);
     } finally {
       setIsProcessingFiles(false);
-      e.target.value = '';
     }
   };
+
+  const handleDosyaYukle = async (e: React.ChangeEvent<HTMLInputElement>, isEditMode: boolean) => {
+    if (e.target.files) {
+      await processBelgeFiles(e.target.files, isEditMode);
+    }
+    e.target.value = '';
+  };
+
+  // Pano (Clipboard / Ekran Görüntüsü / Ctrl + V) ile Doğrudan Resim Yapıştırma
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      const pastedFiles = extractImagesFromClipboard(e);
+      if (pastedFiles.length > 0) {
+        e.preventDefault();
+        if (secilenHatirlatici) {
+          await processBelgeFiles(pastedFiles, true);
+        } else {
+          if (!modalAcik) {
+            setModalAcik(true);
+          }
+          await processBelgeFiles(pastedFiles, false);
+        }
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [secilenHatirlatici, modalAcik]);
 
   const dosyaSil = (index: number, isEditMode: boolean) => {
     if (isEditMode) {
@@ -1110,6 +1138,27 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                           Dosya işleniyor...
                         </span>
                       )}
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const files = await readImagesFromClipboardApi();
+                            if (files.length > 0) {
+                              await processBelgeFiles(files, true);
+                            } else {
+                              alert('Panoda yapıştırılacak resim veya ekran görüntüsü bulunamadı. Lütfen önce resmi kopyalayın (Ctrl+C veya Win+Shift+S).');
+                            }
+                          } catch (err: any) {
+                            alert(err.message || 'Panodan resim okunamadı. Doğrudan Ctrl + V ile yapıştırabilirsiniz.');
+                          }
+                        }}
+                        disabled={isProcessingFiles}
+                        className="cursor-pointer bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-1.5 rounded-xl border border-indigo-200 flex items-center gap-1 transition-colors shadow-2xs"
+                        title="Ekran görüntüsünü veya kopyalanan resmi panodan yapıştır (Ctrl+V)"
+                      >
+                        <ClipboardPaste className="w-3.5 h-3.5" />
+                        <span>Panodan Yapıştır</span>
+                      </button>
                       <label className="cursor-pointer bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold px-2 py-1.5 rounded-xl border border-rose-200 flex items-center gap-1 transition-colors shadow-2xs" title="Kamera ile fotoğraf çek">
                         <Camera className="w-3.5 h-3.5" />
                         <span className="hidden sm:inline">Kamera</span>
@@ -1466,6 +1515,27 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                           İşleniyor...
                         </span>
                       )}
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const files = await readImagesFromClipboardApi();
+                            if (files.length > 0) {
+                              await processBelgeFiles(files, false);
+                            } else {
+                              alert('Panoda yapıştırılacak resim veya ekran görüntüsü bulunamadı. Lütfen önce resmi kopyalayın (Ctrl+C veya Win+Shift+S).');
+                            }
+                          } catch (err: any) {
+                            alert(err.message || 'Panodan resim okunamadı. Doğrudan Ctrl + V ile yapıştırabilirsiniz.');
+                          }
+                        }}
+                        disabled={isProcessingFiles}
+                        className="cursor-pointer bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-1.5 rounded-xl border border-indigo-200 flex items-center gap-1 transition-colors shadow-2xs"
+                        title="Ekran görüntüsünü veya kopyalanan resmi panodan yapıştır (Ctrl+V)"
+                      >
+                        <ClipboardPaste className="w-3.5 h-3.5" />
+                        <span>Panodan Yapıştır</span>
+                      </button>
                       <label className="cursor-pointer bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold px-2 py-1.5 rounded-xl border border-rose-200 flex items-center gap-1 transition-colors shadow-2xs" title="Kamera ile çek">
                         <Camera className="w-3.5 h-3.5" />
                         <span className="hidden sm:inline">Kamera</span>

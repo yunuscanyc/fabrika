@@ -25,11 +25,13 @@ import {
   Eye,
   FileCheck2,
   AlertCircle,
-  Loader2
+  Loader2,
+  ClipboardPaste
 } from 'lucide-react';
 import { PersonelCombobox } from './PersonelCombobox';
 import { formatTarihTR } from '../utils/dateUtils';
 import { CameraCaptureModal } from './CameraCaptureModal';
+import { extractImagesFromClipboard, readImagesFromClipboardApi } from '../utils/clipboardUtils';
 
 interface AraclarViewProps {
   araclar: Arac[];
@@ -182,8 +184,7 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
     ? araclar.find(a => a.AracId === seciliAracBakimModal.AracId) || seciliAracBakimModal
     : null;
 
-  const handleBakimDosyaYukle = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
+  const processBakimFiles = (files: FileList | File[]) => {
     if (!files) return;
 
     Array.from(files).forEach((file: any) => {
@@ -200,8 +201,30 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
       };
       reader.readAsDataURL(file);
     });
+  };
+
+  const handleBakimDosyaYukle = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      processBakimFiles(e.target.files);
+    }
     e.target.value = '';
   };
+
+  // Pano (Clipboard / Ekran Görüntüsü / Ctrl + V) ile Doğrudan Resim Yapıştırma
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (seciliAracBakimModal) {
+        const pastedFiles = extractImagesFromClipboard(e);
+        if (pastedFiles.length > 0) {
+          e.preventDefault();
+          processBakimFiles(pastedFiles);
+        }
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [seciliAracBakimModal]);
 
   const bakimDosyaSil = (index: number) => {
     setBakimBelgeler(prev => prev.filter((_, i) => i !== index));
@@ -1462,7 +1485,28 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                     <span className="text-xs font-bold text-slate-800">
                       Fotoğraf veya Fatura Belgesi Ekleyin
                     </span>
-                    <div className="flex items-center gap-2 mt-2">
+                    <div className="flex items-center gap-2 mt-2 flex-wrap justify-center">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const files = await readImagesFromClipboardApi();
+                            if (files.length > 0) {
+                              processBakimFiles(files);
+                            } else {
+                              alert('Panoda yapıştırılacak resim veya ekran görüntüsü bulunamadı. Lütfen önce resmi kopyalayın (Ctrl+C veya Win+Shift+S).');
+                            }
+                          } catch (err: any) {
+                            alert(err.message || 'Panodan resim okunamadı. Doğrudan Ctrl + V tuşlarına basarak yapıştırabilirsiniz.');
+                          }
+                        }}
+                        disabled={bakimKaydediliyor}
+                        className="cursor-pointer px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs disabled:opacity-50"
+                        title="Ekran görüntüsünü veya kopyalanan resmi panodan yapıştır (Ctrl+V)"
+                      >
+                        <ClipboardPaste className="w-3.5 h-3.5" />
+                        <span>Panodan Yapıştır (Ctrl+V)</span>
+                      </button>
                       <button
                         type="button"
                         onClick={() => setShowBakimCameraModal(true)}
@@ -1471,11 +1515,11 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                         title="Kamerayı açarak canlı fotoğraf çek"
                       >
                         <Camera className="w-3.5 h-3.5" />
-                        <span>📷 Kamera ile Çek</span>
+                        <span>📷 Kamera</span>
                       </button>
                       <label className="cursor-pointer px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs">
                         <Upload className="w-3.5 h-3.5" />
-                        📁 Harddisk / Galeri
+                        📁 Dosya / Galeri
                         <input
                           type="file"
                           multiple
@@ -1486,8 +1530,8 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                         />
                       </label>
                     </div>
-                    <span className="text-[10px] text-slate-500 mt-2">
-                      Fatura, servis tutanağı, parça veya bakım fotoğrafları (JPG, PNG, PDF)
+                    <span className="text-[10px] text-slate-500 mt-2 block">
+                      💡 Ekran görüntüsü aldığınızda (Win+Shift+S / PrtSc) doğrudan bu ekranda <b>Ctrl + V</b> ile yapıştırabilirsiniz.
                     </span>
                   </div>
 

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { RuhsatKaydi, RuhsatKategori } from '../types';
 import { formatTarihTR, getBugunIso } from '../utils/dateUtils';
 import { getFileInfo } from './HatirlaticilarView';
@@ -28,8 +28,10 @@ import {
   Filter,
   Sparkles,
   Loader2,
-  FileSpreadsheet
+  FileSpreadsheet,
+  ClipboardPaste
 } from 'lucide-react';
+import { extractImagesFromClipboard, readImagesFromClipboardApi } from '../utils/clipboardUtils';
 
 interface RuhsatlarViewProps {
   ruhsatlar: RuhsatKaydi[];
@@ -115,8 +117,7 @@ export const RuhsatlarView: React.FC<RuhsatlarViewProps> = ({
   };
 
   // Dosya Yükleme İşleyicisi
-  const handleDosyaYukle = async (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean = false) => {
-    const files = e.target.files;
+  const processFiles = async (files: FileList | File[], isEdit: boolean = false) => {
     if (!files || files.length === 0) return;
     setIsProcessingFiles(true);
 
@@ -148,8 +149,36 @@ export const RuhsatlarView: React.FC<RuhsatlarViewProps> = ({
       setYeniBelgeler(prev => [...prev, ...newDocs]);
     }
     setIsProcessingFiles(false);
+  };
+
+  const handleDosyaYukle = async (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean = false) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    await processFiles(files, isEdit);
     e.target.value = '';
   };
+
+  // Pano (Clipboard / Ekran Görüntüsü / Ctrl + V) ile Doğrudan Resim Yapıştırma
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (ekleModalAcik) {
+        const pastedFiles = extractImagesFromClipboard(e);
+        if (pastedFiles.length > 0) {
+          e.preventDefault();
+          processFiles(pastedFiles, false);
+        }
+      } else if (duzenleModalKayit) {
+        const pastedFiles = extractImagesFromClipboard(e);
+        if (pastedFiles.length > 0) {
+          e.preventDefault();
+          processFiles(pastedFiles, true);
+        }
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [ekleModalAcik, duzenleModalKayit]);
 
   // İstatistik Hesaplamaları
   const stats = useMemo(() => {
@@ -500,9 +529,23 @@ export const RuhsatlarView: React.FC<RuhsatlarViewProps> = ({
                       <div className="flex items-center gap-1 ml-auto">
                         {belgeler.slice(0, 3).map((doc: any, idx: number) => {
                           const info = getFileInfo(doc);
+                          if (info.isImage && info.content) {
+                            return (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => setActiveDocViewer({ file: doc, name: info.name })}
+                                className="h-7 min-w-7 max-w-14 rounded overflow-hidden border border-slate-300 dark:border-slate-700 bg-slate-900 flex items-center justify-center p-0.5 hover:ring-2 hover:ring-amber-500 transition cursor-pointer"
+                                title={info.name}
+                              >
+                                <img src={info.content} alt={info.name} className="h-full w-auto max-w-full object-contain" />
+                              </button>
+                            );
+                          }
                           return (
                             <button
                               key={idx}
+                              type="button"
                               onClick={() => setActiveDocViewer({ file: doc, name: info.name })}
                               className="w-6 h-6 rounded bg-slate-200 dark:bg-slate-800 text-[10px] font-bold flex items-center justify-center hover:bg-amber-500 hover:text-white transition cursor-pointer"
                               title={info.name}
@@ -774,25 +817,73 @@ export const RuhsatlarView: React.FC<RuhsatlarViewProps> = ({
 
               {/* DOSYA YÜKLEME */}
               <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                <label className="font-bold text-slate-700 dark:text-slate-300 block text-xs flex items-center justify-between">
-                  <span>Ruhsat / Belge Dosyası veya Fotoğrafı Ekleyin ({yeniBelgeler.length})</span>
-                  <label className="cursor-pointer text-amber-600 hover:underline flex items-center gap-1 font-bold">
-                    <Paperclip className="w-3.5 h-3.5" />
-                    <span>Dosya Seç</span>
-                    <input type="file" multiple onChange={(e) => handleDosyaYukle(e, false)} className="hidden" />
-                  </label>
-                </label>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-700 dark:text-slate-300 text-xs">
+                    Ruhsat / Belge Dosyası veya Fotoğrafı Ekleyin ({yeniBelgeler.length})
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const files = await readImagesFromClipboardApi();
+                          if (files.length > 0) {
+                            await processFiles(files, false);
+                          } else {
+                            alert('Panoda yapıştırılacak resim veya ekran görüntüsü bulunamadı. Lütfen önce resmi kopyalayın (Ctrl+C veya Win+Shift+S).');
+                          }
+                        } catch (err: any) {
+                          alert(err.message || 'Panodan resim okunamadı. Doğrudan Ctrl + V tuşlarına basarak yapıştırabilirsiniz.');
+                        }
+                      }}
+                      className="cursor-pointer text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 flex items-center gap-1 font-bold text-xs bg-indigo-50 dark:bg-indigo-950/50 px-2 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800/60"
+                      title="Ekran görüntüsünü veya kopyalanan resmi panodan yapıştır (Ctrl+V)"
+                    >
+                      <ClipboardPaste className="w-3.5 h-3.5" />
+                      <span>Panodan Yapıştır (Ctrl+V)</span>
+                    </button>
+
+                    <label className="cursor-pointer text-amber-600 hover:underline flex items-center gap-1 font-bold text-xs bg-amber-50 dark:bg-amber-950/50 px-2 py-1 rounded-lg border border-amber-200 dark:border-amber-800/60">
+                      <Paperclip className="w-3.5 h-3.5" />
+                      <span>Dosya Seç</span>
+                      <input type="file" multiple onChange={(e) => handleDosyaYukle(e, false)} className="hidden" />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="text-[10px] text-slate-400">
+                  💡 Ekran görüntüsü aldığınızda doğrudan <b>Ctrl + V</b> ile yapıştırabilirsiniz.
+                </div>
 
                 {yeniBelgeler.length > 0 && (
                   <div className="flex flex-wrap gap-2 pt-1">
-                    {yeniBelgeler.map((doc, idx) => (
-                      <div key={idx} className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-semibold">
-                        <span>{doc.DosyaAdi}</span>
-                        <button type="button" onClick={() => setYeniBelgeler(yeniBelgeler.filter((_, i) => i !== idx))} className="text-red-500">
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
+                    {yeniBelgeler.map((doc, idx) => {
+                      const isImg = doc.DosyaIcerigi && (doc.DosyaIcerigi.startsWith('data:image') || doc.DosyaAdi.match(/\.(jpg|jpeg|png|webp|gif)$/i));
+                      return (
+                        <div key={idx} className="relative group rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-50 dark:bg-slate-800 flex items-center gap-1.5 p-1 shadow-2xs">
+                          {isImg ? (
+                            <div className="h-10 min-w-10 max-w-20 bg-slate-900 rounded-lg overflow-hidden flex items-center justify-center p-0.5">
+                              <img src={doc.DosyaIcerigi} alt={doc.DosyaAdi} className="h-full w-auto max-w-full object-contain" />
+                            </div>
+                          ) : (
+                            <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 flex items-center justify-center font-bold text-[10px]">
+                              {doc.DosyaAdi.split('.').pop()?.toUpperCase() || 'BELGE'}
+                            </div>
+                          )}
+                          <div className="text-[11px] font-semibold truncate max-w-[120px] pr-1">
+                            {doc.DosyaAdi}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setYeniBelgeler(yeniBelgeler.filter((_, i) => i !== idx))}
+                            className="p-1 text-slate-400 hover:text-red-500 rounded-lg cursor-pointer"
+                            title="Dosyayı Kaldır"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1033,6 +1124,82 @@ export const RuhsatlarView: React.FC<RuhsatlarViewProps> = ({
                   defaultValue={duzenleModalKayit.Aciklama || ''}
                   className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs sm:text-sm"
                 />
+              </div>
+
+              {/* DOSYA & BELGE YÖNETİMİ */}
+              <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-700 dark:text-slate-300 text-xs">
+                    Ekli Belgeler & Fotoğraflar ({(duzenleModalKayit.Belgeler || []).length})
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const files = await readImagesFromClipboardApi();
+                          if (files.length > 0) {
+                            await processFiles(files, true);
+                          } else {
+                            alert('Panoda yapıştırılacak resim veya ekran görüntüsü bulunamadı. Lütfen önce resmi kopyalayın (Ctrl+C veya Win+Shift+S).');
+                          }
+                        } catch (err: any) {
+                          alert(err.message || 'Panodan resim okunamadı. Doğrudan Ctrl + V tuşlarına basarak yapıştırabilirsiniz.');
+                        }
+                      }}
+                      className="cursor-pointer text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 flex items-center gap-1 font-bold text-xs bg-indigo-50 dark:bg-indigo-950/50 px-2 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800/60"
+                      title="Ekran görüntüsünü veya kopyalanan resmi panodan yapıştır (Ctrl+V)"
+                    >
+                      <ClipboardPaste className="w-3.5 h-3.5" />
+                      <span>Panodan Yapıştır (Ctrl+V)</span>
+                    </button>
+
+                    <label className="cursor-pointer text-amber-600 hover:underline flex items-center gap-1 font-bold text-xs bg-amber-50 dark:bg-amber-950/50 px-2 py-1 rounded-lg border border-amber-200 dark:border-amber-800/60">
+                      <Paperclip className="w-3.5 h-3.5" />
+                      <span>Dosya Ekle</span>
+                      <input type="file" multiple onChange={(e) => handleDosyaYukle(e, true)} className="hidden" />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="text-[10px] text-slate-400">
+                  💡 Ekran görüntüsü aldığınızda doğrudan <b>Ctrl + V</b> ile yapıştırabilirsiniz.
+                </div>
+
+                {(duzenleModalKayit.Belgeler || []).length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-1 max-h-36 overflow-y-auto">
+                    {(duzenleModalKayit.Belgeler || []).map((doc: any, idx: number) => {
+                      const isImg = doc.DosyaIcerigi && (doc.DosyaIcerigi.startsWith('data:image') || doc.DosyaAdi.match(/\.(jpg|jpeg|png|webp|gif)$/i));
+                      return (
+                        <div key={idx} className="relative group rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-50 dark:bg-slate-800 flex items-center gap-1.5 p-1 shadow-2xs">
+                          {isImg ? (
+                            <div className="h-10 min-w-10 max-w-20 bg-slate-900 rounded-lg overflow-hidden flex items-center justify-center p-0.5">
+                              <img src={doc.DosyaIcerigi} alt={doc.DosyaAdi} className="h-full w-auto max-w-full object-contain" />
+                            </div>
+                          ) : (
+                            <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 flex items-center justify-center font-bold text-[10px]">
+                              {doc.DosyaAdi.split('.').pop()?.toUpperCase() || 'BELGE'}
+                            </div>
+                          )}
+                          <div className="text-[11px] font-semibold truncate max-w-[120px] pr-1">
+                            {doc.DosyaAdi}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = (duzenleModalKayit.Belgeler || []).filter((_: any, i: number) => i !== idx);
+                              setDuzenleModalKayit({ ...duzenleModalKayit, Belgeler: updated });
+                            }}
+                            className="p-1 text-slate-400 hover:text-red-500 rounded-lg cursor-pointer"
+                            title="Dosyayı Kaldır"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">

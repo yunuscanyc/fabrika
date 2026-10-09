@@ -39,10 +39,12 @@ import {
   Users,
   Shield,
   HardHat,
-  BadgeCheck
+  BadgeCheck,
+  ClipboardPaste
 } from 'lucide-react';
 import { PersonelCombobox } from './PersonelCombobox';
 import { ProjeKadrosu } from './ProjeKadrosu';
+import { extractImagesFromClipboard, readImagesFromClipboardApi } from '../utils/clipboardUtils';
 import { formatTarihTR } from '../utils/dateUtils';
 
 const temizleVeNormalizEtAsamalar = (list: ProjeAsama[]): ProjeAsama[] => {
@@ -799,6 +801,58 @@ export const ProjelerView: React.FC<ProjelerViewProps> = ({
     showAlert('Başarılı', 'Proje ve süreç ağacı başarıyla kaydedildi!', 'success');
   };
 
+  // Aşama Belgeleri Yükleme (Dosya ve Pano desteği)
+  const processAsamaFiles = (files: FileList | File[]) => {
+    if (!files || files.length === 0 || seciliAsamaIndex === null || !asamalar[seciliAsamaIndex]) return;
+
+    const kopya = [...asamalar];
+    const guncelAsama = { ...kopya[seciliAsamaIndex] };
+    if (!guncelAsama.Belgeler) {
+      guncelAsama.Belgeler = [];
+    }
+
+    const fileList = Array.from(files);
+    let yuklenenAdet = 0;
+    fileList.forEach((file: any) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64Content = event.target?.result as string;
+        const yeniDosya = {
+          id: Math.random().toString(36).substr(2, 9),
+          ad: file.name,
+          boyut: (file.size / 1024).toFixed(1) + ' KB',
+          tarih: formatTarihTR(new Date().toISOString().split('T')[0]),
+          base64: base64Content
+        };
+
+        guncelAsama.Belgeler = [...(guncelAsama.Belgeler || []), yeniDosya];
+        yuklenenAdet++;
+
+        if (yuklenenAdet === fileList.length) {
+          kopya[seciliAsamaIndex] = guncelAsama;
+          setAsamalar(kopya);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Pano (Clipboard / Ekran Görüntüsü / Ctrl + V) Dinleyicisi
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (seciliProje && seciliAsamaIndex !== null && asamalar[seciliAsamaIndex]) {
+        const pastedFiles = extractImagesFromClipboard(e);
+        if (pastedFiles.length > 0) {
+          e.preventDefault();
+          processAsamaFiles(pastedFiles);
+        }
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [seciliProje, seciliAsamaIndex, asamalar]);
+
   // Filtreleme
   const filtrelenenProjeler = (projeler || []).filter(p => {
     if (!p) return false;
@@ -1225,49 +1279,76 @@ export const ProjelerView: React.FC<ProjelerViewProps> = ({
                           <span>Aşama Belgeleri ({(asamalar[seciliAsamaIndex].Belgeler || []).length}):</span>
                         </span>
                         
-                        <label className="cursor-pointer text-[11px] font-bold text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-1 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-lg">
-                          <UploadCloud className="w-3.5 h-3.5" />
-                          <span>Çoklu Dosya Ekle</span>
-                          <input
-                            type="file"
-                            multiple
-                            className="hidden"
-                            onChange={(e) => {
-                              const files = e.target.files;
-                              if (!files) return;
-                              
-                              const kopya = [...asamalar];
-                              const guncelAsama = { ...kopya[seciliAsamaIndex] };
-                              if (!guncelAsama.Belgeler) {
-                                guncelAsama.Belgeler = [];
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                const files = await readImagesFromClipboardApi();
+                                if (files.length > 0) {
+                                  processAsamaFiles(files);
+                                } else {
+                                  alert('Panoda yapıştırılacak resim veya ekran görüntüsü bulunamadı. Lütfen önce resmi kopyalayın (Ctrl+C veya Win+Shift+S).');
+                                }
+                              } catch (err: any) {
+                                alert(err.message || 'Panodan resim okunamadı. Doğrudan Ctrl + V tuşlarına basarak yapıştırabilirsiniz.');
                               }
-                              
-                              let yuklenenAdet = 0;
-                              Array.from(files).forEach((file: any) => {
-                                const reader = new FileReader();
-                                reader.onload = (event) => {
-                                  const base64Content = event.target?.result as string;
-                                  const yeniDosya = {
-                                    id: Math.random().toString(36).substr(2, 9),
-                                    ad: file.name,
-                                    boyut: (file.size / 1024).toFixed(1) + ' KB',
-                                    tarih: formatTarihTR(new Date().toISOString().split('T')[0]),
-                                    base64: base64Content
-                                  };
-                                  
-                                  guncelAsama.Belgeler = [...(guncelAsama.Belgeler || []), yeniDosya];
-                                  yuklenenAdet++;
-                                  
-                                  if (yuklenenAdet === files.length) {
-                                    kopya[seciliAsamaIndex] = guncelAsama;
-                                    setAsamalar(kopya);
-                                  }
-                                };
-                                reader.readAsDataURL(file);
-                              });
                             }}
-                          />
-                        </label>
+                            className="cursor-pointer text-[11px] font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg"
+                            title="Ekran görüntüsünü veya panodaki resmi yapıştır (Ctrl+V)"
+                          >
+                            <ClipboardPaste className="w-3.5 h-3.5" />
+                            <span>Panodan Yapıştır (Ctrl+V)</span>
+                          </button>
+
+                          <label className="cursor-pointer text-[11px] font-bold text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-1 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-lg">
+                            <UploadCloud className="w-3.5 h-3.5" />
+                            <span>Çoklu Dosya Ekle</span>
+                            <input
+                              type="file"
+                              multiple
+                              className="hidden"
+                              onChange={(e) => {
+                                const files = e.target.files;
+                                if (!files) return;
+                                
+                                const kopya = [...asamalar];
+                                const guncelAsama = { ...kopya[seciliAsamaIndex] };
+                                if (!guncelAsama.Belgeler) {
+                                  guncelAsama.Belgeler = [];
+                                }
+                                
+                                let yuklenenAdet = 0;
+                                Array.from(files).forEach((file: any) => {
+                                  const reader = new FileReader();
+                                  reader.onload = (event) => {
+                                    const base64Content = event.target?.result as string;
+                                    const yeniDosya = {
+                                      id: Math.random().toString(36).substr(2, 9),
+                                      ad: file.name,
+                                      boyut: (file.size / 1024).toFixed(1) + ' KB',
+                                      tarih: formatTarihTR(new Date().toISOString().split('T')[0]),
+                                      base64: base64Content
+                                    };
+                                    
+                                    guncelAsama.Belgeler = [...(guncelAsama.Belgeler || []), yeniDosya];
+                                    yuklenenAdet++;
+                                    
+                                    if (yuklenenAdet === files.length) {
+                                      kopya[seciliAsamaIndex] = guncelAsama;
+                                      setAsamalar(kopya);
+                                    }
+                                  };
+                                  reader.readAsDataURL(file);
+                                });
+                              }}
+                            />
+                          </label>
+                        </div>
+                      </div>
+
+                      <div className="text-[10px] text-slate-500 mb-2 flex items-center gap-1">
+                        <span>💡 Ekran görüntüsü aldığınızda (Win+Shift+S / PrtSc) doğrudan bu ekranda <b>Ctrl + V</b> ile yapıştırabilirsiniz.</span>
                       </div>
 
                       {/* Dosya Listesi */}

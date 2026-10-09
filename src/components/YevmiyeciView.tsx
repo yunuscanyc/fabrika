@@ -4,8 +4,9 @@ import {
   MapPin, CreditCard, Calendar, CheckCircle2, Clock, AlertCircle, 
   Trash2, Edit, X, User, ExternalLink, ShieldCheck, ChevronDown, 
   ChevronUp, Camera, Upload, Building2, Check, UserCheck, UserX,
-  UserMinus, FileText
+  UserMinus, FileText, ClipboardPaste
 } from 'lucide-react';
+import { extractImagesFromClipboard, readImagesFromClipboardApi } from '../utils/clipboardUtils';
 import { Yevmiyeci, YevmiyeCalismaKaydi, Proje, Departman, Gorev } from '../types';
 import { KismiSureliSozlesmeModal } from './KismiSureliSozlesmeModal';
 import { KvkkAydinlatmaModal } from './KvkkAydinlatmaModal';
@@ -205,10 +206,7 @@ export const YevmiyeciView: React.FC<YevmiyeciViewProps> = ({ projeler = [], dep
   }, []);
 
   // Fotoğraf Yükleme (Otomatik Canvas Optimizasyonu)
-  const handleFotoYukle = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const processFotoFile = async (file: File) => {
     try {
       setFotoYukleniyor(true);
       const compressed = await compressImageFile(file, 360, 0.8);
@@ -224,6 +222,28 @@ export const YevmiyeciView: React.FC<YevmiyeciViewProps> = ({ projeler = [], dep
       setFotoYukleniyor(false);
     }
   };
+
+  const handleFotoYukle = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await processFotoFile(file);
+  };
+
+  // Pano (Clipboard / Ekran Görüntüsü / Ctrl + V) ile Doğrudan Resim Yapıştırma
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (modalAcik) {
+        const pastedFiles = extractImagesFromClipboard(e);
+        if (pastedFiles.length > 0) {
+          e.preventDefault();
+          processFotoFile(pastedFiles[0]);
+        }
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [modalAcik]);
 
   // Yeni Modal Açılışı
   const handleYeniEkleModal = () => {
@@ -721,13 +741,15 @@ export const YevmiyeciView: React.FC<YevmiyeciViewProps> = ({ projeler = [], dep
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3">
                       {/* Fotoğraf veya İsim Baş Harfi Avatarı */}
-                      <div className="relative">
+                      <div className="relative shrink-0">
                         {y.Fotograf ? (
-                          <img
-                            src={y.Fotograf}
-                            alt={y.AdSoyad}
-                            className="w-14 h-14 rounded-2xl object-cover border-2 border-indigo-500/50 shadow-md"
-                          />
+                          <div className="h-14 min-w-12 max-w-20 rounded-2xl bg-slate-900 border-2 border-indigo-500/50 shadow-md flex items-center justify-center overflow-hidden p-0.5">
+                            <img
+                              src={y.Fotograf}
+                              alt={y.AdSoyad}
+                              className="max-h-full max-w-full w-auto h-auto object-contain rounded-xl"
+                            />
+                          </div>
                         ) : (
                           <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-600 to-slate-800 flex items-center justify-center text-white font-bold text-lg border-2 border-indigo-500/30 shadow-md">
                             {y.AdSoyad.slice(0, 2).toUpperCase()}
@@ -1000,13 +1022,15 @@ export const YevmiyeciView: React.FC<YevmiyeciViewProps> = ({ projeler = [], dep
             <form onSubmit={handleKaydet} className="p-5 sm:p-6 space-y-5 max-h-[75vh] overflow-y-auto">
               {/* Fotoğraf Yükleme & Önizleme Alanı */}
               <div className="bg-slate-800/40 border border-slate-700/60 rounded-2xl p-4 flex flex-col sm:flex-row items-center gap-4">
-                <div className="relative">
+                <div className="relative shrink-0">
                   {fotograf ? (
-                    <img
-                      src={fotograf}
-                      alt="Usta Fotoğrafı"
-                      className="w-20 h-20 rounded-2xl object-cover border-2 border-indigo-500 shadow-md"
-                    />
+                    <div className="h-20 min-w-16 max-w-28 rounded-2xl overflow-hidden border-2 border-indigo-500 shadow-md flex items-center justify-center bg-slate-900 p-0.5">
+                      <img
+                        src={fotograf}
+                        alt="Usta Fotoğrafı"
+                        className="max-h-full max-w-full w-auto h-auto object-contain rounded-xl"
+                      />
+                    </div>
                   ) : (
                     <div className="w-20 h-20 rounded-2xl bg-slate-800 border border-dashed border-slate-600 flex flex-col items-center justify-center text-slate-500">
                       <Camera className="w-6 h-6 mb-1" />
@@ -1017,7 +1041,7 @@ export const YevmiyeciView: React.FC<YevmiyeciViewProps> = ({ projeler = [], dep
                     <button
                       type="button"
                       onClick={() => setFotograf('')}
-                      className="absolute -top-2 -right-2 bg-rose-600 text-white rounded-full p-1 shadow-md hover:bg-rose-500"
+                      className="absolute -top-2 -right-2 bg-rose-600 text-white rounded-full p-1 shadow-md hover:bg-rose-500 cursor-pointer"
                       title="Fotoğrafı Kaldır"
                     >
                       <X className="w-3 h-3" />
@@ -1030,28 +1054,55 @@ export const YevmiyeciView: React.FC<YevmiyeciViewProps> = ({ projeler = [], dep
                   <p className="text-[11px] text-slate-400">
                     Şantiye ve fabrikada tanınması için ustanın vesikalık veya çalışma fotoğrafını yükleyebilirsiniz (Max 5MB).
                   </p>
-                  <label className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-white text-xs font-semibold cursor-pointer transition ${
-                    fotoYukleniyor ? 'bg-indigo-800 opacity-75' : 'bg-indigo-600 hover:bg-indigo-500'
-                  }`}>
-                    {fotoYukleniyor ? (
-                      <>
-                        <Clock className="w-3.5 h-3.5 animate-spin" />
-                        <span>Fotoğraf Optimize Ediliyor...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="w-3.5 h-3.5" />
-                        <span>Cihazdan Fotoğraf Seç</span>
-                      </>
-                    )}
-                    <input
-                      type="file"
-                      accept="image/*"
+                  <div className="flex items-center gap-2 flex-wrap justify-center sm:justify-start">
+                    <button
+                      type="button"
                       disabled={fotoYukleniyor}
-                      onChange={handleFotoYukle}
-                      className="hidden"
-                    />
-                  </label>
+                      onClick={async () => {
+                        try {
+                          const files = await readImagesFromClipboardApi();
+                          if (files.length > 0) {
+                            processFotoFile(files[0]);
+                          } else {
+                            alert('Panoda yapıştırılacak resim veya ekran görüntüsü bulunamadı. Lütfen önce resmi kopyalayın (Ctrl+C veya Win+Shift+S).');
+                          }
+                        } catch (err: any) {
+                          alert(err.message || 'Panodan resim okunamadı. Doğrudan Ctrl + V tuşlarına basarak yapıştırabilirsiniz.');
+                        }
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 rounded-xl text-xs font-semibold cursor-pointer transition disabled:opacity-50"
+                      title="Ekran görüntüsünü veya panodaki resmi yapıştır (Ctrl+V)"
+                    >
+                      <ClipboardPaste className="w-3.5 h-3.5" />
+                      <span>Panodan Yapıştır (Ctrl+V)</span>
+                    </button>
+
+                    <label className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-white text-xs font-semibold cursor-pointer transition ${
+                      fotoYukleniyor ? 'bg-indigo-800 opacity-75' : 'bg-indigo-600 hover:bg-indigo-500'
+                    }`}>
+                      {fotoYukleniyor ? (
+                        <>
+                          <Clock className="w-3.5 h-3.5 animate-spin" />
+                          <span>Fotoğraf Optimize Ediliyor...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>Cihazdan Fotoğraf Seç</span>
+                        </>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        disabled={fotoYukleniyor}
+                        onChange={handleFotoYukle}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                  <span className="text-[10px] text-slate-500 block">
+                    💡 Ekran görüntüsü aldığınızda doğrudan bu pencerede <b>Ctrl + V</b> ile yapıştırabilirsiniz.
+                  </span>
                 </div>
               </div>
 

@@ -20,8 +20,10 @@ import {
   Eye,
   Download,
   X,
-  Paperclip
+  Paperclip,
+  ClipboardPaste
 } from 'lucide-react';
+import { extractImagesFromClipboard, readImagesFromClipboardApi } from '../utils/clipboardUtils';
 import { KkdZimmetTutanakModal } from './KkdZimmetTutanakModal';
 import { guvenliDosyaIndir } from '../utils/downloadUtils';
 import { formatTarihTR, tarihAyEkle, getBugunIso, tarihFarkiGun } from '../utils/dateUtils';
@@ -141,9 +143,7 @@ export const IsgView: React.FC<IsgViewProps> = ({
   const [saglikFiltre, setSaglikFiltre] = useState<'tumu' | 'eksik' | 'suresi_dolan' | 'yaklasan'>('tumu');
   const [egitimFiltre, setEgitimFiltre] = useState<'tumu' | 'eksik' | 'suresi_dolan' | 'yaklasan'>('tumu');
 
-  const handleSaglikDosyaYukle = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const processSaglikFile = (file: File) => {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const base64 = ev.target?.result as string;
@@ -156,9 +156,13 @@ export const IsgView: React.FC<IsgViewProps> = ({
     reader.readAsDataURL(file);
   };
 
-  const handleEgitimDosyaYukle = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSaglikDosyaYukle = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    processSaglikFile(file);
+  };
+
+  const processEgitimFile = (file: File) => {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const base64 = ev.target?.result as string;
@@ -170,6 +174,34 @@ export const IsgView: React.FC<IsgViewProps> = ({
     };
     reader.readAsDataURL(file);
   };
+
+  const handleEgitimDosyaYukle = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    processEgitimFile(file);
+  };
+
+  // Pano (Clipboard / Ekran Görüntüsü / Ctrl + V) ile Resim Yapıştırma
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (saglikModalAcik) {
+        const pastedFiles = extractImagesFromClipboard(e);
+        if (pastedFiles.length > 0) {
+          e.preventDefault();
+          processSaglikFile(pastedFiles[0]);
+        }
+      } else if (egitimModalAcik) {
+        const pastedFiles = extractImagesFromClipboard(e);
+        if (pastedFiles.length > 0) {
+          e.preventDefault();
+          processEgitimFile(pastedFiles[0]);
+        }
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [saglikModalAcik, egitimModalAcik]);
 
   const handleSaglikModalAc = (r?: PersonelSaglikRaporu) => {
     if (r) {
@@ -1773,23 +1805,48 @@ export const IsgView: React.FC<IsgViewProps> = ({
                 </div>
 
                 {!saglikForm.BelgeUrl ? (
-                  <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-slate-700 hover:border-rose-500/70 bg-slate-950/60 rounded-xl cursor-pointer transition group">
-                    <div className="w-9 h-9 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
-                      <Upload className="w-5 h-5" />
+                  <div className="space-y-2">
+                    <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-slate-700 hover:border-rose-500/70 bg-slate-950/60 rounded-xl cursor-pointer transition group">
+                      <div className="w-9 h-9 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
+                        <Upload className="w-5 h-5" />
+                      </div>
+                      <span className="text-xs font-bold text-slate-300 group-hover:text-rose-400 transition-colors">
+                        Rapor Belgesi / Tarama Dosyası Seç
+                      </span>
+                      <span className="text-[11px] text-slate-500 mt-0.5">
+                        PDF, JPG, PNG, WEBP (Önizlemeli)
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        onChange={handleSaglikDosyaYukle}
+                        className="hidden"
+                      />
+                    </label>
+
+                    <div className="flex items-center justify-between gap-2 px-1 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const files = await readImagesFromClipboardApi();
+                            if (files.length > 0) processSaglikFile(files[0]);
+                          } catch (err: any) {
+                            alert(err.message || 'Panodan resim okunamadı. Doğrudan Ctrl + V tuşlarına basarak yapıştırabilirsiniz.');
+                          }
+                        }}
+                        className="px-3 py-1.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                        title="Ekran görüntüsünü veya kopyalanan resmi panodan yapıştır (Ctrl+V)"
+                      >
+                        <ClipboardPaste className="w-3.5 h-3.5" />
+                        <span>Panodan Yapıştır (Ctrl+V)</span>
+                      </button>
+
+                      <span className="text-[10px] text-slate-500">
+                        💡 Ekran görüntüsü aldığınızda doğrudan <b>Ctrl + V</b> ile yapıştırabilirsiniz.
+                      </span>
                     </div>
-                    <span className="text-xs font-bold text-slate-300 group-hover:text-rose-400 transition-colors">
-                      Rapor Belgesi / Tarama Dosyası Seç
-                    </span>
-                    <span className="text-[11px] text-slate-500 mt-0.5">
-                      PDF, JPG, PNG, WEBP (Önizlemeli)
-                    </span>
-                    <input
-                      type="file"
-                      accept="image/*,application/pdf"
-                      onChange={handleSaglikDosyaYukle}
-                      className="hidden"
-                    />
-                  </label>
+                  </div>
                 ) : (
                   <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
@@ -1992,23 +2049,48 @@ export const IsgView: React.FC<IsgViewProps> = ({
                 </div>
 
                 {!egitimForm.BelgeUrl ? (
-                  <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-slate-700 hover:border-blue-500/70 bg-slate-950/60 rounded-xl cursor-pointer transition group">
-                    <div className="w-9 h-9 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
-                      <Upload className="w-5 h-5" />
+                  <div className="space-y-2">
+                    <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-slate-700 hover:border-blue-500/70 bg-slate-950/60 rounded-xl cursor-pointer transition group">
+                      <div className="w-9 h-9 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
+                        <Upload className="w-5 h-5" />
+                      </div>
+                      <span className="text-xs font-bold text-slate-300 group-hover:text-blue-400 transition-colors">
+                        Sertifika / Katılım Belgesi Dosyası Seç
+                      </span>
+                      <span className="text-[11px] text-slate-500 mt-0.5">
+                        PDF, JPG, PNG, WEBP (Önizlemeli)
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        onChange={handleEgitimDosyaYukle}
+                        className="hidden"
+                      />
+                    </label>
+
+                    <div className="flex items-center justify-between gap-2 px-1 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const files = await readImagesFromClipboardApi();
+                            if (files.length > 0) processEgitimFile(files[0]);
+                          } catch (err: any) {
+                            alert(err.message || 'Panodan resim okunamadı. Doğrudan Ctrl + V tuşlarına basarak yapıştırabilirsiniz.');
+                          }
+                        }}
+                        className="px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                        title="Ekran görüntüsünü veya kopyalanan resmi panodan yapıştır (Ctrl+V)"
+                      >
+                        <ClipboardPaste className="w-3.5 h-3.5" />
+                        <span>Panodan Yapıştır (Ctrl+V)</span>
+                      </button>
+
+                      <span className="text-[10px] text-slate-500">
+                        💡 Ekran görüntüsü aldığınızda doğrudan <b>Ctrl + V</b> ile yapıştırabilirsiniz.
+                      </span>
                     </div>
-                    <span className="text-xs font-bold text-slate-300 group-hover:text-blue-400 transition-colors">
-                      Sertifika / Katılım Belgesi Dosyası Seç
-                    </span>
-                    <span className="text-[11px] text-slate-500 mt-0.5">
-                      PDF, JPG, PNG, WEBP (Önizlemeli)
-                    </span>
-                    <input
-                      type="file"
-                      accept="image/*,application/pdf"
-                      onChange={handleEgitimDosyaYukle}
-                      className="hidden"
-                    />
-                  </label>
+                  </div>
                 ) : (
                   <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">

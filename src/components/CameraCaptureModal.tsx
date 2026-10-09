@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, X, RefreshCw, Check, AlertCircle, SwitchCamera } from 'lucide-react';
+import { Camera, X, RefreshCw, Check, AlertCircle, SwitchCamera, ClipboardPaste } from 'lucide-react';
+import { extractImagesFromClipboard, readImagesFromClipboardApi } from '../utils/clipboardUtils';
 
 interface CameraCaptureModalProps {
   isOpen: boolean;
@@ -103,6 +104,24 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
     setFacingMode(nextMode);
     startCamera(nextMode);
   };
+
+  // Pano (Clipboard / Ekran Görüntüsü / Ctrl + V) ile Doğrudan Resim Yapıştırma
+  useEffect(() => {
+    if (!isOpen) return;
+    const handlePaste = (e: ClipboardEvent) => {
+      const files = extractImagesFromClipboard(e);
+      if (files.length > 0) {
+        e.preventDefault();
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setCapturedImage(reader.result as string);
+        };
+        reader.readAsDataURL(files[0]);
+      }
+    };
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [isOpen]);
 
   // Fotoğraf Çek
   const handleTakePhoto = () => {
@@ -287,6 +306,31 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
                 className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs rounded-xl border border-slate-700 transition cursor-pointer"
               >
                 İptal
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const files = await readImagesFromClipboardApi();
+                    if (files.length > 0) {
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        setCapturedImage(reader.result as string);
+                      };
+                      reader.readAsDataURL(files[0]);
+                    } else {
+                      alert('Panoda yapıştırılacak resim veya ekran görüntüsü bulunamadı. Lütfen önce resmi kopyalayın.');
+                    }
+                  } catch (err: any) {
+                    alert(err.message || 'Panodan resim okunamadı. Doğrudan Ctrl + V tuşlarına basarak yapıştırabilirsiniz.');
+                  }
+                }}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg transition flex items-center gap-1.5 cursor-pointer"
+                title="Panodaki ekran görüntüsü veya resmi yapıştır (Ctrl+V)"
+              >
+                <ClipboardPaste className="w-3.5 h-3.5" />
+                <span>Panodan Yapıştır (Ctrl+V)</span>
               </button>
 
               {!errorMsg && (
