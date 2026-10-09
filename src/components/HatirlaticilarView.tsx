@@ -38,6 +38,7 @@ import {
   ClipboardPaste
 } from 'lucide-react';
 import { extractImagesFromClipboard, readImagesFromClipboardApi } from '../utils/clipboardUtils';
+import { CameraCaptureModal } from './CameraCaptureModal';
 
 interface HatirlaticilarViewProps {
   hatirlaticilar: Hatirlatici[];
@@ -246,6 +247,22 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
   const [isProcessingFiles, setIsProcessingFiles] = useState(false);
   const [kaydediliyor, setKaydediliyor] = useState(false);
   const [kayitHatasi, setKayitHatasi] = useState<string | null>(null);
+  const [cameraTarget, setCameraTarget] = useState<'create' | 'edit' | null>(null);
+
+  const handleCameraCapture = (base64Image: string, fileName: string) => {
+    const newDoc = {
+      DosyaAdi: fileName,
+      DosyaBoyutu: 'Fotoğraf',
+      DosyaIcerigi: base64Image,
+      YuklenmeTarihi: new Date().toISOString()
+    };
+    if (cameraTarget === 'edit') {
+      setEditBelgeler(prev => [...prev, newDoc]);
+    } else if (cameraTarget === 'create') {
+      setYeniBelgeler(prev => [...prev, newDoc]);
+    }
+    setCameraTarget(null);
+  };
   
   // Detay/Güncelleme Formu için State'ler
   const [editBaslik, setEditBaslik] = useState('');
@@ -1159,17 +1176,16 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                         <ClipboardPaste className="w-3.5 h-3.5" />
                         <span>Panodan Yapıştır</span>
                       </button>
-                      <label className="cursor-pointer bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold px-2 py-1.5 rounded-xl border border-rose-200 flex items-center gap-1 transition-colors shadow-2xs" title="Kamera ile fotoğraf çek">
+                      <button
+                        type="button"
+                        onClick={() => setCameraTarget('edit')}
+                        className="cursor-pointer bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold px-2 py-1.5 rounded-xl border border-rose-200 flex items-center gap-1 transition-colors shadow-2xs"
+                        title="Canlı kamera ile fotoğraf çek ve kırp"
+                      >
                         <Camera className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Kamera</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          onChange={(e) => handleDosyaYukle(e, true)}
-                          className="hidden"
-                        />
-                      </label>
+                        <span className="hidden sm:inline">Kamera ile Çek</span>
+                        <span className="sm:hidden">Kamera</span>
+                      </button>
                       <label className="cursor-pointer bg-sky-50 hover:bg-sky-100 text-sky-700 text-xs font-bold px-2 py-1.5 rounded-xl border border-sky-200 flex items-center gap-1 transition-colors shadow-2xs" title="Galeriden fotoğraf seç">
                         <ImageIcon className="w-3.5 h-3.5" />
                         <span className="hidden sm:inline">Fotoğraf</span>
@@ -1536,17 +1552,16 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                         <ClipboardPaste className="w-3.5 h-3.5" />
                         <span>Panodan Yapıştır</span>
                       </button>
-                      <label className="cursor-pointer bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold px-2 py-1.5 rounded-xl border border-rose-200 flex items-center gap-1 transition-colors shadow-2xs" title="Kamera ile çek">
+                      <button
+                        type="button"
+                        onClick={() => setCameraTarget('create')}
+                        className="cursor-pointer bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold px-2 py-1.5 rounded-xl border border-rose-200 flex items-center gap-1 transition-colors shadow-2xs"
+                        title="Canlı kamera ile fotoğraf çek ve kırp"
+                      >
                         <Camera className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Kamera</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          onChange={(e) => handleDosyaYukle(e, false)}
-                          className="hidden"
-                        />
-                      </label>
+                        <span className="hidden sm:inline">Kamera ile Çek</span>
+                        <span className="sm:hidden">Kamera</span>
+                      </button>
                       <label className="cursor-pointer bg-sky-50 hover:bg-sky-100 text-sky-700 text-xs font-bold px-2 py-1.5 rounded-xl border border-sky-200 flex items-center gap-1 transition-colors shadow-2xs" title="Galeriden fotoğraf seç">
                         <ImageIcon className="w-3.5 h-3.5" />
                         <span className="hidden sm:inline">Fotoğraf</span>
@@ -1985,6 +2000,12 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
           </div>
         );
       })()}
+      {/* CANLI KAMERA VE KIRPMA MODALI */}
+      <CameraCaptureModal
+        isOpen={cameraTarget !== null}
+        onClose={() => setCameraTarget(null)}
+        onCapture={handleCameraCapture}
+      />
     </div>
   );
 };

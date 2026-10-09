@@ -32,6 +32,7 @@ import {
   ClipboardPaste
 } from 'lucide-react';
 import { extractImagesFromClipboard, readImagesFromClipboardApi } from '../utils/clipboardUtils';
+import { CameraCaptureModal } from './CameraCaptureModal';
 
 interface RuhsatlarViewProps {
   ruhsatlar: RuhsatKaydi[];
@@ -69,6 +70,26 @@ export const RuhsatlarView: React.FC<RuhsatlarViewProps> = ({
   const [islemHatasi, setIslemHatasi] = useState<string | null>(null);
   const [yeniBelgeler, setYeniBelgeler] = useState<any[]>([]);
   const [isProcessingFiles, setIsProcessingFiles] = useState(false);
+  const [ruhsatCameraTarget, setRuhsatCameraTarget] = useState<'ekle' | 'duzenle' | null>(null);
+
+  const handleRuhsatCameraCapture = (base64Image: string, fileName: string) => {
+    const newDoc = {
+      Id: Date.now(),
+      DosyaAdi: fileName,
+      DosyaBoyutu: 'Fotoğraf',
+      YuklemeTarihi: new Date().toISOString(),
+      DosyaIcerigi: base64Image
+    };
+    if (ruhsatCameraTarget === 'ekle') {
+      setYeniBelgeler(prev => [...prev, newDoc]);
+    } else if (ruhsatCameraTarget === 'duzenle' && duzenleModalKayit) {
+      setDuzenleModalKayit({
+        ...duzenleModalKayit,
+        Belgeler: [...(duzenleModalKayit.Belgeler || []), newDoc]
+      });
+    }
+    setRuhsatCameraTarget(null);
+  };
 
   // Görünüm Modu: 'grid' veya 'table'
   const [gorunumModu, setGorunumModu] = useState<'grid' | 'table'>('grid');
@@ -821,7 +842,17 @@ export const RuhsatlarView: React.FC<RuhsatlarViewProps> = ({
                   <span className="font-bold text-slate-700 dark:text-slate-300 text-xs">
                     Ruhsat / Belge Dosyası veya Fotoğrafı Ekleyin ({yeniBelgeler.length})
                   </span>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setRuhsatCameraTarget('ekle')}
+                      className="cursor-pointer text-rose-600 hover:text-rose-700 dark:text-rose-400 flex items-center gap-1 font-bold text-xs bg-rose-50 dark:bg-rose-950/50 px-2 py-1 rounded-lg border border-rose-200 dark:border-rose-800/60"
+                      title="Canlı kamera ile fotoğraf çek ve kırp"
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      <span>Kamera ile Çek</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={async () => {
@@ -1132,7 +1163,17 @@ export const RuhsatlarView: React.FC<RuhsatlarViewProps> = ({
                   <span className="font-bold text-slate-700 dark:text-slate-300 text-xs">
                     Ekli Belgeler & Fotoğraflar ({(duzenleModalKayit.Belgeler || []).length})
                   </span>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setRuhsatCameraTarget('duzenle')}
+                      className="cursor-pointer text-rose-600 hover:text-rose-700 dark:text-rose-400 flex items-center gap-1 font-bold text-xs bg-rose-50 dark:bg-rose-950/50 px-2 py-1 rounded-lg border border-rose-200 dark:border-rose-800/60"
+                      title="Canlı kamera ile fotoğraf çek ve kırp"
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      <span>Kamera ile Çek</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={async () => {
@@ -1298,6 +1339,12 @@ export const RuhsatlarView: React.FC<RuhsatlarViewProps> = ({
           </div>
         </div>
       )}
+      {/* CANLI KAMERA VE KIRPMA MODALI */}
+      <CameraCaptureModal
+        isOpen={ruhsatCameraTarget !== null}
+        onClose={() => setRuhsatCameraTarget(null)}
+        onCapture={handleRuhsatCameraCapture}
+      />
     </div>
   );
 };
