@@ -874,6 +874,12 @@ export const RuhsatlarView: React.FC<RuhsatlarViewProps> = ({
                       <span>Panodan Yapıştır (Ctrl+V)</span>
                     </button>
 
+                    <label className="cursor-pointer text-sky-600 hover:text-sky-700 dark:text-sky-400 flex items-center gap-1 font-bold text-xs bg-sky-50 dark:bg-sky-950/50 px-2 py-1 rounded-lg border border-sky-200 dark:border-sky-800/60" title="Galeriden veya cihazdan fotoğraf seç">
+                      <ImageIcon className="w-3.5 h-3.5" />
+                      <span>Fotoğraf Ekle</span>
+                      <input type="file" accept="image/*" multiple onChange={(e) => handleDosyaYukle(e, false)} className="hidden" />
+                    </label>
+
                     <label className="cursor-pointer text-amber-600 hover:underline flex items-center gap-1 font-bold text-xs bg-amber-50 dark:bg-amber-950/50 px-2 py-1 rounded-lg border border-amber-200 dark:border-amber-800/60">
                       <Paperclip className="w-3.5 h-3.5" />
                       <span>Dosya Seç</span>
@@ -1194,6 +1200,12 @@ export const RuhsatlarView: React.FC<RuhsatlarViewProps> = ({
                       <ClipboardPaste className="w-3.5 h-3.5" />
                       <span>Panodan Yapıştır (Ctrl+V)</span>
                     </button>
+
+                    <label className="cursor-pointer text-sky-600 hover:text-sky-700 dark:text-sky-400 flex items-center gap-1 font-bold text-xs bg-sky-50 dark:bg-sky-950/50 px-2 py-1 rounded-lg border border-sky-200 dark:border-sky-800/60" title="Galeriden veya cihazdan fotoğraf seç">
+                      <ImageIcon className="w-3.5 h-3.5" />
+                      <span>Fotoğraf Ekle</span>
+                      <input type="file" accept="image/*" multiple onChange={(e) => handleDosyaYukle(e, true)} className="hidden" />
+                    </label>
 
                     <label className="cursor-pointer text-amber-600 hover:underline flex items-center gap-1 font-bold text-xs bg-amber-50 dark:bg-amber-950/50 px-2 py-1 rounded-lg border border-amber-200 dark:border-amber-800/60">
                       <Paperclip className="w-3.5 h-3.5" />

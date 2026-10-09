@@ -9,7 +9,9 @@ import {
   ClipboardPaste, 
   Crop, 
   RotateCw, 
-  Maximize2 
+  Maximize2,
+  Move,
+  Minimize2
 } from 'lucide-react';
 import { extractImagesFromClipboard, readImagesFromClipboardApi } from '../utils/clipboardUtils';
 
@@ -35,15 +37,16 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
   const [loading, setLoading] = useState(false);
 
   // Kırpma Alanı (Yüzdelik Koordinatlar: 0 - 100)
+  // Başlangıçta tutamaçların rahatça görülüp tutulabilmesi için %5 içten başlar
   const [crop, setCrop] = useState<{ x: number; y: number; w: number; h: number }>({
-    x: 0,
-    y: 0,
-    w: 100,
-    h: 100
+    x: 5,
+    y: 5,
+    w: 90,
+    h: 90
   });
 
   const dragRef = useRef<{
-    type: 'tl' | 'br' | 'tr' | 'bl' | 'move';
+    type: 'tl' | 'br' | 'tr' | 'bl' | 't' | 'b' | 'l' | 'r' | 'move';
     startX: number;
     startY: number;
     startCrop: { x: number; y: number; w: number; h: number };
@@ -111,7 +114,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setCapturedImage(null);
-      setCrop({ x: 0, y: 0, w: 100, h: 100 });
+      setCrop({ x: 5, y: 5, w: 90, h: 90 });
       startCamera(facingMode);
     } else {
       // Modal kapandığında kamerayı kapat
@@ -145,7 +148,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
         const reader = new FileReader();
         reader.onloadend = () => {
           setCapturedImage(reader.result as string);
-          setCrop({ x: 0, y: 0, w: 100, h: 100 });
+          setCrop({ x: 5, y: 5, w: 90, h: 90 });
         };
         reader.readAsDataURL(files[0]);
       }
@@ -200,7 +203,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
       const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
       setCapturedImage(dataUrl);
     }
-    setCrop({ x: 0, y: 0, w: 100, h: 100 });
+    setCrop({ x: 5, y: 5, w: 90, h: 90 });
   };
 
   // 90° Saat Yönünde Döndürme
@@ -218,7 +221,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
         ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
         const rotatedData = canvas.toDataURL('image/jpeg', 0.88);
         setCapturedImage(rotatedData);
-        setCrop({ x: 0, y: 0, w: 100, h: 100 });
+        setCrop({ x: 5, y: 5, w: 90, h: 90 });
       }
     };
     img.src = capturedImage;
@@ -229,10 +232,20 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
     setCrop({ x: 0, y: 0, w: 100, h: 100 });
   };
 
+  // Varsayılan Kırpma (%90)
+  const handleDefaultCrop = () => {
+    setCrop({ x: 5, y: 5, w: 90, h: 90 });
+  };
+
+  // Belge Kırpma (%80)
+  const handleDocCrop = () => {
+    setCrop({ x: 10, y: 10, w: 80, h: 80 });
+  };
+
   // Köşeleri ve Kırpma Alanını Sürükleme Başlatıcı
   const startDrag = (
     e: React.PointerEvent,
-    type: 'tl' | 'br' | 'tr' | 'bl' | 'move'
+    type: 'tl' | 'br' | 'tr' | 'bl' | 't' | 'b' | 'l' | 'r' | 'move'
   ) => {
     e.preventDefault();
     e.stopPropagation();
@@ -256,7 +269,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
 
       const deltaX = ((moveEv.clientX - startX) / containerW) * 100;
       const deltaY = ((moveEv.clientY - startY) / containerH) * 100;
-      const minSize = 6; // Minimum %6 alan
+      const minSize = 5; // Minimum %5 alan
 
       setCrop(prev => {
         let next = { ...prev };
@@ -296,6 +309,28 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
           next.x = Math.round(newX * 10) / 10;
           next.w = Math.round(((startCrop.x + startCrop.w) - newX) * 10) / 10;
           next.h = Math.round((newBottom - startCrop.y) * 10) / 10;
+        } else if (dType === 't') {
+          // Üst kenar
+          const maxY = startCrop.y + startCrop.h - minSize;
+          const newY = Math.max(0, Math.min(maxY, startCrop.y + deltaY));
+          next.y = Math.round(newY * 10) / 10;
+          next.h = Math.round(((startCrop.y + startCrop.h) - newY) * 10) / 10;
+        } else if (dType === 'b') {
+          // Alt kenar
+          const minBottom = startCrop.y + minSize;
+          const newBottom = Math.max(minBottom, Math.min(100, startCrop.y + startCrop.h + deltaY));
+          next.h = Math.round((newBottom - startCrop.y) * 10) / 10;
+        } else if (dType === 'l') {
+          // Sol kenar
+          const maxX = startCrop.x + startCrop.w - minSize;
+          const newX = Math.max(0, Math.min(maxX, startCrop.x + deltaX));
+          next.x = Math.round(newX * 10) / 10;
+          next.w = Math.round(((startCrop.x + startCrop.w) - newX) * 10) / 10;
+        } else if (dType === 'r') {
+          // Sağ kenar
+          const minRight = startCrop.x + minSize;
+          const newRight = Math.max(minRight, Math.min(100, startCrop.x + startCrop.w + deltaX));
+          next.w = Math.round((newRight - startCrop.x) * 10) / 10;
         } else if (dType === 'move') {
           // Kutunun tamamını taşıma
           const maxX = 100 - startCrop.w;
@@ -367,7 +402,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-2 sm:p-4 animate-fadeIn">
-      <div className="relative w-full max-w-4xl h-[92vh] sm:h-[90vh] bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden text-white flex flex-col">
+      <div className="relative w-full max-w-5xl h-[95vh] sm:h-[92vh] bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden text-white flex flex-col">
         {/* Modal Başlık */}
         <div className="px-4 py-3 bg-slate-950 border-b border-slate-800 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
@@ -385,7 +420,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
               </h3>
               <p className="text-[11px] text-slate-400">
                 {capturedImage 
-                  ? 'Fotoğrafı kırpmak için sol üst veya sağ alt köşelerdeki turuncu butonları sürükleyin.'
+                  ? 'Fotoğrafı kırpmak için sol üst veya sağ alt köşelerdeki turuncu butonları ve kenarları sürükleyin.'
                   : 'Masaüstü bilgisayar, tablet veya mobil kameranızdan net fotoğraf çekin.'}
               </p>
             </div>
@@ -402,9 +437,9 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
         </div>
 
         {/* Modal İçeriği (Video / Önizleme ve Kırpma Alanı) */}
-        <div className="p-2 sm:p-3 flex-1 flex flex-col items-center justify-center bg-slate-950/70 overflow-hidden relative select-none">
+        <div className="flex-1 flex flex-col items-center justify-center bg-slate-950/70 overflow-hidden relative select-none min-h-0">
           {errorMsg ? (
-            <div className="p-5 bg-rose-500/10 border border-rose-500/30 rounded-2xl text-center space-y-3 max-w-md">
+            <div className="p-5 bg-rose-500/10 border border-rose-500/30 rounded-2xl text-center space-y-3 max-w-md m-4">
               <AlertCircle className="w-10 h-10 text-rose-400 mx-auto" />
               <p className="text-xs text-rose-200 leading-relaxed font-semibold">{errorMsg}</p>
               <div className="flex items-center justify-center gap-2 pt-2">
@@ -426,7 +461,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
                         const reader = new FileReader();
                         reader.onloadend = () => {
                           setCapturedImage(reader.result as string);
-                          setCrop({ x: 0, y: 0, w: 100, h: 100 });
+                          setCrop({ x: 5, y: 5, w: 90, h: 90 });
                           setErrorMsg(null);
                         };
                         reader.readAsDataURL(file);
@@ -439,19 +474,19 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
             </div>
           ) : capturedImage ? (
             /* Çekilen Fotoğraf & İnteraktif Kırpma Alanı */
-            <div className="w-full h-full flex flex-col items-center justify-between">
+            <div className="w-full h-full flex flex-col items-center justify-between min-h-0">
               {/* Üst Kırpma Kontrol Çubuğu */}
-              <div className="w-full max-w-2xl px-2 py-1.5 mb-1.5 bg-slate-900/90 border border-slate-800 rounded-xl flex items-center justify-between gap-2 text-xs shrink-0 shadow-lg">
+              <div className="w-full max-w-3xl px-3 py-1.5 m-2 bg-slate-900/95 border border-slate-800 rounded-xl flex items-center justify-between gap-2 text-xs shrink-0 shadow-lg flex-wrap">
                 <div className="flex items-center gap-1.5 text-[11px] text-amber-300 font-semibold truncate">
                   <Crop className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                  <span className="truncate">Sol üst ve sağ alt köşelerden kırpılacak alanı seçin</span>
+                  <span className="truncate">Sol üst (↖) ve sağ alt (↘) butonları veya kenarları sürükleyerek kırpın</span>
                 </div>
 
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
                   <button
                     type="button"
                     onClick={handleRotate90}
-                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg font-bold text-[11px] flex items-center gap-1 cursor-pointer transition"
+                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg font-bold text-[11px] flex items-center gap-1 cursor-pointer transition border border-slate-700"
                     title="Fotoğrafı 90° Saat Yönünde Döndür"
                   >
                     <RotateCw className="w-3 h-3 text-cyan-400" />
@@ -459,28 +494,65 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
                   </button>
                   <button
                     type="button"
-                    onClick={handleResetCrop}
-                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg font-bold text-[11px] flex items-center gap-1 cursor-pointer transition"
-                    title="Tüm fotoğrafı seç"
+                    onClick={handleDocCrop}
+                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg font-bold text-[11px] flex items-center gap-1 cursor-pointer transition border border-slate-700"
+                    title="Belge Kırpma (%80)"
                   >
-                    <Maximize2 className="w-3 h-3 text-amber-400" />
-                    <span>Tamamı</span>
+                    <Minimize2 className="w-3 h-3 text-indigo-400" />
+                    <span>Belge (%80)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDefaultCrop}
+                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg font-bold text-[11px] flex items-center gap-1 cursor-pointer transition border border-slate-700"
+                    title="Varsayılan Kırpma (%90)"
+                  >
+                    <Crop className="w-3 h-3 text-amber-400" />
+                    <span>Varsayılan (%90)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleResetCrop}
+                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg font-bold text-[11px] flex items-center gap-1 cursor-pointer transition border border-slate-700"
+                    title="Tüm fotoğrafı seç (%100)"
+                  >
+                    <Maximize2 className="w-3 h-3 text-emerald-400" />
+                    <span>Tamamı (%100)</span>
                   </button>
                 </div>
               </div>
 
               {/* Fotoğraf ve Kırpma Kutusu Konteynırı */}
-              <div className="flex-1 w-full flex items-center justify-center overflow-hidden p-1">
+              {/* Geniş boşluk (p-6 sm:p-8) ve overflow-visible sayesinde tutamaçlar en köşede olsa bile ASLA kırpılmaz */}
+              <div className="flex-1 w-full min-h-0 flex items-center justify-center p-6 sm:p-8 overflow-auto">
                 <div 
                   ref={imageContainerRef}
-                  className="relative inline-block max-w-full max-h-[66vh] overflow-hidden rounded-xl border border-slate-800 bg-black shadow-2xl select-none"
+                  className="relative inline-block max-w-full max-h-[68vh] overflow-visible rounded-xl border border-slate-700 bg-black shadow-2xl select-none"
                   style={{ touchAction: 'none' }}
                 >
                   <img
                     src={capturedImage}
                     alt="Çekilen Fotoğraf"
-                    className="max-w-full max-h-[66vh] w-auto h-auto object-contain block mx-auto select-none pointer-events-none"
+                    className="max-w-full max-h-[68vh] w-auto h-auto object-contain block mx-auto select-none pointer-events-none rounded-xl"
                     draggable={false}
+                  />
+
+                  {/* 4 Karartma Katmanı (Kırpma alanı dışını karartır; overflow-hidden gerektirmez) */}
+                  <div
+                    className="absolute top-0 left-0 right-0 bg-black/60 pointer-events-none z-10 rounded-t-xl"
+                    style={{ height: `${crop.y}%` }}
+                  />
+                  <div
+                    className="absolute left-0 right-0 bottom-0 bg-black/60 pointer-events-none z-10 rounded-b-xl"
+                    style={{ top: `${crop.y + crop.h}%` }}
+                  />
+                  <div
+                    className="absolute left-0 bg-black/60 pointer-events-none z-10"
+                    style={{ top: `${crop.y}%`, width: `${crop.x}%`, height: `${crop.h}%` }}
+                  />
+                  <div
+                    className="absolute right-0 bg-black/60 pointer-events-none z-10"
+                    style={{ top: `${crop.y}%`, left: `${crop.x + crop.w}%`, height: `${crop.h}%` }}
                   />
 
                   {/* Kırpma Alanı Dikdörtgeni */}
@@ -492,55 +564,99 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
                       height: `${crop.h}%`,
                     }}
                     onPointerDown={(e) => startDrag(e, 'move')}
-                    className="absolute border-2 border-amber-400 shadow-[0_0_0_9999px_rgba(0,0,0,0.58)] cursor-move z-10"
+                    className="absolute border-2 border-amber-400 cursor-move z-20 shadow-lg group/box"
                   >
                     {/* 3x3 Kılavuz Çizgileri */}
                     <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 pointer-events-none opacity-35 divide-x divide-y divide-white/70" />
 
-                    {/* SOL ÜST KÖŞE TUTAMACI (Top-Left) */}
-                    <div
-                      onPointerDown={(e) => startDrag(e, 'tl')}
-                      className="absolute -top-3.5 -left-3.5 w-7 h-7 sm:w-8 sm:h-8 bg-amber-500 hover:bg-amber-400 border-2 border-white rounded-full shadow-2xl flex items-center justify-center cursor-nwse-resize z-30 touch-none active:scale-125 transition-transform group"
-                      title="Sol Üst Köşeyi Uzat / Kısalt"
-                    >
-                      <div className="w-2.5 h-2.5 bg-slate-950 rounded-full" />
-                      <div className="absolute -top-6 left-0 bg-amber-500 text-slate-950 text-[10px] font-black px-1.5 py-0.5 rounded shadow-md pointer-events-none whitespace-nowrap hidden sm:block">
-                        ↖ Sol Üst
-                      </div>
+                    {/* Ortadaki Taşıma Rozeti */}
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <span className="px-2 py-0.5 bg-black/80 text-amber-300 border border-amber-500/50 rounded text-[10px] font-bold tracking-wider opacity-70 group-hover/box:opacity-100 transition-opacity flex items-center gap-1 shadow">
+                        <Move className="w-3 h-3 text-amber-400" />
+                        Taşı
+                      </span>
                     </div>
 
-                    {/* SAĞ ALT KÖŞE TUTAMACI (Bottom-Right) */}
+                    {/* SOL ÜST KÖŞE TUTAMACI (Top-Left) - Büyük, yüksek kontrastlı ve etiketli */}
+                    <div
+                      onPointerDown={(e) => startDrag(e, 'tl')}
+                      className="absolute top-0 left-0 -translate-x-1/2 -translate-y-1/2 w-9 h-9 sm:w-10 sm:h-10 bg-amber-400 hover:bg-amber-300 border-2 border-white rounded-full shadow-2xl ring-4 ring-amber-500/50 flex items-center justify-center cursor-nwse-resize z-40 touch-none active:scale-125 transition-transform"
+                      title="Sol Üst Köşeyi Uzat / Kısalt"
+                    >
+                      <span className="text-slate-950 font-black text-xs leading-none select-none">↖</span>
+                      <span className="absolute -top-7 left-1/2 -translate-x-1/2 bg-amber-500 text-slate-950 text-[10px] font-black px-1.5 py-0.5 rounded shadow-lg pointer-events-none whitespace-nowrap">
+                        ↖ Sol Üst
+                      </span>
+                    </div>
+
+                    {/* SAĞ ALT KÖŞE TUTAMACI (Bottom-Right) - Büyük, yüksek kontrastlı ve etiketli */}
                     <div
                       onPointerDown={(e) => startDrag(e, 'br')}
-                      className="absolute -bottom-3.5 -right-3.5 w-7 h-7 sm:w-8 sm:h-8 bg-amber-500 hover:bg-amber-400 border-2 border-white rounded-full shadow-2xl flex items-center justify-center cursor-nwse-resize z-30 touch-none active:scale-125 transition-transform group"
+                      className="absolute top-full left-full -translate-x-1/2 -translate-y-1/2 w-9 h-9 sm:w-10 sm:h-10 bg-amber-400 hover:bg-amber-300 border-2 border-white rounded-full shadow-2xl ring-4 ring-amber-500/50 flex items-center justify-center cursor-nwse-resize z-40 touch-none active:scale-125 transition-transform"
                       title="Sağ Alt Köşeyi Uzat / Kısalt"
                     >
-                      <div className="w-2.5 h-2.5 bg-slate-950 rounded-full" />
-                      <div className="absolute -bottom-6 right-0 bg-amber-500 text-slate-950 text-[10px] font-black px-1.5 py-0.5 rounded shadow-md pointer-events-none whitespace-nowrap hidden sm:block">
+                      <span className="text-slate-950 font-black text-xs leading-none select-none">↘</span>
+                      <span className="absolute -bottom-7 left-1/2 -translate-x-1/2 bg-amber-500 text-slate-950 text-[10px] font-black px-1.5 py-0.5 rounded shadow-lg pointer-events-none whitespace-nowrap">
                         Sağ Alt ↘
-                      </div>
+                      </span>
                     </div>
 
                     {/* SAĞ ÜST KÖŞE TUTAMACI (Top-Right) */}
                     <div
                       onPointerDown={(e) => startDrag(e, 'tr')}
-                      className="absolute -top-2.5 -right-2.5 w-5 h-5 sm:w-6 sm:h-6 bg-amber-400 hover:bg-amber-300 border-2 border-white rounded-full shadow-lg flex items-center justify-center cursor-nesw-resize z-25 touch-none active:scale-115 transition-transform"
+                      className="absolute top-0 left-full -translate-x-1/2 -translate-y-1/2 w-7 h-7 sm:w-8 sm:h-8 bg-amber-400 hover:bg-amber-300 border-2 border-white rounded-full shadow-xl ring-2 ring-amber-500/40 flex items-center justify-center cursor-nesw-resize z-35 touch-none active:scale-115 transition-transform"
                       title="Sağ Üst Köşe"
                     >
-                      <div className="w-1.5 h-1.5 bg-slate-950 rounded-full" />
+                      <span className="text-slate-950 font-black text-[10px] leading-none select-none">↗</span>
                     </div>
 
                     {/* SOL ALT KÖŞE TUTAMACI (Bottom-Left) */}
                     <div
                       onPointerDown={(e) => startDrag(e, 'bl')}
-                      className="absolute -bottom-2.5 -left-2.5 w-5 h-5 sm:w-6 sm:h-6 bg-amber-400 hover:bg-amber-300 border-2 border-white rounded-full shadow-lg flex items-center justify-center cursor-nesw-resize z-25 touch-none active:scale-115 transition-transform"
+                      className="absolute top-full left-0 -translate-x-1/2 -translate-y-1/2 w-7 h-7 sm:w-8 sm:h-8 bg-amber-400 hover:bg-amber-300 border-2 border-white rounded-full shadow-xl ring-2 ring-amber-500/40 flex items-center justify-center cursor-nesw-resize z-35 touch-none active:scale-115 transition-transform"
                       title="Sol Alt Köşe"
                     >
-                      <div className="w-1.5 h-1.5 bg-slate-950 rounded-full" />
+                      <span className="text-slate-950 font-black text-[10px] leading-none select-none">↙</span>
+                    </div>
+
+                    {/* ALT KENAR ORTA TUTAMACI (Bottom Handle) */}
+                    <div
+                      onPointerDown={(e) => startDrag(e, 'b')}
+                      className="absolute top-full left-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-5 bg-amber-400 hover:bg-amber-300 border-2 border-white rounded-full shadow-xl ring-2 ring-amber-500/40 flex items-center justify-center cursor-ns-resize z-35 touch-none active:scale-110 transition-transform"
+                      title="Alt Kenarı Yukarı / Aşağı Çek"
+                    >
+                      <div className="w-5 h-1 bg-slate-950 rounded-full" />
+                    </div>
+
+                    {/* ÜST KENAR ORTA TUTAMACI (Top Handle) */}
+                    <div
+                      onPointerDown={(e) => startDrag(e, 't')}
+                      className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-5 bg-amber-400 hover:bg-amber-300 border-2 border-white rounded-full shadow-xl ring-2 ring-amber-500/40 flex items-center justify-center cursor-ns-resize z-35 touch-none active:scale-110 transition-transform"
+                      title="Üst Kenarı Yukarı / Aşağı Çek"
+                    >
+                      <div className="w-5 h-1 bg-slate-950 rounded-full" />
+                    </div>
+
+                    {/* SOL KENAR ORTA TUTAMACI (Left Handle) */}
+                    <div
+                      onPointerDown={(e) => startDrag(e, 'l')}
+                      className="absolute top-1/2 left-0 -translate-x-1/2 -translate-y-1/2 h-14 w-5 bg-amber-400 hover:bg-amber-300 border-2 border-white rounded-full shadow-xl ring-2 ring-amber-500/40 flex items-center justify-center cursor-ew-resize z-35 touch-none active:scale-110 transition-transform"
+                      title="Sol Kenarı Sağa / Sola Çek"
+                    >
+                      <div className="h-5 w-1 bg-slate-950 rounded-full" />
+                    </div>
+
+                    {/* SAĞ KENAR ORTA TUTAMACI (Right Handle) */}
+                    <div
+                      onPointerDown={(e) => startDrag(e, 'r')}
+                      className="absolute top-1/2 left-full -translate-x-1/2 -translate-y-1/2 h-14 w-5 bg-amber-400 hover:bg-amber-300 border-2 border-white rounded-full shadow-xl ring-2 ring-amber-500/40 flex items-center justify-center cursor-ew-resize z-35 touch-none active:scale-110 transition-transform"
+                      title="Sağ Kenarı Sağa / Sola Çek"
+                    >
+                      <div className="h-5 w-1 bg-slate-950 rounded-full" />
                     </div>
 
                     {/* Kırpma Boyut Bilgisi Rozeti */}
-                    <div className="absolute bottom-1 left-1 bg-black/80 text-amber-300 text-[10px] font-mono px-1.5 py-0.5 rounded pointer-events-none">
+                    <div className="absolute bottom-1 left-1 bg-black/85 text-amber-300 text-[10px] font-mono font-bold px-2 py-0.5 rounded shadow pointer-events-none">
                       {Math.round(crop.w)}% × {Math.round(crop.h)}%
                     </div>
                   </div>
@@ -555,7 +671,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
                 autoPlay
                 playsInline
                 muted
-                className="w-full h-full max-h-[72vh] object-contain rounded-xl"
+                className="w-full h-full max-h-[74vh] object-contain rounded-xl"
               />
               <canvas ref={canvasRef} className="hidden" />
 
@@ -620,7 +736,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
                         const reader = new FileReader();
                         reader.onloadend = () => {
                           setCapturedImage(reader.result as string);
-                          setCrop({ x: 0, y: 0, w: 100, h: 100 });
+                          setCrop({ x: 5, y: 5, w: 90, h: 90 });
                         };
                         reader.readAsDataURL(files[0]);
                       } else {
