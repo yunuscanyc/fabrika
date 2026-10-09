@@ -1497,13 +1497,13 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                         const isImg = doc.DosyaIcerigi && (doc.DosyaIcerigi.startsWith('data:image') || doc.DosyaAdi.match(/\.(jpg|jpeg|png|webp|gif)$/i));
                         return (
                           <div key={idx} className="relative rounded-lg border border-slate-200 overflow-hidden bg-white h-20 flex flex-col justify-between shadow-xs group">
-                            <div className="w-full h-14 overflow-hidden bg-slate-100 flex items-center justify-center">
+                            <div className="w-full h-14 overflow-hidden bg-slate-100 flex items-center justify-center p-0.5">
                               {isImg ? (
                                 <img
                                   src={doc.DosyaIcerigi}
                                   alt={doc.DosyaAdi}
                                   referrerPolicy="no-referrer"
-                                  className="w-full h-full object-cover cursor-pointer"
+                                  className="max-h-full max-w-full w-auto h-auto object-contain cursor-pointer rounded"
                                   onClick={() => setLightboxDosya(doc)}
                                 />
                               ) : (
@@ -1612,11 +1612,11 @@ export const AraclarView: React.FC<AraclarViewProps> = ({
                                     key={docIdx}
                                     type="button"
                                     onClick={() => setLightboxDosya(doc)}
-                                    className="relative group w-7 h-7 rounded-md overflow-hidden border border-slate-200 bg-slate-100 flex items-center justify-center hover:border-blue-500 transition-all shadow-xs"
+                                    className="relative group h-7 min-w-7 max-w-14 px-0.5 rounded-md overflow-hidden border border-slate-200 bg-slate-100 flex items-center justify-center hover:border-blue-500 transition-all shadow-xs"
                                     title={`${doc.DosyaAdi} (${doc.DosyaBoyutu || ''}) - Tıkla ve İncele`}
                                   >
                                     {isImg ? (
-                                      <img src={doc.DosyaIcerigi} alt={doc.DosyaAdi} className="w-full h-full object-cover" />
+                                      <img src={doc.DosyaIcerigi} alt={doc.DosyaAdi} className="h-full w-auto max-w-full object-contain" />
                                     ) : (
                                       <FileText className="w-3.5 h-3.5 text-slate-600" />
                                     )}

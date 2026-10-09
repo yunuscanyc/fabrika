@@ -1795,7 +1795,7 @@ export const IsgView: React.FC<IsgViewProps> = ({
                     <div className="flex items-center gap-3 min-w-0">
                       <div 
                         onClick={() => setLightboxDosya({ DosyaAdi: saglikForm.BelgeAdi || 'Sağlık Raporu', DosyaIcerigi: saglikForm.BelgeUrl })}
-                        className="w-14 h-14 rounded-lg bg-slate-900 border border-slate-700/80 overflow-hidden flex items-center justify-center shrink-0 cursor-pointer hover:opacity-90 relative group"
+                        className="h-14 min-w-14 max-w-24 rounded-lg bg-slate-900 border border-slate-700/80 overflow-hidden flex items-center justify-center shrink-0 cursor-pointer hover:opacity-90 relative group p-0.5"
                         title="Önizlemeyi Büyüt"
                       >
                         {saglikForm.BelgeUrl.startsWith('data:image') || saglikForm.BelgeAdi.match(/\.(jpg|jpeg|png|webp|gif)$/i) ? (
@@ -1803,7 +1803,7 @@ export const IsgView: React.FC<IsgViewProps> = ({
                             src={saglikForm.BelgeUrl} 
                             alt={saglikForm.BelgeAdi} 
                             referrerPolicy="no-referrer"
-                            className="w-full h-full object-cover"
+                            className="h-full w-auto max-w-full object-contain"
                           />
                         ) : (
                           <FileText className="w-7 h-7 text-rose-400" />
@@ -2014,7 +2014,7 @@ export const IsgView: React.FC<IsgViewProps> = ({
                     <div className="flex items-center gap-3 min-w-0">
                       <div 
                         onClick={() => setLightboxDosya({ DosyaAdi: egitimForm.BelgeAdi || 'Eğitim Sertifikası', DosyaIcerigi: egitimForm.BelgeUrl })}
-                        className="w-14 h-14 rounded-lg bg-slate-900 border border-slate-700/80 overflow-hidden flex items-center justify-center shrink-0 cursor-pointer hover:opacity-90 relative group"
+                        className="h-14 min-w-14 max-w-24 rounded-lg bg-slate-900 border border-slate-700/80 overflow-hidden flex items-center justify-center shrink-0 cursor-pointer hover:opacity-90 relative group p-0.5"
                         title="Önizlemeyi Büyüt"
                       >
                         {egitimForm.BelgeUrl.startsWith('data:image') || egitimForm.BelgeAdi.match(/\.(jpg|jpeg|png|webp|gif)$/i) ? (
@@ -2022,7 +2022,7 @@ export const IsgView: React.FC<IsgViewProps> = ({
                             src={egitimForm.BelgeUrl} 
                             alt={egitimForm.BelgeAdi} 
                             referrerPolicy="no-referrer"
-                            className="w-full h-full object-cover"
+                            className="h-full w-auto max-w-full object-contain"
                           />
                         ) : (
                           <FileText className="w-7 h-7 text-blue-400" />

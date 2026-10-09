@@ -929,12 +929,12 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                               title={fInfo.name}
                             >
                               {fInfo.isImage && fInfo.content ? (
-                                <div className="w-12 h-12 bg-slate-900">
+                                <div className="h-12 min-w-12 max-w-24 bg-slate-900 flex items-center justify-center p-0.5">
                                   <img
                                     src={fInfo.content}
                                     alt={fInfo.name}
                                     referrerPolicy="no-referrer"
-                                    className="w-full h-full object-cover group-hover/thumb:scale-110 transition-transform"
+                                    className="h-full w-auto max-w-full object-contain group-hover/thumb:scale-110 transition-transform"
                                   />
                                 </div>
                               ) : (
@@ -1170,12 +1170,12 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                             <div key={idx} className="relative group rounded-xl border border-slate-200 overflow-hidden bg-slate-50 h-32 flex flex-col justify-between shadow-2xs">
                               {/* Önizleme Alanı */}
                               {fInfo.isImage && fInfo.content ? (
-                                <div className="w-full h-24 overflow-hidden relative cursor-zoom-in bg-slate-900" onClick={() => setLightboxDosya(file)}>
+                                <div className="w-full h-24 overflow-hidden relative cursor-zoom-in bg-slate-900 flex items-center justify-center p-1" onClick={() => setLightboxDosya(file)}>
                                   <img
                                     src={fInfo.content}
                                     alt={fInfo.name}
                                     referrerPolicy="no-referrer"
-                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                    className="max-h-full max-w-full w-auto h-auto object-contain rounded group-hover:scale-105 transition-transform"
                                   />
                                   <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                                     <Eye className="w-5 h-5 text-white" />
@@ -1517,7 +1517,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                             <div key={idx} className="relative group rounded-xl border border-slate-200 overflow-hidden bg-slate-50 h-32 flex flex-col justify-between shadow-2xs">
                               {fInfo.isImage && fInfo.content ? (
                                 <div 
-                                  className="w-full h-24 overflow-hidden relative cursor-zoom-in bg-slate-900"
+                                  className="w-full h-24 overflow-hidden relative cursor-zoom-in bg-slate-900 flex items-center justify-center p-1"
                                   onClick={() => setLightboxDosya(file)}
                                   title="Önizlemeyi Büyüt"
                                 >
@@ -1525,7 +1525,7 @@ export const HatirlaticilarView: React.FC<HatirlaticilarViewProps> = ({
                                     src={fInfo.content}
                                     alt={fInfo.name}
                                     referrerPolicy="no-referrer"
-                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                    className="max-h-full max-w-full w-auto h-auto object-contain rounded group-hover:scale-105 transition-transform"
                                   />
                                   <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                                     <Eye className="w-5 h-5 text-white" />

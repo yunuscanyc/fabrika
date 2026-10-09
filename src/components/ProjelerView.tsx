@@ -1282,8 +1282,8 @@ export const ProjelerView: React.FC<ProjelerViewProps> = ({
                               >
                                 <div className="flex items-center gap-2 min-w-0">
                                   {isResim ? (
-                                    <div className="w-8 h-8 rounded-lg overflow-hidden border border-slate-150 shrink-0 bg-slate-50 flex items-center justify-center">
-                                      <img src={dosya.base64} alt="" className="w-full h-full object-cover" />
+                                    <div className="h-8 min-w-8 max-w-16 rounded-lg overflow-hidden border border-slate-150 shrink-0 bg-slate-50 flex items-center justify-center p-0.5">
+                                      <img src={dosya.base64} alt="" className="h-full w-auto max-w-full object-contain" />
                                     </div>
                                   ) : (
                                     <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0">

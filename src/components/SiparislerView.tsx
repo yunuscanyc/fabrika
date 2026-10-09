@@ -1059,7 +1059,7 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
                         {siparis.Belgeler.map((belge, bIdx) => (
                           <div
                             key={bIdx}
-                            className="relative group border border-slate-200 rounded-lg overflow-hidden bg-slate-100 w-20 h-20 flex items-center justify-center cursor-pointer shadow-2xs hover:shadow transition-all"
+                            className="relative group border border-slate-200 rounded-lg overflow-hidden bg-slate-100 h-20 min-w-20 max-w-36 flex items-center justify-center cursor-pointer shadow-2xs hover:shadow transition-all p-0.5"
                             onClick={() => {
                               if (belge.DosyaIcerigi) {
                                 const w = window.open('');
@@ -1073,7 +1073,7 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
                               <img
                                 src={belge.DosyaIcerigi}
                                 alt={belge.DosyaAdi}
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                className="h-full w-auto max-w-full object-contain rounded group-hover:scale-105 transition-transform"
                               />
                             ) : (
                               <div className="p-1 text-center text-[10px] text-slate-600 font-semibold truncate">
@@ -1752,11 +1752,11 @@ export const SiparislerView: React.FC<SiparislerViewProps> = ({
                 ) : (
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                     {formBelgeler.map((b, idx) => (
-                      <div key={idx} className="relative border border-slate-300 rounded-lg p-1 bg-white group">
+                      <div key={idx} className="relative border border-slate-300 rounded-lg p-1 bg-slate-50 flex items-center justify-center h-20 group">
                         {b.DosyaIcerigi && b.DosyaIcerigi.startsWith('data:image') ? (
-                          <img src={b.DosyaIcerigi} alt={b.DosyaAdi} className="w-full h-16 object-cover rounded" />
+                          <img src={b.DosyaIcerigi} alt={b.DosyaAdi} className="max-h-full max-w-full w-auto h-auto object-contain rounded" />
                         ) : (
-                          <div className="w-full h-16 flex items-center justify-center bg-slate-100 rounded text-[9px] text-slate-600 p-1 truncate">
+                          <div className="w-full h-full flex items-center justify-center bg-slate-100 rounded text-[9px] text-slate-600 p-1 truncate text-center">
                             {b.DosyaAdi}
                           </div>
                         )}

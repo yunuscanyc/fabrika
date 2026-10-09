@@ -1073,12 +1073,12 @@ export const CerideView: React.FC<CerideViewProps> = ({
                                         const onlyImgIdx = onlyImages.findIndex(x => x.Id === f.Id || x.DosyaAdi === f.DosyaAdi);
                                         setLightboxData({ images: onlyImages, index: onlyImgIdx >= 0 ? onlyImgIdx : 0, title: item.Olay });
                                       }}
-                                      className="relative group/thumb cursor-pointer shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 transition hover:ring-2 hover:ring-amber-500 shadow-2xs"
+                                      className="relative group/thumb cursor-pointer shrink-0 h-20 sm:h-24 min-w-[70px] max-w-[150px] rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-900/5 dark:bg-slate-900 transition hover:ring-2 hover:ring-amber-500 shadow-2xs flex items-center justify-center p-0.5"
                                     >
                                       <img 
                                         src={f.DosyaIcerigi} 
                                         alt={f.DosyaAdi || 'Ceride Fotoğrafı'} 
-                                        className="w-full h-full object-cover group-hover/thumb:scale-105 transition duration-200"
+                                        className="h-full w-auto max-w-full object-contain rounded group-hover/thumb:scale-105 transition duration-200"
                                         loading="lazy"
                                       />
                                       <div className="absolute inset-0 bg-black/30 opacity-0 group-hover/thumb:opacity-100 transition flex items-center justify-center text-white">
@@ -1389,12 +1389,12 @@ export const CerideView: React.FC<CerideViewProps> = ({
                         {formFotograflar.map((foto, idx) => {
                           const isImg = isImageFile(foto.DosyaAdi);
                           return (
-                            <div key={foto.Id || idx} className="relative group/pic rounded-xl overflow-hidden border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 aspect-square shadow-2xs">
+                            <div key={foto.Id || idx} className="relative group/pic rounded-xl overflow-hidden border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 h-36 flex items-center justify-center p-1 shadow-2xs">
                               {isImg && foto.DosyaIcerigi ? (
                                 <img 
                                   src={foto.DosyaIcerigi} 
                                   alt={foto.DosyaAdi} 
-                                  className="w-full h-full object-cover group-hover/pic:scale-105 transition-transform"
+                                  className="max-h-full max-w-full w-auto h-auto object-contain rounded-lg group-hover/pic:scale-105 transition-transform"
                                 />
                               ) : (
                                 <div className={`w-full h-full flex flex-col items-center justify-center p-3 text-center border rounded-lg gap-1.5 ${getFileIconAndColor(foto.DosyaAdi).bg}`}>

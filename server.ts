@@ -3148,6 +3148,27 @@ async function checkDbConnection() {
       }
     }
 
+    // AjandaBildirimleri tablosu ve 64-bit ID uyumluluğu kontrolü (32-bit integer taşma hatalarını önler)
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS "AjandaBildirimleri" (
+          "Id" BIGSERIAL PRIMARY KEY,
+          "HatirlaticiId" BIGINT,
+          "Baslik" VARCHAR(255),
+          "IslemTuru" VARCHAR(50),
+          "YapanKisi" VARCHAR(100),
+          "Detay" TEXT,
+          "Tarih" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          "OkuyanKisiler" TEXT DEFAULT '[]'
+        )
+      `);
+      // Eski 32-bit integer kolonları bigint türüne yükselt (out of range for type integer hatasını önler)
+      await pool.query(`ALTER TABLE "AjandaBildirimleri" ALTER COLUMN "Id" TYPE BIGINT`);
+      await pool.query(`ALTER TABLE "AjandaBildirimleri" ALTER COLUMN "HatirlaticiId" TYPE BIGINT`);
+    } catch (aErr: any) {
+      console.log('[DB-MIGRATE] AjandaBildirimleri kolon kontrolü:', aErr.message);
+    }
+
     console.log('[DB] Eşleşen Tablolar:', detectedTables);
   } catch (err: any) {
     isDbConnected = false;
@@ -6788,8 +6809,8 @@ async function recordAjandaNotification(notif: {
     try {
       await pool.query(`
         CREATE TABLE IF NOT EXISTS "AjandaBildirimleri" (
-          "Id" SERIAL PRIMARY KEY,
-          "HatirlaticiId" INTEGER,
+          "Id" BIGSERIAL PRIMARY KEY,
+          "HatirlaticiId" BIGINT,
           "Baslik" VARCHAR(255),
           "IslemTuru" VARCHAR(50),
           "YapanKisi" VARCHAR(100),
@@ -6798,9 +6819,10 @@ async function recordAjandaNotification(notif: {
           "OkuyanKisiler" TEXT DEFAULT '[]'
         )
       `);
-      await pool.query(`
+      const insRes = await pool.query(`
         INSERT INTO "AjandaBildirimleri" ("HatirlaticiId", "Baslik", "IslemTuru", "YapanKisi", "Detay", "Tarih", "OkuyanKisiler")
         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING "Id"
       `, [
         newNotif.HatirlaticiId,
         newNotif.Baslik,
@@ -6810,6 +6832,9 @@ async function recordAjandaNotification(notif: {
         newNotif.Tarih,
         JSON.stringify(newNotif.OkuyanKisiler)
       ]);
+      if (insRes.rows && insRes.rows.length > 0 && insRes.rows[0].Id) {
+        newNotif.Id = Number(insRes.rows[0].Id);
+      }
     } catch (e: any) {
       console.error('[DB AJANDA BILDIRIM INSERT ERROR]', e.message);
     }
@@ -6996,15 +7021,15 @@ app.post('/api/ajanda/bildirimler/okundu', async (req, res) => {
     if (isDbConnected) {
       try {
         if (notificationId) {
-          const rowRes = await pool.query(`SELECT "OkuyanKisiler" FROM "AjandaBildirimleri" WHERE "Id" = $1`, [notificationId]);
+          const rowRes = await pool.query(`SELECT "Id", "OkuyanKisiler" FROM "AjandaBildirimleri" WHERE "Id"::text = $1::text`, [String(notificationId)]);
           if (rowRes.rows.length > 0) {
             let okuyan: string[] = [];
             try { okuyan = JSON.parse(rowRes.rows[0].OkuyanKisiler || '[]'); } catch { okuyan = []; }
             mgrAliases.forEach(u => { if (!okuyan.includes(u)) okuyan.push(u); });
-            await pool.query(`UPDATE "AjandaBildirimleri" SET "OkuyanKisiler" = $1 WHERE "Id" = $2`, [JSON.stringify(okuyan), notificationId]);
+            await pool.query(`UPDATE "AjandaBildirimleri" SET "OkuyanKisiler" = $1 WHERE "Id" = $2`, [JSON.stringify(okuyan), rowRes.rows[0].Id]);
           }
         } else if (hatirlaticiId) {
-          const rowsRes = await pool.query(`SELECT "Id", "OkuyanKisiler" FROM "AjandaBildirimleri" WHERE "HatirlaticiId" = $1`, [hatirlaticiId]);
+          const rowsRes = await pool.query(`SELECT "Id", "OkuyanKisiler" FROM "AjandaBildirimleri" WHERE "HatirlaticiId"::text = $1::text`, [String(hatirlaticiId)]);
           for (const row of rowsRes.rows) {
             let okuyan: string[] = [];
             try { okuyan = JSON.parse(row.OkuyanKisiler || '[]'); } catch { okuyan = []; }
@@ -7080,8 +7105,7 @@ app.post('/api/ajanda/bildirimler/kategori-oku', async (req, res) => {
     const user = String(userName || req.headers['x-user-name'] || '1. Yönetici').trim();
     const mgrAliases = ['1. Yönetici', '2. Yönetici', 'Yönetici', 'admin1', 'admin2', 'Yunus CAN', user];
 
-    const matchIds: number[] = [];
-
+    // 1. Bellek içi bildirimleri güncelle
     memAjandaBildirimler.forEach(item => {
       const baslik = (item.Baslik || '').toLowerCase();
       let match = false;
@@ -7094,22 +7118,49 @@ app.post('/api/ajanda/bildirimler/kategori-oku', async (req, res) => {
       else if (category === 'hatirlaticilar') match = true;
 
       if (match) {
-        matchIds.push(item.Id);
         mgrAliases.forEach(u => {
           if (!item.OkuyanKisiler.includes(u)) item.OkuyanKisiler.push(u);
         });
       }
     });
 
-    if (isDbConnected && matchIds.length > 0) {
+    // 2. Veritabanındaki ilgili kayıtları güncelle (Doğrudan DB'den çekerek ID türü uyumsuzluklarını önler)
+    if (isDbConnected) {
       try {
-        for (const mId of matchIds) {
-          const rowRes = await pool.query(`SELECT "OkuyanKisiler" FROM "AjandaBildirimleri" WHERE "Id" = $1`, [mId]);
-          if (rowRes.rows.length > 0) {
+        const rowsRes = await pool.query(`SELECT "Id", "Baslik", "OkuyanKisiler" FROM "AjandaBildirimleri" ORDER BY "Id" DESC LIMIT 200`);
+        for (const row of rowsRes.rows) {
+          const baslik = (row.Baslik || '').toLowerCase();
+          let match = false;
+          if (category === 'siparisler' && (baslik.includes('📦') || baslik.includes('sipariş') || baslik.includes('siparis'))) match = true;
+          else if (category === 'ceride' && (baslik.includes('📜') || baslik.includes('ceride'))) match = true;
+          else if (category === 'personel' && (baslik.includes('👥') || baslik.includes('personel') || baslik.includes('puantaj') || baslik.includes('izin'))) match = true;
+          else if (category === 'projeler' && (baslik.includes('🌿') || baslik.includes('proje'))) match = true;
+          else if (category === 'araclar' && (baslik.includes('🚛') || baslik.includes('araç') || baslik.includes('arac'))) match = true;
+          else if (category === 'makineler' && (baslik.includes('🪚') || baslik.includes('makine') || baslik.includes('makina'))) match = true;
+          else if (category === 'hatirlaticilar') match = true;
+
+          if (match) {
             let okuyan: string[] = [];
-            try { okuyan = JSON.parse(rowRes.rows[0].OkuyanKisiler || '[]'); } catch { okuyan = []; }
-            mgrAliases.forEach(u => { if (!okuyan.includes(u)) okuyan.push(u); });
-            await pool.query(`UPDATE "AjandaBildirimleri" SET "OkuyanKisiler" = $1 WHERE "Id" = $2`, [JSON.stringify(okuyan), mId]);
+            if (Array.isArray(row.OkuyanKisiler)) {
+              okuyan = [...row.OkuyanKisiler];
+            } else if (typeof row.OkuyanKisiler === 'string') {
+              try { 
+                okuyan = JSON.parse(row.OkuyanKisiler); 
+              } catch { 
+                okuyan = row.OkuyanKisiler ? [row.OkuyanKisiler] : []; 
+              }
+            }
+            if (!Array.isArray(okuyan)) okuyan = [];
+            let changed = false;
+            mgrAliases.forEach(u => {
+              if (!okuyan.includes(u)) {
+                okuyan.push(u);
+                changed = true;
+              }
+            });
+            if (changed) {
+              await pool.query(`UPDATE "AjandaBildirimleri" SET "OkuyanKisiler" = $1 WHERE "Id" = $2`, [JSON.stringify(okuyan), row.Id]);
+            }
           }
         }
       } catch (e: any) {

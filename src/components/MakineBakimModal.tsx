@@ -298,7 +298,7 @@ export const MakineBakimModal: React.FC<MakineBakimModalProps> = ({
                               src={doc.DosyaIcerigi}
                               alt={doc.DosyaAdi}
                               referrerPolicy="no-referrer"
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                              className="max-h-full max-w-full w-auto h-auto object-contain rounded group-hover:scale-105 transition-transform"
                             />
                           ) : (
                             <FileText className="w-6 h-6 text-slate-500" />

@@ -811,11 +811,11 @@ export const MakineView: React.FC<MakineViewProps> = ({ makineler, personeller =
                                   key={docIdx}
                                   type="button"
                                   onClick={() => setLightboxDosya(doc)}
-                                  className="relative group w-10 h-10 rounded-lg overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center hover:border-amber-500 transition-all shadow-xs"
+                                  className="relative group h-10 min-w-10 max-w-20 px-0.5 rounded-lg overflow-hidden border border-slate-800 bg-slate-900 flex items-center justify-center hover:border-amber-500 transition-all shadow-xs"
                                   title={`${doc.DosyaAdi} (${doc.DosyaBoyutu || ''})`}
                                 >
                                   {isImg ? (
-                                    <img src={doc.DosyaIcerigi} alt={doc.DosyaAdi} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                    <img src={doc.DosyaIcerigi} alt={doc.DosyaAdi} className="h-full w-auto max-w-full object-contain" referrerPolicy="no-referrer" />
                                   ) : (
                                     <FileText className="w-4 h-4 text-slate-400" />
                                   )}
